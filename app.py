@@ -22,24 +22,15 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont
 import zipfile
 
-
-# ===============================
-# Billing Profiles Configuration
-# ===============================
-# Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
-BILLING_PROFILES = [
-    ("Onit ELM",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
-    ("SimpleLegal", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
-    ("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
-]
-
-def get_profile(env: str):
-    """Return (client_name, client_id, law_firm_name, law_firm_id) for the environment."""
-    for p in BILLING_PROFILES:
-        if p[0] == env:
-            return (p[1], p[2], p[3], p[4])
-    p = BILLING_PROFILES[0]
-    return (p[1], p[2], p[3], p[4])
+# ---- Guard: ensure DEFAULT_RECEIPT_FOOTERS exists ----
+if "DEFAULT_RECEIPT_FOOTERS" not in globals():
+    DEFAULT_RECEIPT_FOOTERS = {
+        "travel":  "Travel receipts must include itinerary and proof of payment.",
+        "mileage": "Mileage reimbursed at the current company rate; odometer log required.",
+        "supplies":"Supplies must be business-related; retain itemized receipts.",
+        "generic": "All expenses are subject to company policy and audit.",
+    }
+# ------------------------------------------------------
 
 
 # --- Logging Setup ---
@@ -454,15 +445,96 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
 
     return rows, total_amount
 
-def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> List[Dict]:
-    """Ensure mandatory line items are included."""
+
+def _ensure_mandatory_lines(
+    rows: List[Dict],
+    timekeeper_data: List[Dict],
+    invoice_desc: str,
+    client_id: str,
+    law_firm_id: str,
+    billing_start_date: datetime.date,
+    billing_end_date: datetime.date,
+    selected_items: List[str]
+) -> List[Dict]:
+    """Ensure mandatory line items are included. If Travel Details are provided, use them to build E110 lines."""
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
+
+    # Travel details from Output tab (used to build E110 lines if present)
+    travel_df = st.session_state.get("travel_segments_df")
+    try:
+        import pandas as pd
+        if travel_df is not None:
+            _tmp = travel_df.copy()
+            _tmp = _tmp.replace("", pd.NA).dropna(how='all')
+            travel_df = _tmp
+            use_travel_for_e110 = len(travel_df) > 0
+        else:
+            use_travel_for_e110 = False
+    except Exception:
+        use_travel_for_e110 = False
+    used_travel_e110 = False
+
     for item_name in selected_items:
         item = CONFIG['MANDATORY_ITEMS'][item_name]
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
+
         if item['is_expense']:
+            # If this is an E110 expense and we have Travel Details, create one line per segment
+            if item.get('expense_code') == "E110" and use_travel_for_e110 and not used_travel_e110:
+                try:
+                    import pandas as pd
+                    for _, seg in travel_df.fillna("").iterrows():
+                        # Determine the date: prefer Depart, else Arrive, else billing_end_date
+                        try:
+                            seg_depart = pd.to_datetime(seg.get("Depart")) if str(seg.get("Depart")).strip() else None
+                        except Exception:
+                            seg_depart = None
+                        try:
+                            seg_arrive = pd.to_datetime(seg.get("Arrive")) if str(seg.get("Arrive")).strip() else None
+                        except Exception:
+                            seg_arrive = None
+                        li_date = (seg_depart or seg_arrive or pd.to_datetime(billing_end_date)).date()
+
+                        # Amount
+                        try:
+                            amt = float(seg.get("Amount")) if str(seg.get("Amount")).strip() else 0.0
+                        except Exception:
+                            amt = 0.0
+
+                        # Build description string
+                        parts = []
+                        t = str(seg.get("Type") or "").strip()
+                        vendor = str(seg.get("Carrier/Vendor") or "").strip()
+                        num = str(seg.get("Number") or "").strip()
+                        frm = str(seg.get("From") or "").strip()
+                        to = str(seg.get("To") or "").strip()
+                        conf = str(seg.get("Conf #") or "").strip()
+                        if t: parts.append(t)
+                        if vendor: parts.append(vendor)
+                        if num: parts.append(f"#{num}")
+                        pair = "->".join([s for s in [frm, to] if s])
+                        if pair: parts.append(pair)
+                        if conf: parts.append(f"Conf {conf}")
+                        desc = " | ".join([p for p in parts if p]) or item['desc']
+
+                        row = {
+                            "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                            "LINE_ITEM_DATE": li_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
+                            "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": "",
+                            "ACTIVITY_CODE": "", "EXPENSE_CODE": "E110", "DESCRIPTION": desc,
+                            "HOURS": 1, "RATE": 0.0
+                        }
+                        row["LINE_ITEM_TOTAL"] = round(amt, 2)
+                        rows.append(row)
+                    used_travel_e110 = True
+                    continue  # Skip default generation for this E110 item
+                except Exception as _e:
+                    # Fall back to default generation below
+                    pass
+
+            # Default expense generation (quantity x rate)
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
                 "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
@@ -472,6 +544,7 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
             }
             row["LINE_ITEM_TOTAL"] = round(row["HOURS"] * row["RATE"], 2)
         else:
+            # Fee line
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
                 "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": item['tk_name'],
@@ -480,8 +553,10 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 "HOURS": round(random.uniform(0.5, 8.0), 1), "RATE": 0.0
             }
             row = _force_timekeeper_on_row(row, item['tk_name'], timekeeper_data)
+
         rows.append(row)
     return rows
+
 
 def _validate_image_bytes(image_bytes: bytes) -> bool:
     """Validate that the provided bytes represent a valid image."""
@@ -530,6 +605,47 @@ def _get_logo_bytes(uploaded_logo: Optional[Any], law_firm_id: str, use_custom: 
     return buf.getvalue()
 
 
+def _summarize_travel_segments(travel_df, max_rows: int = 8):
+    """Return a list of compact strings summarizing travel segments, and a footnote if truncated."""
+    try:
+        import pandas as pd
+        if travel_df is None or len(travel_df) == 0:
+            return [], ""
+        df = travel_df.copy()
+        df = df.replace("", pd.NA).dropna(how="all")
+        if len(df) == 0:
+            return [], ""
+        rows = []
+        for _, seg in df.head(max_rows).iterrows():
+            t = str(seg.get("Type") or "").strip()
+            vendor = str(seg.get("Carrier/Vendor") or "").strip()
+            num = str(seg.get("Number") or "").strip()
+            frm = str(seg.get("From") or "").strip()
+            to = str(seg.get("To") or "").strip()
+            amount = seg.get("Amount")
+            conf = str(seg.get("Conf #") or "").strip()
+            pair = "->".join([s for s in [frm, to] if s])
+            head = " • ".join([x for x in [t, vendor] if x])
+            mid = f"#{num}" if num else ""
+            tail = f"{pair}" if pair else ""
+            amt = ""
+            try:
+                amt_val = float(amount)
+                amt = f"${amt_val:,.2f}"
+            except Exception:
+                pass
+            conf_s = f"Conf {conf}" if conf else ""
+            parts = [head, mid, tail, amt, conf_s]
+            row = " | ".join([p for p in parts if p])
+            rows.append(row)
+        foot = ""
+        if len(df) > max_rows:
+            foot = f"(showing first {max_rows} of {len(df)})"
+        return rows, foot
+    except Exception:
+        return [], ""
+
+
 def _create_pdf_invoice(
     df: pd.DataFrame,
     total_amount: float,
@@ -544,7 +660,7 @@ def _create_pdf_invoice(
     client_name: str = "",
     law_firm_name: str = ""
 ) -> io.BytesIO:
-    """Generate a PDF invoice matching the provided format."""
+    """Generate a PDF invoice with a compact Travel Summary and right-aligned totals."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
@@ -561,7 +677,7 @@ def _create_pdf_invoice(
     lf_name = law_firm_name or "Law Firm"
     cl_name = client_name or "Client"
     law_firm_info = f"{lf_name}<br/>{law_firm_id}<br/>One Park Avenue<br/>Manhattan, NY 10003"
-    client_info   = f"{cl_name}<br/>{client_id}<br/>1360 Post Oak Blvd<br/>Houston, TX 77056"
+    client_info = f"{cl_name}<br/>{client_id}<br/>1360 Post Oak Blvd<br/>Houston, TX 77056"
     law_firm_para = Paragraph(law_firm_info, header_info_style)
     client_para = Paragraph(client_info, client_info_style)
 
@@ -594,7 +710,11 @@ def _create_pdf_invoice(
     elements.append(Spacer(1, 0.1 * inch))
 
     # Invoice meta
-    invoice_info = f"Invoice #: {invoice_number}<br/>Invoice Date: {invoice_date.strftime('%Y-%m-%d')}<br/>Billing Period: {billing_start_date.strftime('%Y-%m-%d')} to {billing_end_date.strftime('%Y-%m-%d')}"
+    invoice_info = (
+        f"Invoice #: {invoice_number}<br/>"
+        f"Invoice Date: {invoice_date.strftime('%Y-%m-%d')}<br/>"
+        f"Billing Period: {billing_start_date.strftime('%Y-%m-%d')} to {billing_end_date.strftime('%Y-%m-%d')}"
+    )
     invoice_para = Paragraph(invoice_info, right_align_style)
     invoice_table = Table([[invoice_para]], colWidths=[7.5 * inch])
     invoice_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
@@ -616,13 +736,17 @@ def _create_pdf_invoice(
     # Rows
     for _, row in df.iterrows():
         date = row["LINE_ITEM_DATE"]
-        timekeeper = Paragraph(row["TIMEKEEPER_NAME"] if row["TIMEKEEPER_NAME"] else "N/A", table_data_style)
-        task_code = row.get("TASK_CODE", "") if not row["EXPENSE_CODE"] else ""
-        activity_code = row.get("ACTIVITY_CODE", "") if not row["EXPENSE_CODE"] else ""
-        description = Paragraph(row["DESCRIPTION"], table_data_style)
-        hours = f"{row['HOURS']:.1f}" if not row["EXPENSE_CODE"] else f"{int(row['HOURS'])}"
-        rate = f"${row['RATE']:.2f}" if row["RATE"] else "N/A"
-        total = f"${row['LINE_ITEM_TOTAL']:.2f}"
+        timekeeper = Paragraph(row.get("TIMEKEEPER_NAME") or "N/A", table_data_style)
+        task_code = row.get("TASK_CODE", "") if not row.get("EXPENSE_CODE") else ""
+        activity_code = row.get("ACTIVITY_CODE", "") if not row.get("EXPENSE_CODE") else ""
+        description = Paragraph(str(row.get("DESCRIPTION", "")), table_data_style)
+        hours = f"{float(row['HOURS']):.1f}" if not row.get("EXPENSE_CODE") else f"{int(float(row['HOURS']))}"
+        rate_val = row.get("RATE", 0.0)
+        try:
+            rate = f"${float(rate_val):.2f}" if float(rate_val) > 0 else "N/A"
+        except Exception:
+            rate = "N/A"
+        total = f"${float(row['LINE_ITEM_TOTAL']):.2f}"
         data.append([date, task_code, activity_code, timekeeper, description, hours, rate, total])
 
     table = Table(data, colWidths=[0.8 * inch, 0.7 * inch, 0.7 * inch, 1.3 * inch, 1.8 * inch, 0.8 * inch, 0.8 * inch, 0.8 * inch])
@@ -647,6 +771,27 @@ def _create_pdf_invoice(
     ]))
     elements.append(table)
 
+    # Travel Summary (compact)
+    travel_df = st.session_state.get("travel_segments_df")
+    ts_rows, ts_foot = _summarize_travel_segments(travel_df, max_rows=8)
+    if ts_rows:
+        ts_title_style = ParagraphStyle('TravelSummaryTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, alignment=TA_LEFT)
+        ts_row_style = ParagraphStyle('TravelSummaryRow', parent=styles['Normal'], fontName='Helvetica', fontSize=9, alignment=TA_LEFT, leading=11)
+        elements.append(Spacer(1, 0.1 * inch))
+        elements.append(Paragraph("Travel Summary", ts_title_style))
+        ts_table = Table([[Paragraph(r, ts_row_style)] for r in ts_rows], colWidths=[7.5 * inch])
+        ts_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('LEFTPADDING', (0,0), (-1,-1), 2),
+            ('RIGHTPADDING', (0,0), (-1,-1), 2),
+            ('TOPPADDING', (0,0), (-1,-1), 1),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 1),
+        ]))
+        elements.append(ts_table)
+        if ts_foot:
+            elements.append(Paragraph(ts_foot, styles['Italic']))
+
     # Totals block (right-aligned)
     try:
         fees_total = float(df.loc[(df.get("EXPENSE_CODE") == "") | (df.get("EXPENSE_CODE").isna()), "LINE_ITEM_TOTAL"].astype(float).sum())
@@ -666,7 +811,7 @@ def _create_pdf_invoice(
     elements.append(Spacer(1, 0.2 * inch))
 
     totals_style_label = ParagraphStyle('TotalsLabel', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, alignment=TA_RIGHT)
-    totals_style_amt   = ParagraphStyle('TotalsAmt',   parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, alignment=TA_RIGHT)
+    totals_style_amt   = ParagraphStyle('TotalsAmt', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, alignment=TA_RIGHT)
 
     totals_data = [
         [Paragraph("Total Fees:", totals_style_label), Paragraph(f"${fees_total:,.2f}", totals_style_amt)],
@@ -687,7 +832,6 @@ def _create_pdf_invoice(
     doc.build(elements)
     buffer.seek(0)
     return buffer
-
 
 def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str, io.BytesIO]:
     """Enhanced realistic receipt generator (see chat notes for details)."""
@@ -934,6 +1078,27 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
         draw.text((40, y), line, font=tiny_font, fill=(90,90,90))
         y += 20
 
+    # --- Travel Summary box (compact) ---
+    try:
+        travel_df = st.session_state.get("travel_segments_df") if st else None
+        ts_rows, ts_foot = _summarize_travel_segments(travel_df, max_rows=6)
+        if ts_rows:
+            box_x = 40
+            box_w = width - 80
+            box_top = y + 10
+            box_h = 18 + 16*len(ts_rows) + (16 if ts_foot else 0) + 10
+            draw.rectangle((box_x, box_top, box_x+box_w, box_top+box_h), outline=faint, width=rcpt_line_weight)
+            draw.text((box_x+8, box_top+6), "Travel Summary", font=header_font, fill=fg)
+            text_y = box_top + 26
+            for r in ts_rows:
+                draw.text((box_x+8, text_y), r[:60], font=small_font, fill=fg)
+                text_y += 16
+            if ts_foot:
+                draw.text((box_x+8, text_y), ts_foot, font=tiny_font, fill=faint)
+            y = box_top + box_h + 12
+    except Exception:
+        pass
+
     y = height - 80
     x = 40
     random.seed(rnum)
@@ -1043,82 +1208,33 @@ csv_custom = sample_custom.to_csv(index=False).encode('utf-8')
 st.sidebar.download_button("Download Sample Custom Tasks CSV", csv_custom, "sample_custom_tasks.csv", "text/csv")
 
 # Dynamic Tabs
-tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
+tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output", "Admin"]
 # Email settings will live under the Output tab.
 tab_objects = st.tabs(tabs)
 
 with tab_objects[0]:
-
     st.markdown("<h3 style='color: #1E1E1E;'>Data Sources</h3>", unsafe_allow_html=True)
     uploaded_timekeeper_file = st.file_uploader("Upload Timekeeper CSV (tk_info.csv)", type="csv")
     timekeeper_data = _load_timekeepers(uploaded_timekeeper_file)
-
-    # Timekeeper summary + preview
-    if timekeeper_data is not None:
-        tk_count = len(timekeeper_data)
-        st.success(f"Loaded {tk_count} timekeepers.")
-        tk_df_preview = pd.DataFrame(timekeeper_data).head(10).reset_index(drop=True)
-        tk_df_preview.index = tk_df_preview.index + 1
-        preview_count = min(10, len(timekeeper_data))
-        st.markdown(f"**{preview_count}-Row Preview**")
-        st.dataframe(tk_df_preview, use_container_width=True)
 
     use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
     uploaded_custom_tasks_file = None
     if use_custom_tasks:
         uploaded_custom_tasks_file = st.file_uploader("Upload Custom Line Items CSV (custom_details.csv)", type="csv")
-
+    
     task_activity_desc = CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
     if use_custom_tasks and uploaded_custom_tasks_file:
         custom_tasks_data = _load_custom_task_activity_data(uploaded_custom_tasks_file)
-        if custom_tasks_data is not None:
-            li_count = len(custom_tasks_data)
-            st.success(f"Loaded {li_count} custom line items.")
-            if custom_tasks_data:
-                task_activity_desc = custom_tasks_data
+        if custom_tasks_data:
+            task_activity_desc = custom_tasks_data
 
 with tab_objects[1]:
     st.markdown("<h2 style='color: #1E1E1E;'>Invoice Details</h2>", unsafe_allow_html=True)
-
-    # ===== Billing Profiles =====
-    st.markdown("<h3 style='color: #1E1E1E;'>Billing Profiles</h3>", unsafe_allow_html=True)
-    env_names = [p[0] for p in BILLING_PROFILES]
-    default_env = st.session_state.get("selected_env", env_names[0])
-    if default_env not in env_names:
-        default_env = env_names[0]
-    selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
-    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.")
-
-    prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
-
-    # Names
-    c1, c2 = st.columns(2)
-    with c1:
-        client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
-    with c2:
-        law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
-
-    # IDs (no format restrictions)
-    c3, c4 = st.columns(2)
-    with c3:
-        client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
-    with c4:
-        law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
-
-    # Status footer
-    status_html = f"""
-    <div style="margin-top:0.25rem;font-size:0.92rem;color:#444">
-      Using: <strong>{selected_env}</strong>
-      &nbsp;—&nbsp; Client ID: <span style="color:#15803d">{prof_client_id}</span>
-      &nbsp;•&nbsp; Law Firm ID: <span style="color:#15803d">{prof_law_firm_id}</span>
-    </div>
-    """
-    st.markdown(status_html, unsafe_allow_html=True)
-
-    # Other invoice details
+    st.markdown("<h3 style='color: #1E1E1E;'>Billing Information</h3>", unsafe_allow_html=True)
+    client_id = st.text_input("Client ID:", CONFIG['DEFAULT_CLIENT_ID'], help="Format: XX-XXXXXXX (e.g., 02-4388252)")
+    law_firm_id = st.text_input("Law Firm ID:", CONFIG['DEFAULT_LAW_FIRM_ID'], help="Format: XX-XXXXXXX (e.g., 02-1234567)")
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
     invoice_number_base = st.text_input("Invoice Number (Base):", "2025MMM-XXXXXX")
-
     LEDES_OPTIONS = ["1998B", "XML 2.1"]
     ledes_version = st.selectbox(
         "LEDES Version:",
@@ -1126,6 +1242,7 @@ with tab_objects[1]:
         key="ledes_version",
         help="XML 2.1 export is not implemented yet; please use 1998B."
     )
+
     if ledes_version == "XML 2.1":
         st.warning("This is not yet implemented - please use 1998B")
 
@@ -1276,14 +1393,7 @@ if generate_receipts:
             st.text_input("From (city)", value="", key="rcpt_travel_from")
             st.text_input("To (city)", value="", key="rcpt_travel_to")
             st.checkbox("Auto-generate blank travel fields", value=True, key="rcpt_travel_autogen")
-        with st.expander("Meal Details (E111)", expanded=False):
-            st.text_input("Table #", value="", key="rcpt_meal_table")
-            st.text_input("Server ID", value="", key="rcpt_meal_server")
-            st.checkbox("Include cashier line", value=True, key="rcpt_meal_show_cashier")
-
-
-
-# Email Configuration Tab (only created if send_email is True)
+        
 if st.session_state.send_email:
     email_tab_index = len(tabs) - 1
     with tab_objects[email_tab_index]:
@@ -1306,6 +1416,12 @@ if timekeeper_data is None:
     is_valid_input = False
 if billing_start_date >= billing_end_date:
     st.error("Billing start date must be before end date.")
+    is_valid_input = False
+if not _is_valid_client_id(client_id):
+    st.error("Client ID must be in format XX-XXXXXXX (e.g., 02-4388252).")
+    is_valid_input = False
+if not _is_valid_law_firm_id(law_firm_id):
+    st.error("Law Firm ID must be in format XX-XXXXXXX (e.g., 02-1234567).")
     is_valid_input = False
 if st.session_state.send_email and not recipient_email:
     st.error("Please provide a recipient email address.")
@@ -1373,7 +1489,7 @@ if generate_button:
                 if include_pdf:
                     use_custom_logo = st.session_state.get('use_custom_logo_checkbox', False)
                     logo_bytes = _get_logo_bytes(uploaded_logo, law_firm_id, use_custom_logo)
-                    pdf_buffer = _create_pdf_invoice(df=df_invoice, total_amount=total_amount, invoice_number=current_invoice_number, invoice_date=current_end_date, billing_start_date=current_start_date, billing_end_date=current_end_date, client_id=client_id, law_firm_id=law_firm_id, logo_bytes=logo_bytes, include_logo=include_logo, client_name=client_name, law_firm_name=law_firm_name)
+                    pdf_buffer = _create_pdf_invoice(df_invoice, total_amount, current_invoice_number, current_end_date, current_start_date, current_end_date, client_id, law_firm_id, logo_bytes, include_logo)
                     pdf_filename = f"Invoice_{current_invoice_number}.pdf"
                     attachments_list.append((pdf_filename, pdf_buffer.getvalue()))
                 
@@ -1448,3 +1564,51 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
+
+
+with tab_objects[4]:
+    st.markdown("### Admin")
+    st.markdown("#### Footer Policy Visibility")
+    if "rcpt_policy_text_travel" not in st.session_state:
+        st.session_state["rcpt_policy_text_travel"] = DEFAULT_RECEIPT_FOOTERS.get("travel", "Travel receipts must include itinerary and proof of payment.")
+    if "rcpt_policy_text_mileage" not in st.session_state:
+        st.session_state["rcpt_policy_text_mileage"] = DEFAULT_RECEIPT_FOOTERS.get("mileage", "Mileage reimbursed at the current company rate; odometer log required.")
+    if "rcpt_policy_text_supplies" not in st.session_state:
+        st.session_state["rcpt_policy_text_supplies"] = DEFAULT_RECEIPT_FOOTERS.get("supplies", "Supplies must be business-related; retain itemized receipts.")
+    if "rcpt_policy_text_generic" not in st.session_state:
+        st.session_state["rcpt_policy_text_generic"] = DEFAULT_RECEIPT_FOOTERS.get("generic", "All expenses are subject to company policy and audit.")
+
+    colA, colB = st.columns(2)
+    with colA:
+        with st.expander("Travel Footer", expanded=False):
+            st.checkbox("Show Travel Footer", key="rcpt_show_policy_travel", value=st.session_state.get("rcpt_show_policy_travel", True))
+            st.text_area("Footer Text", key="rcpt_policy_text_travel", height=100)
+        with st.expander("Mileage Footer", expanded=False):
+            st.checkbox("Show Mileage Footer", key="rcpt_show_policy_mileage", value=st.session_state.get("rcpt_show_policy_mileage", True))
+            st.text_area("Footer Text", key="rcpt_policy_text_mileage", height=100)
+    with colB:
+        with st.expander("Supplies Footer", expanded=False):
+            st.checkbox("Show Supplies Footer", key="rcpt_show_policy_supplies", value=st.session_state.get("rcpt_show_policy_supplies", True))
+            st.text_area("Footer Text", key="rcpt_policy_text_supplies", height=100)
+        with st.expander("Generic Footer", expanded=False):
+            st.checkbox("Show Generic Footer", key="rcpt_show_policy_generic", value=st.session_state.get("rcpt_show_policy_generic", True))
+            st.text_area("Footer Text", key="rcpt_policy_text_generic", height=100)
+
+    st.markdown("---")
+    st.markdown("#### Global Style")
+    st.session_state["rcpt_scale"] = st.slider("Scale", 0.5, 2.0, st.session_state.get("rcpt_scale", 1.0), 0.1, help="Overall receipt scaling factor.")
+    st.session_state["rcpt_line_weight"] = st.number_input("Line Weight", min_value=1, max_value=5, value=int(st.session_state.get("rcpt_line_weight", 1)))
+    st.session_state["rcpt_dashed"] = st.checkbox("Dashed Lines", value=bool(st.session_state.get("rcpt_dashed", False)))
+
+
+# Build policy text map in session (used by receipt generation)
+try:
+    st.session_state["rcpt_policy_text_map"] = {
+        "travel": st.session_state.get("rcpt_policy_text_travel", DEFAULT_RECEIPT_FOOTERS.get("travel", "Travel receipts must include itinerary and proof of payment.")),
+        "mileage": st.session_state.get("rcpt_policy_text_mileage", DEFAULT_RECEIPT_FOOTERS.get("mileage", "Mileage reimbursed at the current company rate; odometer log required.")),
+        "supplies": st.session_state.get("rcpt_policy_text_supplies", DEFAULT_RECEIPT_FOOTERS.get("supplies", "Supplies must be business-related; retain itemized receipts.")),
+        "generic": st.session_state.get("rcpt_policy_text_generic", DEFAULT_RECEIPT_FOOTERS.get("generic", "All expenses are subject to company policy and audit.")),
+    }
+except Exception:
+    pass
