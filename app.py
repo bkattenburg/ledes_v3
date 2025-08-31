@@ -1369,12 +1369,7 @@ if generate_receipts:
                 value=False,
                 key="rcpt_dashed"
             )
-        with st.expander("Footer Policy Visibility", expanded=False):
-            st.checkbox("Show policy on Travel (E110)", value=True, key="admin_rcpt_show_policy_travel")
-            st.checkbox("Show policy on Meals (E111)", value=True, key="rcpt_show_policy_meal")
-            st.checkbox("Show policy on Mileage (E109)", value=True, key="admin_rcpt_show_policy_mileage")
-            st.checkbox("Show policy on Supplies/Other (E124)", value=True, key="admin_rcpt_show_policy_supplies")
-            st.checkbox("Show policy on Other (generic)", value=True, key="admin_rcpt_show_policy_generic")
+
         with st.expander("Travel Details (E110)", expanded=False):
             st.text_input("Carrier code (e.g., AA, UA)", value="", key="rcpt_travel_carrier")
             st.text_input("Flight number", value="", key="rcpt_travel_flight")
