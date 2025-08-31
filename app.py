@@ -1582,9 +1582,9 @@ with tab_objects[4]:
 
     st.markdown("---")
     st.markdown("#### Global Style")
-    st.session_state["rcpt_scale"] = st.slider("Scale", 0.5, 2.0, st.session_state.get("rcpt_scale", 1.0), 0.1, help="Overall receipt scaling factor.")
-    st.session_state["rcpt_line_weight"] = st.number_input("Line Weight", min_value=1, max_value=5, value=int(st.session_state.get("rcpt_line_weight", 1)))
-    st.session_state["rcpt_dashed"] = st.checkbox("Dashed Lines", value=bool(st.session_state.get("rcpt_dashed", False)))
+    rcpt_scale = st.slider("Scale", 0.5, 2.0, st.session_state.get("rcpt_scale", 1.0), 0.1, help="Overall receipt scaling factor.")
+    rcpt_line_weight = st.number_input("Line Weight", min_value=1, max_value=5, value=int(st.session_state.get("rcpt_line_weight", 1)))
+    rcpt_dashed = st.checkbox("Dashed Lines", value=bool(st.session_state.get("rcpt_dashed", False)))
 
 
 # Build policy text map in session (used by receipt generation)
