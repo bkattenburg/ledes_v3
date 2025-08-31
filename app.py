@@ -1552,48 +1552,49 @@ if generate_button:
 
 
 
+def _render_admin_tab():
+    with tab_objects[4]:
+        st.markdown("### Admin")
+        st.markdown("#### Footer Policy Visibility")
+        if "rcpt_policy_text_travel" not in st.session_state:
+            st.session_state["admin_rcpt_policy_text_travel"] = DEFAULT_RECEIPT_FOOTERS.get("travel", "Travel receipts must include itinerary and proof of payment.")
+        if "rcpt_policy_text_mileage" not in st.session_state:
+            st.session_state["admin_rcpt_policy_text_mileage"] = DEFAULT_RECEIPT_FOOTERS.get("mileage", "Mileage reimbursed at the current company rate; odometer log required.")
+        if "rcpt_policy_text_supplies" not in st.session_state:
+            st.session_state["admin_rcpt_policy_text_supplies"] = DEFAULT_RECEIPT_FOOTERS.get("supplies", "Supplies must be business-related; retain itemized receipts.")
+        if "rcpt_policy_text_generic" not in st.session_state:
+            st.session_state["admin_rcpt_policy_text_generic"] = DEFAULT_RECEIPT_FOOTERS.get("generic", "All expenses are subject to company policy and audit.")
+        colA, colB = st.columns(2)
+        with colA:
+            with st.expander("Travel Footer", expanded=False):
+                st.checkbox("Show Travel Footer", key="admin_rcpt_show_policy_travel", value=st.session_state.get("admin_rcpt_show_policy_travel", True))
+                st.text_area("Footer Text", key="admin_rcpt_policy_text_travel", height=100)
+            with st.expander("Mileage Footer", expanded=False):
+                st.checkbox("Show Mileage Footer", key="admin_rcpt_show_policy_mileage", value=st.session_state.get("admin_rcpt_show_policy_mileage", True))
+                st.text_area("Footer Text", key="admin_rcpt_policy_text_mileage", height=100)
+        with colB:
+            with st.expander("Supplies Footer", expanded=False):
+                st.checkbox("Show Supplies Footer", key="admin_rcpt_show_policy_supplies", value=st.session_state.get("admin_rcpt_show_policy_supplies", True))
+                st.text_area("Footer Text", key="admin_rcpt_policy_text_supplies", height=100)
+            with st.expander("Generic Footer", expanded=False):
+                st.checkbox("Show Generic Footer", key="admin_rcpt_show_policy_generic", value=st.session_state.get("admin_rcpt_show_policy_generic", True))
+                st.text_area("Footer Text", key="admin_rcpt_policy_text_generic", height=100)
+        st.markdown("---")
+        st.markdown("#### Global Style")
+        rcpt_scale = st.slider("Scale", 0.5, 2.0, st.session_state.get("rcpt_scale", 1.0), 0.1, help="Overall receipt scaling factor.")
+        rcpt_line_weight = st.number_input("Line Weight", min_value=1, max_value=5, value=int(st.session_state.get("rcpt_line_weight", 1)))
+        rcpt_dashed = st.checkbox("Dashed Lines", value=bool(st.session_state.get("rcpt_dashed", False)))
+    # Build policy text map in session (used by receipt generation)
+    try:
+        st.session_state["rcpt_policy_text_map"] = {
+            "travel": st.session_state.get("admin_rcpt_policy_text_travel", st.session_state.get("rcpt_policy_text_travel", DEFAULT_RECEIPT_FOOTERS.get("travel", "Travel receipts must include itinerary and proof of payment."))),
+            "mileage": st.session_state.get("admin_rcpt_policy_text_mileage", st.session_state.get("rcpt_policy_text_mileage", DEFAULT_RECEIPT_FOOTERS.get("mileage", "Mileage reimbursed at the current company rate; odometer log required."))),
+            "supplies": st.session_state.get("admin_rcpt_policy_text_supplies", st.session_state.get("rcpt_policy_text_supplies", DEFAULT_RECEIPT_FOOTERS.get("supplies", "Supplies must be business-related; retain itemized receipts."))),
+            "generic": st.session_state.get("admin_rcpt_policy_text_generic", st.session_state.get("rcpt_policy_text_generic", DEFAULT_RECEIPT_FOOTERS.get("generic", "All expenses are subject to company policy and audit."))),
+        }
+    except Exception:
+        pass
+
 with tab_objects[4]:
-    st.markdown("### Admin")
-    st.markdown("#### Footer Policy Visibility")
-    if "rcpt_policy_text_travel" not in st.session_state:
-        st.session_state["admin_rcpt_policy_text_travel"] = DEFAULT_RECEIPT_FOOTERS.get("travel", "Travel receipts must include itinerary and proof of payment.")
-    if "rcpt_policy_text_mileage" not in st.session_state:
-        st.session_state["admin_rcpt_policy_text_mileage"] = DEFAULT_RECEIPT_FOOTERS.get("mileage", "Mileage reimbursed at the current company rate; odometer log required.")
-    if "rcpt_policy_text_supplies" not in st.session_state:
-        st.session_state["admin_rcpt_policy_text_supplies"] = DEFAULT_RECEIPT_FOOTERS.get("supplies", "Supplies must be business-related; retain itemized receipts.")
-    if "rcpt_policy_text_generic" not in st.session_state:
-        st.session_state["admin_rcpt_policy_text_generic"] = DEFAULT_RECEIPT_FOOTERS.get("generic", "All expenses are subject to company policy and audit.")
+    _render_admin_tab()
 
-    colA, colB = st.columns(2)
-    with colA:
-        with st.expander("Travel Footer", expanded=False):
-            st.checkbox("Show Travel Footer", key="admin_rcpt_show_policy_travel", value=st.session_state.get("admin_rcpt_show_policy_travel", True))
-            st.text_area("Footer Text", key="admin_rcpt_policy_text_travel", height=100)
-        with st.expander("Mileage Footer", expanded=False):
-            st.checkbox("Show Mileage Footer", key="admin_rcpt_show_policy_mileage", value=st.session_state.get("admin_rcpt_show_policy_mileage", True))
-            st.text_area("Footer Text", key="admin_rcpt_policy_text_mileage", height=100)
-    with colB:
-        with st.expander("Supplies Footer", expanded=False):
-            st.checkbox("Show Supplies Footer", key="admin_rcpt_show_policy_supplies", value=st.session_state.get("admin_rcpt_show_policy_supplies", True))
-            st.text_area("Footer Text", key="admin_rcpt_policy_text_supplies", height=100)
-        with st.expander("Generic Footer", expanded=False):
-            st.checkbox("Show Generic Footer", key="admin_rcpt_show_policy_generic", value=st.session_state.get("admin_rcpt_show_policy_generic", True))
-            st.text_area("Footer Text", key="admin_rcpt_policy_text_generic", height=100)
-
-    st.markdown("---")
-    st.markdown("#### Global Style")
-    rcpt_scale = st.slider("Scale", 0.5, 2.0, st.session_state.get("rcpt_scale", 1.0), 0.1, help="Overall receipt scaling factor.")
-    rcpt_line_weight = st.number_input("Line Weight", min_value=1, max_value=5, value=int(st.session_state.get("rcpt_line_weight", 1)))
-    rcpt_dashed = st.checkbox("Dashed Lines", value=bool(st.session_state.get("rcpt_dashed", False)))
-
-
-# Build policy text map in session (used by receipt generation)
-try:
-    st.session_state["rcpt_policy_text_map"] = {
-        "travel": st.session_state.get("admin_rcpt_policy_text_travel", st.session_state.get("rcpt_policy_text_travel", DEFAULT_RECEIPT_FOOTERS.get("travel", "Travel receipts must include itinerary and proof of payment."))),
-        "mileage": st.session_state.get("admin_rcpt_policy_text_mileage", st.session_state.get("rcpt_policy_text_mileage", DEFAULT_RECEIPT_FOOTERS.get("mileage", "Mileage reimbursed at the current company rate; odometer log required."))),
-        "supplies": st.session_state.get("admin_rcpt_policy_text_supplies", st.session_state.get("rcpt_policy_text_supplies", DEFAULT_RECEIPT_FOOTERS.get("supplies", "Supplies must be business-related; retain itemized receipts."))),
-        "generic": st.session_state.get("admin_rcpt_policy_text_generic", st.session_state.get("rcpt_policy_text_generic", DEFAULT_RECEIPT_FOOTERS.get("generic", "All expenses are subject to company policy and audit."))),
-    }
-except Exception:
-    pass
