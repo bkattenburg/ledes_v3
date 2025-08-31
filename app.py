@@ -1031,7 +1031,8 @@ if timekeeper_data is not None:
     # Preview top rows (index starting at 1)
     tk_df_preview = pd.DataFrame(timekeeper_data).head(10).reset_index(drop=True)
     tk_df_preview.index = tk_df_preview.index + 1
-    st.markdown("**10-Row Preview**")
+    preview_count = min(10, len(timekeeper_data))
+    st.markdown(f"**{preview_count}-Row Preview**")
     st.dataframe(tk_df_preview, use_container_width=True)
 
     use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
