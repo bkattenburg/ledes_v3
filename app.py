@@ -1022,13 +1022,17 @@ with tab_objects[0]:
     uploaded_timekeeper_file = st.file_uploader("Upload Timekeeper CSV (tk_info.csv)", type="csv")
     timekeeper_data = _load_timekeepers(uploaded_timekeeper_file)
 
-    # Timekeeper summary + preview
-    if timekeeper_data is not None:
-        tk_count = len(timekeeper_data)
-        st.success(f"Loaded {tk_count} timekeepers.")
-        # Preview top rows for quick validation
-        tk_df_preview = pd.DataFrame(timekeeper_data).head(10)
-        st.dataframe(tk_df_preview, use_container_width=True)
+    
+# Timekeeper summary + preview
+if timekeeper_data is not None:
+    tk_count = len(timekeeper_data)
+    st.success(f"Loaded {tk_count} timekeepers.")
+
+    # Preview top rows (index starting at 1)
+    tk_df_preview = pd.DataFrame(timekeeper_data).head(10).reset_index(drop=True)
+    tk_df_preview.index = tk_df_preview.index + 1
+    st.markdown("**10-Row Preview**")
+    st.dataframe(tk_df_preview, use_container_width=True)
 
     use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
     uploaded_custom_tasks_file = None
