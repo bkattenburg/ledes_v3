@@ -22,6 +22,26 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont
 import zipfile
 
+
+# ===============================
+# Billing Profiles Configuration
+# ===============================
+# Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
+BILLING_PROFILES = [
+    ("Onit ELM",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
+    ("SimpleLegal", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
+    ("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
+]
+
+def get_profile(env: str):
+    """Return (client_name, client_id, law_firm_name, law_firm_id) for the environment."""
+    for p in BILLING_PROFILES:
+        if p[0] == env:
+            return (p[1], p[2], p[3], p[4])
+    p = BILLING_PROFILES[0]
+    return (p[1], p[2], p[3], p[4])
+
+
 # --- Logging Setup ---
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -509,55 +529,40 @@ def _get_logo_bytes(uploaded_logo: Optional[Any], law_firm_id: str, use_custom: 
     buf.seek(0)
     return buf.getvalue()
 
-def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: str, invoice_date: datetime.date, billing_start_date: datetime.date, billing_end_date: datetime.date, client_id: str, law_firm_id: str, logo_bytes: bytes, include_logo: bool = True) -> io.BytesIO:
+
+def _create_pdf_invoice(
+    df: pd.DataFrame,
+    total_amount: float,
+    invoice_number: str,
+    invoice_date: datetime.date,
+    billing_start_date: datetime.date,
+    billing_end_date: datetime.date,
+    client_id: str,
+    law_firm_id: str,
+    logo_bytes: bytes,
+    include_logo: bool = True,
+    client_name: str = "",
+    law_firm_name: str = ""
+) -> io.BytesIO:
     """Generate a PDF invoice matching the provided format."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
     styles = getSampleStyleSheet()
 
-    # Define new styles
-    header_info_style = ParagraphStyle(
-        'HeaderInfo',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=12,
-        leading=14,
-        alignment=TA_LEFT
-    )
-    
-    client_info_style = ParagraphStyle(
-        'ClientInfo',
-        parent=header_info_style,
-        alignment=TA_RIGHT
-    )
-
-    table_header_style = ParagraphStyle(
-        'TableHeader',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=10,
-        leading=12,
-        alignment=TA_CENTER,
-        wordWrap='CJK'
-    )
-
-    table_data_style = ParagraphStyle(
-        'TableData',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=10,
-        leading=12,
-        alignment=TA_LEFT,
-        wordWrap='CJK'
-    )
-    
+    # Styles
+    header_info_style = ParagraphStyle('HeaderInfo', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=14, alignment=TA_LEFT)
+    client_info_style = ParagraphStyle('ClientInfo', parent=header_info_style, alignment=TA_RIGHT)
+    table_header_style = ParagraphStyle('TableHeader', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=12, alignment=TA_CENTER, wordWrap='CJK')
+    table_data_style = ParagraphStyle('TableData', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=12, alignment=TA_LEFT, wordWrap='CJK')
     right_align_style = styles['Heading4']
 
-    # Header with Law Firm on left and Client on right
-    law_firm_info = f"Nelson and Murdock<br/>{law_firm_id}<br/>One Park Avenue<br/>Manhattan, NY 10003"
-    client_info = f"A Onit Inc.<br/>{client_id}<br/>1360 Post Oak Blvd<br/>Houston, TX 77056"
-    
+    # Header: law firm (left) / client (right)
+    lf_name = law_firm_name or "Law Firm"
+    cl_name = client_name or "Client"
+    law_firm_info = f"{lf_name}<br/>{law_firm_id}<br/>One Park Avenue<br/>Manhattan, NY 10003"
+    client_info   = f"{cl_name}<br/>{client_id}<br/>1360 Post Oak Blvd<br/>Houston, TX 77056"
+
     law_firm_para = Paragraph(law_firm_info, header_info_style)
     client_para = Paragraph(client_info, client_info_style)
 
@@ -571,14 +576,10 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
             img.alt = "Law Firm Logo"
             inner_table_data = [[img, Paragraph(law_firm_info, header_info_style)]]
             inner_table = Table(inner_table_data, colWidths=[0.7 * inch, None])
-            inner_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (1, 0), (1, 0), 6),
-            ]))
+            inner_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (1, 0), (1, 0), 6)]))
             header_left_content = inner_table
         except Exception as e:
             logging.error(f"Error adding logo to PDF: {e}")
-            st.warning("Could not add logo to PDF. Using text instead.")
             header_left_content = law_firm_para
 
     header_data = [[header_left_content, client_para]]
@@ -593,30 +594,27 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
     elements.append(header_table)
     elements.append(Spacer(1, 0.1 * inch))
 
-    # Invoice details
+    # Invoice info
     invoice_info = f"Invoice #: {invoice_number}<br/>Invoice Date: {invoice_date.strftime('%Y-%m-%d')}<br/>Billing Period: {billing_start_date.strftime('%Y-%m-%d')} to {billing_end_date.strftime('%Y-%m-%d')}"
     invoice_para = Paragraph(invoice_info, right_align_style)
     invoice_table = Table([[invoice_para]], colWidths=[7.5 * inch])
-    invoice_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-    ]))
+    invoice_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
     elements.append(invoice_table)
     elements.append(Spacer(1, 0.1 * inch))
 
-    # Table with updated columns and wrapped text
-    data = [
-        [
-            Paragraph("Date", table_header_style), 
-            Paragraph("Task<br/>Code", table_header_style), 
-            Paragraph("Activity<br/>Code", table_header_style), 
-            Paragraph("Timekeeper", table_header_style), 
-            Paragraph("Description", table_header_style), 
-            Paragraph("Hours", table_header_style), 
-            Paragraph("Rate", table_header_style), 
-            Paragraph("Total", table_header_style)
-        ]
-    ]
+    # Table headers
+    data = [[
+        Paragraph("Date", table_header_style),
+        Paragraph("Task<br/>Code", table_header_style),
+        Paragraph("Activity<br/>Code", table_header_style),
+        Paragraph("Timekeeper", table_header_style),
+        Paragraph("Description", table_header_style),
+        Paragraph("Hours", table_header_style),
+        Paragraph("Rate", table_header_style),
+        Paragraph("Total", table_header_style),
+    ]]
+
+    # Rows
     for _, row in df.iterrows():
         date = row["LINE_ITEM_DATE"]
         timekeeper = Paragraph(row["TIMEKEEPER_NAME"] if row["TIMEKEEPER_NAME"] else "N/A", table_data_style)
@@ -639,7 +637,7 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (1, 1), (2, -1), 'CENTER'), # Center Task Code and Activity Code data
+        ('ALIGN', (1, 1), (2, -1), 'CENTER'),
         ('ALIGN', (5, 0), (5, -1), 'CENTER'),
         ('ALIGN', (6, 0), (6, -1), 'RIGHT'),
         ('ALIGN', (7, 0), (7, -1), 'RIGHT'),
@@ -1033,13 +1031,48 @@ with tab_objects[0]:
         if custom_tasks_data:
             task_activity_desc = custom_tasks_data
 
+
 with tab_objects[1]:
     st.markdown("<h2 style='color: #1E1E1E;'>Invoice Details</h2>", unsafe_allow_html=True)
-    st.markdown("<h3 style='color: #1E1E1E;'>Billing Information</h3>", unsafe_allow_html=True)
-    client_id = st.text_input("Client ID:", CONFIG['DEFAULT_CLIENT_ID'], help="Format: XX-XXXXXXX (e.g., 02-4388252)")
-    law_firm_id = st.text_input("Law Firm ID:", CONFIG['DEFAULT_LAW_FIRM_ID'], help="Format: XX-XXXXXXX (e.g., 02-1234567)")
+
+    # ===== Billing Profiles =====
+    st.markdown("<h3 style='color: #1E1E1E;'>Billing Profiles</h3>", unsafe_allow_html=True)
+    env_names = [p[0] for p in BILLING_PROFILES]
+    default_env = st.session_state.get("selected_env", env_names[0])
+    if default_env not in env_names:
+        default_env = env_names[0]
+    selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
+    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.")
+
+    prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
+
+    # Side-by-side names
+    c1, c2 = st.columns(2)
+    with c1:
+        client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
+    with c2:
+        law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
+
+    c3, c4 = st.columns(2)
+    with c3:
+        client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
+    with c4:
+        law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
+
+    # Status footer (always shows the stored profile values)
+    status_html = f"""
+    <div style="margin-top:0.25rem;font-size:0.92rem;color:#444">
+      Using: <strong>{selected_env}</strong>
+      &nbsp;—&nbsp; Client ID: <span style="color:#15803d">{prof_client_id}</span>
+      &nbsp;•&nbsp; Law Firm ID: <span style="color:#15803d">{prof_law_firm_id}</span>
+    </div>
+    """
+    st.markdown(status_html, unsafe_allow_html=True)
+
+    # Other invoice details
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
     invoice_number_base = st.text_input("Invoice Number (Base):", "2025MMM-XXXXXX")
+
     LEDES_OPTIONS = ["1998B", "XML 2.1"]
     ledes_version = st.selectbox(
         "LEDES Version:",
@@ -1047,7 +1080,6 @@ with tab_objects[1]:
         key="ledes_version",
         help="XML 2.1 export is not implemented yet; please use 1998B."
     )
-
     if ledes_version == "XML 2.1":
         st.warning("This is not yet implemented - please use 1998B")
 
@@ -1229,12 +1261,6 @@ if timekeeper_data is None:
 if billing_start_date >= billing_end_date:
     st.error("Billing start date must be before end date.")
     is_valid_input = False
-if not _is_valid_client_id(client_id):
-    st.error("Client ID must be in format XX-XXXXXXX (e.g., 02-4388252).")
-    is_valid_input = False
-if not _is_valid_law_firm_id(law_firm_id):
-    st.error("Law Firm ID must be in format XX-XXXXXXX (e.g., 02-1234567).")
-    is_valid_input = False
 if st.session_state.send_email and not recipient_email:
     st.error("Please provide a recipient email address.")
     is_valid_input = False
@@ -1301,7 +1327,7 @@ if generate_button:
                 if include_pdf:
                     use_custom_logo = st.session_state.get('use_custom_logo_checkbox', False)
                     logo_bytes = _get_logo_bytes(uploaded_logo, law_firm_id, use_custom_logo)
-                    pdf_buffer = _create_pdf_invoice(df_invoice, total_amount, current_invoice_number, current_end_date, current_start_date, current_end_date, client_id, law_firm_id, logo_bytes, include_logo)
+                    pdf_buffer = _create_pdf_invoice(df_invoice, total_amount, current_invoice_number, current_end_date, current_start_date, current_end_date, client_id, law_firm_id, logo_bytes, include_logo, client_name, law_firm_name)
                     pdf_filename = f"Invoice_{current_invoice_number}.pdf"
                     attachments_list.append((pdf_filename, pdf_buffer.getvalue()))
                 
