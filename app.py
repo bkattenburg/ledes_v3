@@ -1015,22 +1015,34 @@ tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
 # Email settings will live under the Output tab.
 tab_objects = st.tabs(tabs)
 
+
 with tab_objects[0]:
+
     st.markdown("<h3 style='color: #1E1E1E;'>Data Sources</h3>", unsafe_allow_html=True)
     uploaded_timekeeper_file = st.file_uploader("Upload Timekeeper CSV (tk_info.csv)", type="csv")
     timekeeper_data = _load_timekeepers(uploaded_timekeeper_file)
+
+    # Timekeeper summary + preview
+    if timekeeper_data is not None:
+        tk_count = len(timekeeper_data)
+        st.success(f"Loaded {tk_count} timekeepers.")
+        # Preview top rows for quick validation
+        tk_df_preview = pd.DataFrame(timekeeper_data).head(10)
+        st.dataframe(tk_df_preview, use_container_width=True)
 
     use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
     uploaded_custom_tasks_file = None
     if use_custom_tasks:
         uploaded_custom_tasks_file = st.file_uploader("Upload Custom Line Items CSV (custom_details.csv)", type="csv")
-    
+
     task_activity_desc = CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
     if use_custom_tasks and uploaded_custom_tasks_file:
         custom_tasks_data = _load_custom_task_activity_data(uploaded_custom_tasks_file)
-        if custom_tasks_data:
-            task_activity_desc = custom_tasks_data
-
+        if custom_tasks_data is not None:
+            li_count = len(custom_tasks_data)
+            st.success(f"Loaded {li_count} custom line items.")
+            if custom_tasks_data:
+                task_activity_desc = custom_tasks_data
 
 with tab_objects[1]:
     st.markdown("<h2 style='color: #1E1E1E;'>Invoice Details</h2>", unsafe_allow_html=True)
