@@ -22,6 +22,18 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont
 import zipfile
 
+# ---- SEND_EMAIL_STATE_GUARD ----
+try:
+    import streamlit as st  # ensure st exists in this scope
+    if "send_email" not in st.session_state:
+        st.session_state["send_email"] = False
+    if "send_email_checkbox" not in st.session_state:
+        st.session_state["send_email_checkbox"] = st.session_state.get("send_email", False)
+except Exception:
+    pass
+# --------------------------------
+
+
 # ---- Guard: ensure DEFAULT_RECEIPT_FOOTERS exists ----
 if "DEFAULT_RECEIPT_FOOTERS" not in globals():
     DEFAULT_RECEIPT_FOOTERS = {
@@ -1154,10 +1166,14 @@ if "send_email" not in st.session_state:
     st.session_state.send_email = False
 
 # Callback for updating send_email state
-def update_send_email():
-    st.session_state.send_email = st.session_state.send_email_checkbox
-    logging.debug(f"Updated st.session_state.send_email to {st.session_state.send_email}")
 
+def update_send_email():
+    try:
+        val = bool(st.session_state.get("send_email_checkbox", st.session_state.get("send_email", False)))
+        st.session_state["send_email"] = val
+        logging.debug(f"Updated st.session_state.send_email to {st.session_state['send_email']}")
+    except Exception as e:
+        logging.error(f"update_send_email failed: {e}")
 with st.expander("Help & FAQs"):
     st.markdown("""
     ### FAQs
@@ -1173,7 +1189,7 @@ with st.expander("Help & FAQs"):
 st.markdown("<h3 style='color: #1E1E1E;'>Output & Delivery Options</h3>", unsafe_allow_html=True)
 st.checkbox(
     "Send Invoices via Email",
-    value=st.session_state.send_email,
+    value=bool(st.session_state.get("send_email", False)),
     key="send_email_checkbox",
     on_change=update_send_email
 )
