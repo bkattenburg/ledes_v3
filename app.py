@@ -529,60 +529,44 @@ def _get_logo_bytes(uploaded_logo: Optional[Any], law_firm_id: str, use_custom: 
     buf.seek(0)
     return buf.getvalue()
 
-def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: str, invoice_date: datetime.date, billing_start_date: datetime.date, billing_end_date: datetime.date, client_id: str, law_firm_id: str, logo_bytes: bytes, include_logo: bool = True) -> io.BytesIO:
+
+def _create_pdf_invoice(
+    df: pd.DataFrame,
+    total_amount: float,
+    invoice_number: str,
+    invoice_date: datetime.date,
+    billing_start_date: datetime.date,
+    billing_end_date: datetime.date,
+    client_id: str,
+    law_firm_id: str,
+    logo_bytes: bytes | None = None,
+    include_logo: bool = False,
+    client_name: str = "",
+    law_firm_name: str = ""
+) -> io.BytesIO:
     """Generate a PDF invoice matching the provided format."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
     styles = getSampleStyleSheet()
 
-    # Define new styles
-    header_info_style = ParagraphStyle(
-        'HeaderInfo',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=12,
-        leading=14,
-        alignment=TA_LEFT
-    )
-    
-    client_info_style = ParagraphStyle(
-        'ClientInfo',
-        parent=header_info_style,
-        alignment=TA_RIGHT
-    )
-
-    table_header_style = ParagraphStyle(
-        'TableHeader',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=10,
-        leading=12,
-        alignment=TA_CENTER,
-        wordWrap='CJK'
-    )
-
-    table_data_style = ParagraphStyle(
-        'TableData',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=10,
-        leading=12,
-        alignment=TA_LEFT,
-        wordWrap='CJK'
-    )
-    
+    # Styles
+    header_info_style = ParagraphStyle('HeaderInfo', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=14, alignment=TA_LEFT)
+    client_info_style = ParagraphStyle('ClientInfo', parent=header_info_style, alignment=TA_RIGHT)
+    table_header_style = ParagraphStyle('TableHeader', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=12, alignment=TA_CENTER, wordWrap='CJK')
+    table_data_style = ParagraphStyle('TableData', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=12, alignment=TA_LEFT, wordWrap='CJK')
     right_align_style = styles['Heading4']
 
-    # Header with Law Firm on left and Client on right
-    law_firm_info = f"Nelson and Murdock<br/>{law_firm_id}<br/>One Park Avenue<br/>Manhattan, NY 10003"
-    client_info = f"A Onit Inc.<br/>{client_id}<br/>1360 Post Oak Blvd<br/>Houston, TX 77056"
-    
+    # Header info
+    lf_name = law_firm_name or "Law Firm"
+    cl_name = client_name or "Client"
+    law_firm_info = f"{lf_name}<br/>{law_firm_id}<br/>One Park Avenue<br/>Manhattan, NY 10003"
+    client_info   = f"{cl_name}<br/>{client_id}<br/>1360 Post Oak Blvd<br/>Houston, TX 77056"
     law_firm_para = Paragraph(law_firm_info, header_info_style)
     client_para = Paragraph(client_info, client_info_style)
 
     header_left_content = law_firm_para
-    if include_logo:
+    if include_logo and logo_bytes:
         try:
             if not _validate_image_bytes(logo_bytes):
                 raise ValueError("Invalid logo bytes")
@@ -591,14 +575,10 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
             img.alt = "Law Firm Logo"
             inner_table_data = [[img, Paragraph(law_firm_info, header_info_style)]]
             inner_table = Table(inner_table_data, colWidths=[0.7 * inch, None])
-            inner_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (1, 0), (1, 0), 6),
-            ]))
+            inner_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (1, 0), (1, 0), 6)]))
             header_left_content = inner_table
         except Exception as e:
             logging.error(f"Error adding logo to PDF: {e}")
-            st.warning("Could not add logo to PDF. Using text instead.")
             header_left_content = law_firm_para
 
     header_data = [[header_left_content, client_para]]
@@ -613,30 +593,27 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
     elements.append(header_table)
     elements.append(Spacer(1, 0.1 * inch))
 
-    # Invoice details
+    # Invoice meta
     invoice_info = f"Invoice #: {invoice_number}<br/>Invoice Date: {invoice_date.strftime('%Y-%m-%d')}<br/>Billing Period: {billing_start_date.strftime('%Y-%m-%d')} to {billing_end_date.strftime('%Y-%m-%d')}"
     invoice_para = Paragraph(invoice_info, right_align_style)
     invoice_table = Table([[invoice_para]], colWidths=[7.5 * inch])
-    invoice_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-    ]))
+    invoice_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
     elements.append(invoice_table)
     elements.append(Spacer(1, 0.1 * inch))
 
-    # Table with updated columns and wrapped text
-    data = [
-        [
-            Paragraph("Date", table_header_style), 
-            Paragraph("Task<br/>Code", table_header_style), 
-            Paragraph("Activity<br/>Code", table_header_style), 
-            Paragraph("Timekeeper", table_header_style), 
-            Paragraph("Description", table_header_style), 
-            Paragraph("Hours", table_header_style), 
-            Paragraph("Rate", table_header_style), 
-            Paragraph("Total", table_header_style)
-        ]
-    ]
+    # Table headers
+    data = [[
+        Paragraph("Date", table_header_style),
+        Paragraph("Task<br/>Code", table_header_style),
+        Paragraph("Activity<br/>Code", table_header_style),
+        Paragraph("Timekeeper", table_header_style),
+        Paragraph("Description", table_header_style),
+        Paragraph("Hours", table_header_style),
+        Paragraph("Rate", table_header_style),
+        Paragraph("Total", table_header_style),
+    ]]
+
+    # Rows
     for _, row in df.iterrows():
         date = row["LINE_ITEM_DATE"]
         timekeeper = Paragraph(row["TIMEKEEPER_NAME"] if row["TIMEKEEPER_NAME"] else "N/A", table_data_style)
@@ -659,7 +636,7 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (1, 1), (2, -1), 'CENTER'), # Center Task Code and Activity Code data
+        ('ALIGN', (1, 1), (2, -1), 'CENTER'),
         ('ALIGN', (5, 0), (5, -1), 'CENTER'),
         ('ALIGN', (6, 0), (6, -1), 'RIGHT'),
         ('ALIGN', (7, 0), (7, -1), 'RIGHT'),
@@ -670,9 +647,42 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
     ]))
     elements.append(table)
 
-    elements.append(Spacer(1, 0.25 * inch))
-    total_para = Paragraph(f"Total: ${total_amount:.2f}", right_align_style)
-    elements.append(total_para)
+    # Totals block (right-aligned)
+    try:
+        fees_total = float(df.loc[(df.get("EXPENSE_CODE") == "") | (df.get("EXPENSE_CODE").isna()), "LINE_ITEM_TOTAL"].astype(float).sum())
+    except Exception:
+        try:
+            fees_total = float(df[df["EXPENSE_CODE"] == ""]["LINE_ITEM_TOTAL"].astype(float).sum())
+        except Exception:
+            fees_total = 0.0
+    try:
+        expenses_total = float(df.loc[df.get("EXPENSE_CODE") != "", "LINE_ITEM_TOTAL"].astype(float).sum())
+    except Exception:
+        try:
+            expenses_total = float(df[df["EXPENSE_CODE"] != ""]["LINE_ITEM_TOTAL"].astype(float).sum())
+        except Exception:
+            expenses_total = 0.0
+
+    elements.append(Spacer(1, 0.2 * inch))
+
+    totals_style_label = ParagraphStyle('TotalsLabel', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, alignment=TA_RIGHT)
+    totals_style_amt   = ParagraphStyle('TotalsAmt',   parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, alignment=TA_RIGHT)
+
+    totals_data = [
+        [Paragraph("Total Fees:", totals_style_label), Paragraph(f"${fees_total:,.2f}", totals_style_amt)],
+        [Paragraph("Total Expenses:", totals_style_label), Paragraph(f"${expenses_total:,.2f}", totals_style_amt)],
+        [Paragraph("Invoice Total:", totals_style_label), Paragraph(f"${total_amount:,.2f}", totals_style_amt)],
+    ]
+    totals_table = Table(totals_data, colWidths=[1.6 * inch, 1.2 * inch], hAlign='RIGHT')
+    totals_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(totals_table)
 
     doc.build(elements)
     buffer.seek(0)
@@ -1363,7 +1373,7 @@ if generate_button:
                 if include_pdf:
                     use_custom_logo = st.session_state.get('use_custom_logo_checkbox', False)
                     logo_bytes = _get_logo_bytes(uploaded_logo, law_firm_id, use_custom_logo)
-                    pdf_buffer = _create_pdf_invoice(df_invoice, total_amount, current_invoice_number, current_end_date, current_start_date, current_end_date, client_id, law_firm_id, logo_bytes, include_logo, client_name, law_firm_name)
+                    pdf_buffer = _create_pdf_invoice(df=df_invoice, total_amount=total_amount, invoice_number=current_invoice_number, invoice_date=current_end_date, billing_start_date=current_start_date, billing_end_date=current_end_date, client_id=client_id, law_firm_id=law_firm_id, logo_bytes=logo_bytes, include_logo=include_logo, client_name=client_name, law_firm_name=law_firm_name)
                     pdf_filename = f"Invoice_{current_invoice_number}.pdf"
                     attachments_list.append((pdf_filename, pdf_buffer.getvalue()))
                 
