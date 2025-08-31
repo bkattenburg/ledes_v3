@@ -851,17 +851,13 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     rcpt_line_weight = int(st.session_state.get("rcpt_line_weight", 1)) if st else 1
     rcpt_dashed = bool(st.session_state.get("rcpt_dashed", False)) if st else False
     
-    show_policy_map = {
-        "travel": bool(st.session_state.get("rcpt_show_policy_travel", True)) if st else True,
-        "meal": bool(st.session_state.get("rcpt_show_policy_meal", True)) if st else True,
-        "mileage": bool(st.session_state.get("rcpt_show_policy_mileage", True)) if st else True,
-        "supplies": bool(st.session_state.get("rcpt_show_policy_supplies", True)) if st else True,
-        "generic": bool(st.session_state.get("rcpt_show_policy_generic", True)) if st else True,
-        "delivery": True,
-        "postage": True,
-        "rideshare": True,
-    }
     
+    show_policy_map = {
+    "travel": bool(st.session_state.get("admin_rcpt_show_policy_travel", st.session_state.get("rcpt_show_policy_travel", True))) if st else True,
+    "mileage": bool(st.session_state.get("admin_rcpt_show_policy_mileage", st.session_state.get("rcpt_show_policy_mileage", True))) if st else True,
+    "supplies": bool(st.session_state.get("admin_rcpt_show_policy_supplies", st.session_state.get("rcpt_show_policy_supplies", True))) if st else True,
+    "generic": bool(st.session_state.get("admin_rcpt_show_policy_generic", st.session_state.get("rcpt_show_policy_generic", True))) if st else True,
+    }
     travel_overrides = {
         "carrier": (st.session_state.get("rcpt_travel_carrier", "") if st else ""),
         "flight": (st.session_state.get("rcpt_travel_flight", "") if st else ""),
@@ -870,12 +866,6 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
         "from": (st.session_state.get("rcpt_travel_from", "") if st else ""),
         "to": (st.session_state.get("rcpt_travel_to", "") if st else ""),
         "autogen": bool(st.session_state.get("rcpt_travel_autogen", True)) if st else True,
-    }
-    
-    meal_overrides = {
-        "table": (st.session_state.get("rcpt_meal_table", "") if st else ""),
-        "server": (st.session_state.get("rcpt_meal_server", "") if st else ""),
-        "show_cashier": bool(st.session_state.get("rcpt_meal_show_cashier", True)) if st else True,
     }
     
 
@@ -1380,11 +1370,11 @@ if generate_receipts:
                 key="rcpt_dashed"
             )
         with st.expander("Footer Policy Visibility", expanded=False):
-            st.checkbox("Show policy on Travel (E110)", value=True, key="rcpt_show_policy_travel")
+            st.checkbox("Show policy on Travel (E110)", value=True, key="admin_rcpt_show_policy_travel")
             st.checkbox("Show policy on Meals (E111)", value=True, key="rcpt_show_policy_meal")
-            st.checkbox("Show policy on Mileage (E109)", value=True, key="rcpt_show_policy_mileage")
-            st.checkbox("Show policy on Supplies/Other (E124)", value=True, key="rcpt_show_policy_supplies")
-            st.checkbox("Show policy on Other (generic)", value=True, key="rcpt_show_policy_generic")
+            st.checkbox("Show policy on Mileage (E109)", value=True, key="admin_rcpt_show_policy_mileage")
+            st.checkbox("Show policy on Supplies/Other (E124)", value=True, key="admin_rcpt_show_policy_supplies")
+            st.checkbox("Show policy on Other (generic)", value=True, key="admin_rcpt_show_policy_generic")
         with st.expander("Travel Details (E110)", expanded=False):
             st.text_input("Carrier code (e.g., AA, UA)", value="", key="rcpt_travel_carrier")
             st.text_input("Flight number", value="", key="rcpt_travel_flight")
@@ -1571,29 +1561,29 @@ with tab_objects[4]:
     st.markdown("### Admin")
     st.markdown("#### Footer Policy Visibility")
     if "rcpt_policy_text_travel" not in st.session_state:
-        st.session_state["rcpt_policy_text_travel"] = DEFAULT_RECEIPT_FOOTERS.get("travel", "Travel receipts must include itinerary and proof of payment.")
+        st.session_state["admin_rcpt_policy_text_travel"] = DEFAULT_RECEIPT_FOOTERS.get("travel", "Travel receipts must include itinerary and proof of payment.")
     if "rcpt_policy_text_mileage" not in st.session_state:
-        st.session_state["rcpt_policy_text_mileage"] = DEFAULT_RECEIPT_FOOTERS.get("mileage", "Mileage reimbursed at the current company rate; odometer log required.")
+        st.session_state["admin_rcpt_policy_text_mileage"] = DEFAULT_RECEIPT_FOOTERS.get("mileage", "Mileage reimbursed at the current company rate; odometer log required.")
     if "rcpt_policy_text_supplies" not in st.session_state:
-        st.session_state["rcpt_policy_text_supplies"] = DEFAULT_RECEIPT_FOOTERS.get("supplies", "Supplies must be business-related; retain itemized receipts.")
+        st.session_state["admin_rcpt_policy_text_supplies"] = DEFAULT_RECEIPT_FOOTERS.get("supplies", "Supplies must be business-related; retain itemized receipts.")
     if "rcpt_policy_text_generic" not in st.session_state:
-        st.session_state["rcpt_policy_text_generic"] = DEFAULT_RECEIPT_FOOTERS.get("generic", "All expenses are subject to company policy and audit.")
+        st.session_state["admin_rcpt_policy_text_generic"] = DEFAULT_RECEIPT_FOOTERS.get("generic", "All expenses are subject to company policy and audit.")
 
     colA, colB = st.columns(2)
     with colA:
         with st.expander("Travel Footer", expanded=False):
-            st.checkbox("Show Travel Footer", key="rcpt_show_policy_travel", value=st.session_state.get("rcpt_show_policy_travel", True))
-            st.text_area("Footer Text", key="rcpt_policy_text_travel", height=100)
+            st.checkbox("Show Travel Footer", key="admin_rcpt_show_policy_travel", value=st.session_state.get("admin_rcpt_show_policy_travel", True))
+            st.text_area("Footer Text", key="admin_rcpt_policy_text_travel", height=100)
         with st.expander("Mileage Footer", expanded=False):
-            st.checkbox("Show Mileage Footer", key="rcpt_show_policy_mileage", value=st.session_state.get("rcpt_show_policy_mileage", True))
-            st.text_area("Footer Text", key="rcpt_policy_text_mileage", height=100)
+            st.checkbox("Show Mileage Footer", key="admin_rcpt_show_policy_mileage", value=st.session_state.get("admin_rcpt_show_policy_mileage", True))
+            st.text_area("Footer Text", key="admin_rcpt_policy_text_mileage", height=100)
     with colB:
         with st.expander("Supplies Footer", expanded=False):
-            st.checkbox("Show Supplies Footer", key="rcpt_show_policy_supplies", value=st.session_state.get("rcpt_show_policy_supplies", True))
-            st.text_area("Footer Text", key="rcpt_policy_text_supplies", height=100)
+            st.checkbox("Show Supplies Footer", key="admin_rcpt_show_policy_supplies", value=st.session_state.get("admin_rcpt_show_policy_supplies", True))
+            st.text_area("Footer Text", key="admin_rcpt_policy_text_supplies", height=100)
         with st.expander("Generic Footer", expanded=False):
-            st.checkbox("Show Generic Footer", key="rcpt_show_policy_generic", value=st.session_state.get("rcpt_show_policy_generic", True))
-            st.text_area("Footer Text", key="rcpt_policy_text_generic", height=100)
+            st.checkbox("Show Generic Footer", key="admin_rcpt_show_policy_generic", value=st.session_state.get("admin_rcpt_show_policy_generic", True))
+            st.text_area("Footer Text", key="admin_rcpt_policy_text_generic", height=100)
 
     st.markdown("---")
     st.markdown("#### Global Style")
@@ -1605,10 +1595,10 @@ with tab_objects[4]:
 # Build policy text map in session (used by receipt generation)
 try:
     st.session_state["rcpt_policy_text_map"] = {
-        "travel": st.session_state.get("rcpt_policy_text_travel", DEFAULT_RECEIPT_FOOTERS.get("travel", "Travel receipts must include itinerary and proof of payment.")),
-        "mileage": st.session_state.get("rcpt_policy_text_mileage", DEFAULT_RECEIPT_FOOTERS.get("mileage", "Mileage reimbursed at the current company rate; odometer log required.")),
-        "supplies": st.session_state.get("rcpt_policy_text_supplies", DEFAULT_RECEIPT_FOOTERS.get("supplies", "Supplies must be business-related; retain itemized receipts.")),
-        "generic": st.session_state.get("rcpt_policy_text_generic", DEFAULT_RECEIPT_FOOTERS.get("generic", "All expenses are subject to company policy and audit.")),
+        "travel": st.session_state.get("admin_rcpt_policy_text_travel", st.session_state.get("rcpt_policy_text_travel", DEFAULT_RECEIPT_FOOTERS.get("travel", "Travel receipts must include itinerary and proof of payment."))),
+        "mileage": st.session_state.get("admin_rcpt_policy_text_mileage", st.session_state.get("rcpt_policy_text_mileage", DEFAULT_RECEIPT_FOOTERS.get("mileage", "Mileage reimbursed at the current company rate; odometer log required."))),
+        "supplies": st.session_state.get("admin_rcpt_policy_text_supplies", st.session_state.get("rcpt_policy_text_supplies", DEFAULT_RECEIPT_FOOTERS.get("supplies", "Supplies must be business-related; retain itemized receipts."))),
+        "generic": st.session_state.get("admin_rcpt_policy_text_generic", st.session_state.get("rcpt_policy_text_generic", DEFAULT_RECEIPT_FOOTERS.get("generic", "All expenses are subject to company policy and audit."))),
     }
 except Exception:
     pass
