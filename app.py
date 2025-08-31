@@ -529,40 +529,55 @@ def _get_logo_bytes(uploaded_logo: Optional[Any], law_firm_id: str, use_custom: 
     buf.seek(0)
     return buf.getvalue()
 
-
-def _create_pdf_invoice(
-    df: pd.DataFrame,
-    total_amount: float,
-    invoice_number: str,
-    invoice_date: datetime.date,
-    billing_start_date: datetime.date,
-    billing_end_date: datetime.date,
-    client_id: str,
-    law_firm_id: str,
-    logo_bytes: bytes,
-    include_logo: bool = True,
-    client_name: str = "",
-    law_firm_name: str = ""
-) -> io.BytesIO:
+def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: str, invoice_date: datetime.date, billing_start_date: datetime.date, billing_end_date: datetime.date, client_id: str, law_firm_id: str, logo_bytes: bytes, include_logo: bool = True) -> io.BytesIO:
     """Generate a PDF invoice matching the provided format."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
     styles = getSampleStyleSheet()
 
-    # Styles
-    header_info_style = ParagraphStyle('HeaderInfo', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=14, alignment=TA_LEFT)
-    client_info_style = ParagraphStyle('ClientInfo', parent=header_info_style, alignment=TA_RIGHT)
-    table_header_style = ParagraphStyle('TableHeader', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=12, alignment=TA_CENTER, wordWrap='CJK')
-    table_data_style = ParagraphStyle('TableData', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=12, alignment=TA_LEFT, wordWrap='CJK')
+    # Define new styles
+    header_info_style = ParagraphStyle(
+        'HeaderInfo',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=12,
+        leading=14,
+        alignment=TA_LEFT
+    )
+    
+    client_info_style = ParagraphStyle(
+        'ClientInfo',
+        parent=header_info_style,
+        alignment=TA_RIGHT
+    )
+
+    table_header_style = ParagraphStyle(
+        'TableHeader',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        leading=12,
+        alignment=TA_CENTER,
+        wordWrap='CJK'
+    )
+
+    table_data_style = ParagraphStyle(
+        'TableData',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=10,
+        leading=12,
+        alignment=TA_LEFT,
+        wordWrap='CJK'
+    )
+    
     right_align_style = styles['Heading4']
 
-    # Header: law firm (left) / client (right)
-    lf_name = law_firm_name or "Law Firm"
-    cl_name = client_name or "Client"
-    law_firm_info = f"{lf_name}<br/>{law_firm_id}<br/>One Park Avenue<br/>Manhattan, NY 10003"
-    client_info   = f"{cl_name}<br/>{client_id}<br/>1360 Post Oak Blvd<br/>Houston, TX 77056"
-
+    # Header with Law Firm on left and Client on right
+    law_firm_info = f"Nelson and Murdock<br/>{law_firm_id}<br/>One Park Avenue<br/>Manhattan, NY 10003"
+    client_info = f"A Onit Inc.<br/>{client_id}<br/>1360 Post Oak Blvd<br/>Houston, TX 77056"
+    
     law_firm_para = Paragraph(law_firm_info, header_info_style)
     client_para = Paragraph(client_info, client_info_style)
 
@@ -576,10 +591,14 @@ def _create_pdf_invoice(
             img.alt = "Law Firm Logo"
             inner_table_data = [[img, Paragraph(law_firm_info, header_info_style)]]
             inner_table = Table(inner_table_data, colWidths=[0.7 * inch, None])
-            inner_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (1, 0), (1, 0), 6)]))
+            inner_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (1, 0), (1, 0), 6),
+            ]))
             header_left_content = inner_table
         except Exception as e:
             logging.error(f"Error adding logo to PDF: {e}")
+            st.warning("Could not add logo to PDF. Using text instead.")
             header_left_content = law_firm_para
 
     header_data = [[header_left_content, client_para]]
@@ -594,27 +613,30 @@ def _create_pdf_invoice(
     elements.append(header_table)
     elements.append(Spacer(1, 0.1 * inch))
 
-    # Invoice info
+    # Invoice details
     invoice_info = f"Invoice #: {invoice_number}<br/>Invoice Date: {invoice_date.strftime('%Y-%m-%d')}<br/>Billing Period: {billing_start_date.strftime('%Y-%m-%d')} to {billing_end_date.strftime('%Y-%m-%d')}"
     invoice_para = Paragraph(invoice_info, right_align_style)
     invoice_table = Table([[invoice_para]], colWidths=[7.5 * inch])
-    invoice_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+    invoice_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
     elements.append(invoice_table)
     elements.append(Spacer(1, 0.1 * inch))
 
-    # Table headers
-    data = [[
-        Paragraph("Date", table_header_style),
-        Paragraph("Task<br/>Code", table_header_style),
-        Paragraph("Activity<br/>Code", table_header_style),
-        Paragraph("Timekeeper", table_header_style),
-        Paragraph("Description", table_header_style),
-        Paragraph("Hours", table_header_style),
-        Paragraph("Rate", table_header_style),
-        Paragraph("Total", table_header_style),
-    ]]
-
-    # Rows
+    # Table with updated columns and wrapped text
+    data = [
+        [
+            Paragraph("Date", table_header_style), 
+            Paragraph("Task<br/>Code", table_header_style), 
+            Paragraph("Activity<br/>Code", table_header_style), 
+            Paragraph("Timekeeper", table_header_style), 
+            Paragraph("Description", table_header_style), 
+            Paragraph("Hours", table_header_style), 
+            Paragraph("Rate", table_header_style), 
+            Paragraph("Total", table_header_style)
+        ]
+    ]
     for _, row in df.iterrows():
         date = row["LINE_ITEM_DATE"]
         timekeeper = Paragraph(row["TIMEKEEPER_NAME"] if row["TIMEKEEPER_NAME"] else "N/A", table_data_style)
@@ -637,7 +659,7 @@ def _create_pdf_invoice(
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (1, 1), (2, -1), 'CENTER'),
+        ('ALIGN', (1, 1), (2, -1), 'CENTER'), # Center Task Code and Activity Code data
         ('ALIGN', (5, 0), (5, -1), 'CENTER'),
         ('ALIGN', (6, 0), (6, -1), 'RIGHT'),
         ('ALIGN', (7, 0), (7, -1), 'RIGHT'),
@@ -1015,25 +1037,21 @@ tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
 # Email settings will live under the Output tab.
 tab_objects = st.tabs(tabs)
 
-
 with tab_objects[0]:
 
     st.markdown("<h3 style='color: #1E1E1E;'>Data Sources</h3>", unsafe_allow_html=True)
     uploaded_timekeeper_file = st.file_uploader("Upload Timekeeper CSV (tk_info.csv)", type="csv")
     timekeeper_data = _load_timekeepers(uploaded_timekeeper_file)
 
-    
-# Timekeeper summary + preview
-if timekeeper_data is not None:
-    tk_count = len(timekeeper_data)
-    st.success(f"Loaded {tk_count} timekeepers.")
-
-    # Preview top rows (index starting at 1)
-    tk_df_preview = pd.DataFrame(timekeeper_data).head(10).reset_index(drop=True)
-    tk_df_preview.index = tk_df_preview.index + 1
-    preview_count = min(10, len(timekeeper_data))
-    st.markdown(f"**{preview_count}-Row Preview**")
-    st.dataframe(tk_df_preview, use_container_width=True)
+    # Timekeeper summary + preview
+    if timekeeper_data is not None:
+        tk_count = len(timekeeper_data)
+        st.success(f"Loaded {tk_count} timekeepers.")
+        tk_df_preview = pd.DataFrame(timekeeper_data).head(10).reset_index(drop=True)
+        tk_df_preview.index = tk_df_preview.index + 1
+        preview_count = min(10, len(timekeeper_data))
+        st.markdown(f"**{preview_count}-Row Preview**")
+        st.dataframe(tk_df_preview, use_container_width=True)
 
     use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
     uploaded_custom_tasks_file = None
@@ -1063,20 +1081,21 @@ with tab_objects[1]:
 
     prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
 
-    # Side-by-side names
+    # Names
     c1, c2 = st.columns(2)
     with c1:
         client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
     with c2:
         law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
 
+    # IDs (no format restrictions)
     c3, c4 = st.columns(2)
     with c3:
         client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
     with c4:
         law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
 
-    # Status footer (always shows the stored profile values)
+    # Status footer
     status_html = f"""
     <div style="margin-top:0.25rem;font-size:0.92rem;color:#444">
       Using: <strong>{selected_env}</strong>
