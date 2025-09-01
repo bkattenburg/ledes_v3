@@ -1251,18 +1251,23 @@ with tab_objects[2]:
     
 
 
-    # --- Mandatory Items (Spend Agent only) ---
-    if spend_agent:
-        st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-        selected_items = st.multiselect(
-            "Mandatory Items",
-            options=list(CONFIG['MANDATORY_ITEMS'].keys()),
-            default=st.session_state.get('selected_items', [])
-        )
-        st.session_state['selected_items'] = selected_items
-    else:
-        selected_items = []
 
+# --- Mandatory Items (Spend Agent only) ---
+if spend_agent:
+    st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
+    opts = list(CONFIG['MANDATORY_ITEMS'].keys())
+    prev = st.session_state.get('selected_items', [])
+    # prune any stale values that are not in options
+    default_vals = [v for v in prev if v in opts]
+    selected_items = st.multiselect(
+        "Mandatory Items",
+        options=opts,
+        default=default_vals
+    )
+    # persist for UX
+    st.session_state['selected_items'] = selected_items
+else:
+    selected_items = []
 # --- Airfare Details UI (E110) ---
 if spend_agent and ('Airfare E110 (Flight)' in (selected_items or [])):
     st.markdown("#### Airfare Details (E110)")
