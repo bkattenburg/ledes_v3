@@ -32,18 +32,6 @@ BILLING_PROFILES = [
     ("SimpleLegal", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
     ("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
-# --- Helper: find first Partner timekeeper ---
-def _find_first_partner(timekeepers):
-    try:
-        if not timekeepers:
-            return None
-        for tk in timekeepers:
-            if str(tk.get("TIMEKEEPER_CLASSIFICATION","")).strip().lower() == "partner":
-                return tk
-    except Exception:
-        pass
-    return None
-
 
 def get_profile(env: str):
     """Return (client_name, client_id, law_firm_name, law_firm_id) for the environment."""
@@ -70,7 +58,6 @@ CONFIG = {
         "Private investigators": "E120", "Arbitrators/mediators": "E121",
         "Local counsel": "E122", "Other professionals": "E123", "Other": "E124",
     },
-
     'DEFAULT_TASK_ACTIVITY_DESC': [
         ("L100", "A101", "Legal Research: Analyze legal precedents"),
         ("L110", "A101", "Legal Research: Review statutes and regulations"),
@@ -113,20 +100,8 @@ CONFIG = {
             'tk_name': "Tom Delaganis",
             'task': "L140",
             'activity': "A107",
-            'is_expense': False,
-        'Partner Paralegal Work': {
-    'desc': "Paralegal-level filing, indexing, and docketing tasks performed by Partner for urgency/continuity.",
-    'tk_name': None,
-    'task': "L120",
-    'activity': "A102",
-    'is_expense': False
-},
-'Airfare E110 (Flight)': {
-    'desc': "Airfare",
-    'expense_code': "E110",
-    'is_expense': True
-},
-            },
+            'is_expense': False
+        },
         'John Doe': {
             'desc': ("Reviewed and summarized deposition transcript of John Doe; prepared exhibit index; "
                      "updated case chronology spreadsheet for attorney review"),
@@ -137,18 +112,6 @@ CONFIG = {
         },
         'Uber E110': {
             'desc': "10-mile Uber ride to client's office",
-            'expense_code': "E110",
-            'is_expense': True
-        },
-        'Partner Paralegal Work': {
-            'desc': "Paralegal-level filing, indexing, and docketing tasks performed by Partner for urgency/continuity.",
-            'tk_name': None,
-            'task': "L120",
-            'activity': "A102",
-            'is_expense': False
-        },
-        'Airfare E110 (Flight)': {
-            'desc': "Airfare",
             'expense_code': "E110",
             'is_expense': True
         },
@@ -491,95 +454,15 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
 
     return rows, total_amount
 
-def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str,
-                            client_id: str, law_firm_id: str,
-                            billing_start_date: datetime.date, billing_end_date: datetime.date,
-                            selected_items: List[str]) -> List[Dict]:
-    """Ensure mandatory line items are included, including Spend Agent cases."""
+def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> List[Dict]:
+    """Ensure mandatory line items are included."""
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
-
     for item_name in selected_items:
-        # Spend Agent special: Partner doing Paralegal work (fee)
-        if item_name == 'Partner Paralegal Work':
-            random_day_offset = random.randint(0, num_days - 1)
-            line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
-            partner = _find_first_partner(timekeeper_data)
-            tk_row = partner if partner else (timekeeper_data[0] if timekeeper_data else None)
-            tk_name = tk_row.get("TIMEKEEPER_NAME", "Partner (TBD)") if tk_row else "Partner (TBD)"
-            tk_id = tk_row.get("TIMEKEEPER_ID", "") if tk_row else ""
-            try:
-                rate = float(tk_row.get("RATE", 0.0)) if tk_row else 0.0
-            except Exception:
-                rate = 0.0
-            row = {
-                "INVOICE_DESCRIPTION": invoice_desc,
-                "CLIENT_ID": client_id,
-                "LAW_FIRM_ID": law_firm_id,
-                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"),
-                "TIMEKEEPER_NAME": tk_name,
-                "TIMEKEEPER_CLASSIFICATION": "Partner",
-                "TIMEKEEPER_ID": tk_id,
-                "TASK_CODE": "L120",
-                "ACTIVITY_CODE": "A102",
-                "EXPENSE_CODE": "",
-                "DESCRIPTION": "Paralegal work performed by Partner (filing, indexing, docketing) due to urgency/continuity.",
-                "HOURS": round(random.uniform(0.5, 3.0), 1),
-                "RATE": rate
-            }
-            row["LINE_ITEM_TOTAL"] = round(float(row["HOURS"]) * float(row["RATE"]), 2)
-            rows.append(row)
-            continue
-
-        # Spend Agent special: Airfare E110 expense with flight details
-        if item_name == 'Airfare E110 (Flight)':
-            random_day_offset = random.randint(0, num_days - 1)
-            line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
-            airline   = st.session_state.get("airfare_airline", "Airline")
-            flight_no = st.session_state.get("airfare_flight_number", "XX000")
-            fare_cls  = st.session_state.get("airfare_fare_class", "Y")
-            origin    = st.session_state.get("airfare_origin", "Origin City")
-            arrival   = st.session_state.get("airfare_arrival", "Arrival City")
-            try:
-                amount    = float(st.session_state.get("airfare_amount", 425.00))
-            except Exception:
-                amount = 425.00
-            desc = f"Airfare: {airline} {flight_no} ({fare_cls}) {origin} → {arrival}"
-            row = {
-                "INVOICE_DESCRIPTION": invoice_desc,
-                "CLIENT_ID": client_id,
-                "LAW_FIRM_ID": law_firm_id,
-                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"),
-                "TIMEKEEPER_NAME": "",
-                "TIMEKEEPER_CLASSIFICATION": "",
-                "TIMEKEEPER_ID": "",
-                "TASK_CODE": "",
-                "ACTIVITY_CODE": "",
-                "EXPENSE_CODE": "E110",
-                "DESCRIPTION": desc,
-                "HOURS": 1,
-                "RATE": round(amount, 2)
-            }
-            row["LINE_ITEM_TOTAL"] = row["RATE"]
-            rows.append(row)
-
-            # Prime receipt overrides for receipt generation
-            st.session_state["rcpt_travel_carrier"] = airline
-            st.session_state["rcpt_travel_flight"]  = flight_no
-            st.session_state["rcpt_travel_fare"]    = fare_cls
-            st.session_state["rcpt_travel_from"]    = origin
-            st.session_state["rcpt_travel_to"]      = arrival
-            continue
-
-        # Default handling for existing mandatory items
-        item = CONFIG['MANDATORY_ITEMS'].get(item_name)
-        if not item:
-            continue
-
+        item = CONFIG['MANDATORY_ITEMS'][item_name]
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
-
-        if item.get('is_expense'):
+        if item['is_expense']:
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
                 "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
@@ -591,14 +474,12 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
         else:
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": item.get('tk_name') or "",
+                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": item['tk_name'],
                 "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": item['task'],
                 "ACTIVITY_CODE": item['activity'], "EXPENSE_CODE": "", "DESCRIPTION": item['desc'],
                 "HOURS": round(random.uniform(0.5, 8.0), 1), "RATE": 0.0
             }
-            if item.get('tk_name'):
-                row = _force_timekeeper_on_row(row, item['tk_name'], timekeeper_data)
-
+            row = _force_timekeeper_on_row(row, item['tk_name'], timekeeper_data)
         rows.append(row)
     return rows
 
@@ -1162,7 +1043,7 @@ csv_custom = sample_custom.to_csv(index=False).encode('utf-8')
 st.sidebar.download_button("Download Sample Custom Tasks CSV", csv_custom, "sample_custom_tasks.csv", "text/csv")
 
 # Dynamic Tabs
-tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
+tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output", "Admin"]
 # Email settings will live under the Output tab.
 tab_objects = st.tabs(tabs)
 
@@ -1318,42 +1199,8 @@ with tab_objects[2]:
     if spend_agent:
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
         selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
-    # --- Spend Agent: Airfare Details UI & force required items ---
-    try:
-        if 'spend_agent' in globals() or 'spend_agent' in locals():
-            _spend_agent_val = spend_agent
-        else:
-            _spend_agent_val = st.session_state.get('spend_agent', False)
-    except Exception:
-        _spend_agent_val = False
-
-    if _spend_agent_val:
-        st.markdown("#### Airfare Details (E110)")
-        cfa, cfb, cfc = st.columns([1,1,1])
-        with cfa:
-            st.text_input("Airline (e.g., United, AA)", key="airfare_airline", value=st.session_state.get("airfare_airline","United"))
-            st.text_input("Fare Class (e.g., Y, B, F)", key="airfare_fare_class", value=st.session_state.get("airfare_fare_class","Y"))
-        with cfb:
-            st.text_input("Flight Number", key="airfare_flight_number", value=st.session_state.get("airfare_flight_number","UA1234"))
-            st.text_input("From (Origin City)", key="airfare_origin", value=st.session_state.get("airfare_origin","San Francisco"))
-        with cfc:
-            st.text_input("To (Arrival City)", key="airfare_arrival", value=st.session_state.get("airfare_arrival","New York"))
-            st.number_input("Airfare Amount ($)", min_value=50.0, max_value=10000.0, step=1.0, value=float(st.session_state.get("airfare_amount",425.00)), key="airfare_amount")
-
-        # Ensure Partner Paralegal Work and Airfare E110 are always included
-        try:
-            if 'selected_items' in globals() or 'selected_items' in locals():
-                # convert to set, add required, convert back
-                _sel = set(selected_items) if selected_items else set()
-                _sel.update({'Partner Paralegal Work', 'Airfare E110 (Flight)'})
-                selected_items = list(_sel)
-            else:
-                st.session_state['selected_items'] = list(set(st.session_state.get('selected_items', [])) | {'Partner Paralegal Work', 'Airfare E110 (Flight)'})
-        except Exception:
-            pass
-
-        else:
-            selected_items = []
+    else:
+        selected_items = []
 
 
 with tab_objects[3]:
@@ -1395,64 +1242,41 @@ with tab_objects[3]:
         combine_ledes = False
 
     generate_receipts = st.checkbox("Generate Sample Receipts for Expenses?", value=False)
-if generate_receipts:
-    receipt_tabs = st.tabs(["Receipt Settings"])
-    with receipt_tabs[0]:
-        st.caption("These settings affect only the generated sample receipts.")
-        with st.expander("Global Style", expanded=False):
-            st.slider(
-                "Receipt scale (affects font sizes)",
-                min_value=0.8, max_value=1.4, value=1.0, step=0.05,
-                key="rcpt_scale"
-            )
-            st.slider(
-                "Divider line weight",
-                min_value=1, max_value=4, value=1, step=1,
-                key="rcpt_line_weight"
-            )
-            st.checkbox(
-                "Use dashed dividers",
-                value=False,
-                key="rcpt_dashed"
-            )
-        with st.expander("Footer Policy Visibility", expanded=False):
-            st.checkbox("Show policy on Travel (E110)", value=True, key="rcpt_show_policy_travel")
-            st.checkbox("Show policy on Meals (E111)", value=True, key="rcpt_show_policy_meal")
-            st.checkbox("Show policy on Mileage (E109)", value=True, key="rcpt_show_policy_mileage")
-            st.checkbox("Show policy on Supplies/Other (E124)", value=True, key="rcpt_show_policy_supplies")
-            st.checkbox("Show policy on Other (generic)", value=True, key="rcpt_show_policy_generic")
-        with st.expander("Travel Details (E110)", expanded=False):
-            st.text_input("Carrier code (e.g., AA, UA)", value="", key="rcpt_travel_carrier")
-            st.text_input("Flight number", value="", key="rcpt_travel_flight")
-            st.text_input("Seat", value="", key="rcpt_travel_seat")
-            st.text_input("Fare class", value="", key="rcpt_travel_fare")
-            st.text_input("From (city)", value="", key="rcpt_travel_from")
-            st.text_input("To (city)", value="", key="rcpt_travel_to")
-            st.checkbox("Auto-generate blank travel fields", value=True, key="rcpt_travel_autogen")
-        with st.expander("Meal Details (E111)", expanded=False):
-            st.text_input("Table #", value="", key="rcpt_meal_table")
-            st.text_input("Server ID", value="", key="rcpt_meal_server")
-            st.checkbox("Include cashier line", value=True, key="rcpt_meal_show_cashier")
+    if generate_receipts:
+        # moved: receipt_tabs = st.tabs(["Receipt Settings"])
+        # Receipt Settings moved to Admin tab
+        pass  # settings moved to Admin tab
 
 
+with tab_objects[4]:
+    st.markdown("<h2 style='color: #1E1E1E;'>Admin</h2>", unsafe_allow_html=True)
 
-# Email Configuration Tab (only created if send_email is True)
-if st.session_state.send_email:
-    email_tab_index = len(tabs) - 1
-    with tab_objects[email_tab_index]:
-        st.markdown("<h2 style='color: #1E1E1E;'>Email Configuration</h2>", unsafe_allow_html=True)
-        recipient_email = st.text_input("Recipient Email Address:")
+    # --- Receipt Settings (scoped to Admin) ---
+    st.markdown("### Receipt Settings")
+    st.slider("Receipt scale (affects font sizes)", min_value=0.8, max_value=1.4, value=1.0, step=0.05, key="rcpt_scale")
+    st.slider("Divider line weight", min_value=1, max_value=4, value=1, step=1, key="rcpt_line_weight")
+    st.checkbox("Use dashed dividers", value=bool(st.session_state.get("rcpt_dashed", False)), key="rcpt_dashed")
+    with st.expander("Footer Policy Visibility", expanded=False):
+        st.checkbox("Show policy on Travel (E110)", value=True, key="rcpt_show_policy_travel")
+        st.checkbox("Show policy on Meals (E111)", value=True, key="rcpt_show_policy_meal")
+        st.checkbox("Show policy on Mileage (E105)", value=True, key="rcpt_show_policy_mileage")
+        st.checkbox("Show policy on Supplies (E106/E118)", value=True, key="rcpt_show_policy_supplies")
+        st.checkbox("Show generic policy on other expenses", value=True, key="rcpt_show_policy_generic")
+
+    # --- Email Configuration (moved from Output; shown only if sending is enabled) ---
+    st.markdown("### Email Configuration")
+    if st.session_state.get("send_email", False):
+        recipient_email = st.text_input("Recipient Email Address:", key="recipient_email")
         try:
             sender_email = st.secrets.email.email_from
             st.caption(f"Sender Email will be from: {st.secrets.get('email', {}).get('username', 'N/A')}")
         except AttributeError:
             st.caption("Sender Email: Not configured (check secrets.toml)")
-        st.text_input("Email Subject Template:", value=f"LEDES Invoice for {matter_number_base} (Invoice #{{invoice_number}})", key="email_subject")
-        st.text_area("Email Body Template:", value=f"Please find the attached invoice files for matter {{matter_number}}.\n\nBest regards,\nYour Law Firm", height=150, key="email_body")
-else:
-    recipient_email = ""
+        st.text_input("Email Subject Template:", value=st.session_state.get("email_subject", "Your Generated Invoices"), key="email_subject")
+        st.text_area("Email Body Template:", value=st.session_state.get("email_body", "Please find the generated invoices attached."), height=150, key="email_body")
+    else:
+        st.info("Email sending is currently disabled.")
 
-# Validation Logic
 is_valid_input = True
 if timekeeper_data is None:
     st.error("Please upload a valid timekeeper CSV file.")
