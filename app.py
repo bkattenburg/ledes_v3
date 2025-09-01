@@ -1318,43 +1318,42 @@ with tab_objects[2]:
     if spend_agent:
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
         selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
-
-# --- Spend Agent: Airfare Details UI & force required items ---
-try:
-    if 'spend_agent' in globals() or 'spend_agent' in locals():
-        _spend_agent_val = spend_agent
-    else:
-        _spend_agent_val = st.session_state.get('spend_agent', False)
-except Exception:
-    _spend_agent_val = False
-
-if _spend_agent_val:
-    st.markdown("#### Airfare Details (E110)")
-    cfa, cfb, cfc = st.columns([1,1,1])
-    with cfa:
-        st.text_input("Airline (e.g., United, AA)", key="airfare_airline", value=st.session_state.get("airfare_airline","United"))
-        st.text_input("Fare Class (e.g., Y, B, F)", key="airfare_fare_class", value=st.session_state.get("airfare_fare_class","Y"))
-    with cfb:
-        st.text_input("Flight Number", key="airfare_flight_number", value=st.session_state.get("airfare_flight_number","UA1234"))
-        st.text_input("From (Origin City)", key="airfare_origin", value=st.session_state.get("airfare_origin","San Francisco"))
-    with cfc:
-        st.text_input("To (Arrival City)", key="airfare_arrival", value=st.session_state.get("airfare_arrival","New York"))
-        st.number_input("Airfare Amount ($)", min_value=50.0, max_value=10000.0, step=1.0, value=float(st.session_state.get("airfare_amount",425.00)), key="airfare_amount")
-
-    # Ensure Partner Paralegal Work and Airfare E110 are always included
+    # --- Spend Agent: Airfare Details UI & force required items ---
     try:
-        if 'selected_items' in globals() or 'selected_items' in locals():
-            # convert to set, add required, convert back
-            _sel = set(selected_items) if selected_items else set()
-            _sel.update({'Partner Paralegal Work', 'Airfare E110 (Flight)'})
-            selected_items = list(_sel)
+        if 'spend_agent' in globals() or 'spend_agent' in locals():
+            _spend_agent_val = spend_agent
         else:
-            st.session_state['selected_items'] = list(set(st.session_state.get('selected_items', [])) | {'Partner Paralegal Work', 'Airfare E110 (Flight)'})
+            _spend_agent_val = st.session_state.get('spend_agent', False)
     except Exception:
-        pass
+        _spend_agent_val = False
 
-    else:
-        selected_items = []
+    if _spend_agent_val:
+        st.markdown("#### Airfare Details (E110)")
+        cfa, cfb, cfc = st.columns([1,1,1])
+        with cfa:
+            st.text_input("Airline (e.g., United, AA)", key="airfare_airline", value=st.session_state.get("airfare_airline","United"))
+            st.text_input("Fare Class (e.g., Y, B, F)", key="airfare_fare_class", value=st.session_state.get("airfare_fare_class","Y"))
+        with cfb:
+            st.text_input("Flight Number", key="airfare_flight_number", value=st.session_state.get("airfare_flight_number","UA1234"))
+            st.text_input("From (Origin City)", key="airfare_origin", value=st.session_state.get("airfare_origin","San Francisco"))
+        with cfc:
+            st.text_input("To (Arrival City)", key="airfare_arrival", value=st.session_state.get("airfare_arrival","New York"))
+            st.number_input("Airfare Amount ($)", min_value=50.0, max_value=10000.0, step=1.0, value=float(st.session_state.get("airfare_amount",425.00)), key="airfare_amount")
+
+        # Ensure Partner Paralegal Work and Airfare E110 are always included
+        try:
+            if 'selected_items' in globals() or 'selected_items' in locals():
+                # convert to set, add required, convert back
+                _sel = set(selected_items) if selected_items else set()
+                _sel.update({'Partner Paralegal Work', 'Airfare E110 (Flight)'})
+                selected_items = list(_sel)
+            else:
+                st.session_state['selected_items'] = list(set(st.session_state.get('selected_items', [])) | {'Partner Paralegal Work', 'Airfare E110 (Flight)'})
+        except Exception:
+            pass
+
+        else:
+            selected_items = []
 
 
 with tab_objects[3]:
