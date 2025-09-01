@@ -1,4 +1,8 @@
 import streamlit as st
+
+# --- Email state initialization (safe defaults) ---
+st.session_state.setdefault('send_email', False)
+st.session_state.setdefault('send_email_checkbox', st.session_state['send_email'])
 import pandas as pd
 import random
 import datetime
@@ -459,59 +463,6 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
     for item_name in selected_items:
-        # --- Special handling for Spend Agent items ---
-        if item_name == 'Partner Paralegal Work':
-            tk_row = None
-            try:
-                for tk in timekeeper_data or []:
-                    if str(tk.get("TIMEKEEPER_CLASSIFICATION","")).strip().lower() == "partner":
-                        tk_row = tk
-                        break
-            except Exception:
-                tk_row = None
-            if tk_row is None and (timekeeper_data or []):
-                tk_row = (timekeeper_data or [None])[0]
-            tk_name = tk_row.get("TIMEKEEPER_NAME","Partner (TBD)") if tk_row else "Partner (TBD)"
-            rate = float(tk_row.get("RATE", 0.0)) if tk_row else 0.0
-            row = {
-                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": tk_name,
-                "TIMEKEEPER_CLASSIFICATION": "Partner", "TIMEKEEPER_ID": tk_row.get("TIMEKEEPER_ID","") if tk_row else "",
-                "TASK_CODE": "L120", "ACTIVITY_CODE": "A102", "EXPENSE_CODE": "",
-                "DESCRIPTION": "Paralegal work performed by Partner (filing, indexing, docketing).",
-                "HOURS": round(random.uniform(0.5, 3.0), 1), "RATE": rate
-            }
-            row = _force_timekeeper_on_row(row, tk_name, timekeeper_data)
-            rows.append(row)
-            continue
-
-        if item_name == 'Airfare E110 (Flight)':
-            airline   = st.session_state.get("airfare_airline", "Airline")
-            flight_no = st.session_state.get("airfare_flight_number", "XX000")
-            fare_cls  = st.session_state.get("airfare_fare_class", "Y")
-            origin    = st.session_state.get("airfare_origin", "Origin City")
-            arrival   = st.session_state.get("airfare_arrival", "Arrival City")
-            try:
-                amount = float(st.session_state.get("airfare_amount", 425.00))
-            except Exception:
-                amount = 425.00
-            desc = f"Airfare: {airline} {flight_no} ({fare_cls}) {origin} → {arrival}"
-            row = {
-                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
-                "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": "",
-                "ACTIVITY_CODE": "", "EXPENSE_CODE": "E110", "DESCRIPTION": desc,
-                "HOURS": 1, "RATE": round(amount, 2)
-            }
-            row["LINE_ITEM_TOTAL"] = row["RATE"]
-            rows.append(row)
-            st.session_state["rcpt_travel_carrier"] = airline
-            st.session_state["rcpt_travel_flight"]  = flight_no
-            st.session_state["rcpt_travel_fare"]    = fare_cls
-            st.session_state["rcpt_travel_from"]    = origin
-            st.session_state["rcpt_travel_to"]      = arrival
-            continue
-
         item = CONFIG['MANDATORY_ITEMS'][item_name]
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
@@ -1053,7 +1004,8 @@ if "send_email" not in st.session_state:
 
 # Callback for updating send_email state
 def update_send_email():
-    st.session_state.send_email = st.session_state.send_email_checkbox
+    # Robust against missing key
+    st.session_state['send_email'] = bool(st.session_state.get('send_email_checkbox', False))
     logging.debug(f"Updated st.session_state.send_email to {st.session_state.send_email}")
 
 with st.expander("Help & FAQs"):
@@ -1249,39 +1201,11 @@ with tab_objects[2]:
         )
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
     
-
-
-
-# --- Mandatory Items (Spend Agent only) ---
-if spend_agent:
-    st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-    opts = list(CONFIG['MANDATORY_ITEMS'].keys())
-    prev = st.session_state.get('selected_items', [])
-    # prune any stale values that are not in options
-    default_vals = [v for v in prev if v in opts]
-    selected_items = st.multiselect(
-        "Mandatory Items",
-        options=opts,
-        default=default_vals
-    )
-    # persist for UX
-    st.session_state['selected_items'] = selected_items
-else:
-    selected_items = []
-# --- Airfare Details UI (E110) ---
-if spend_agent and ('Airfare E110 (Flight)' in (selected_items or [])):
-    st.markdown("#### Airfare Details (E110)")
-    c1, c2, c3 = st.columns([1,1,1])
-    with c1:
-        st.text_input("Airline", key="airfare_airline", value=st.session_state.get("airfare_airline","United"))
-        st.text_input("Fare Class", key="airfare_fare_class", value=st.session_state.get("airfare_fare_class","Y"))
-    with c2:
-        st.text_input("Flight Number", key="airfare_flight_number", value=st.session_state.get("airfare_flight_number","UA1234"))
-        st.text_input("From (Origin City)", key="airfare_origin", value=st.session_state.get("airfare_origin","San Francisco"))
-    with c3:
-        st.text_input("To (Arrival City)", key="airfare_arrival", value=st.session_state.get("airfare_arrival","New York"))
-        st.number_input("Airfare Amount ($)", min_value=50.0, max_value=10000.0, step=1.0, value=float(st.session_state.get("airfare_amount",425.00)), key="airfare_amount")
-
+    if spend_agent:
+        st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
+        selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
+    else:
+        selected_items = []
 
 
 with tab_objects[3]:
@@ -1529,13 +1453,3 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
-
-
-# --- Build marker ---
-BUILD_TAG = 'Admin+SpendAgent+AirfareE110+SanitizedDefaults'
-
-try:
-    import streamlit as st
-    st.sidebar.info(f'Build: {BUILD_TAG}')
-except Exception:
-    pass
