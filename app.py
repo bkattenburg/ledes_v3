@@ -1,8 +1,4 @@
 import streamlit as st
-
-# --- Email state initialization (safe defaults) ---
-st.session_state.setdefault('send_email', False)
-st.session_state.setdefault('send_email_checkbox', st.session_state['send_email'])
 import pandas as pd
 import random
 import datetime
@@ -1004,8 +1000,7 @@ if "send_email" not in st.session_state:
 
 # Callback for updating send_email state
 def update_send_email():
-    # Robust against missing key
-    st.session_state['send_email'] = bool(st.session_state.get('send_email_checkbox', False))
+    st.session_state.send_email = st.session_state.send_email_checkbox
     logging.debug(f"Updated st.session_state.send_email to {st.session_state.send_email}")
 
 with st.expander("Help & FAQs"):
