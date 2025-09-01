@@ -94,35 +94,14 @@ CONFIG = {
     'DEFAULT_INVOICE_DESCRIPTION': "Monthly Legal Services",
     'MANDATORY_ITEMS': {
         'KBCG': {
-            'desc': ("Commenced data entry into the KBCG e-licensing portal for Piers Walter Vermont "
-                     "form 1005 application; Drafted deficiency notice to send to client re: same; "
-                     "Scheduled follow-up call with client to review application status and address outstanding deficiencies."),
+            'desc': "KBCG e-licensing portal work; deficiency notice; follow-up scheduling; status review & outstanding items.",
             'tk_name': "Tom Delaganis",
             'task': "L140",
             'activity': "A107",
-            'is_expense': False,
-        'Partner Paralegal Work': {
-    'desc': "Paralegal-level filing, indexing, and docketing tasks performed by Partner for urgency/continuity.",
-    'tk_name': None,
-    'task': "L120",
-    'activity': "A102",
-    'is_expense': False,
-'Airfare E110 (Flight)': {
-    'desc': "Airfare",
-    'expense_code': "E110",
-    'is_expense': True
-},
-
-},
-        'Airfare E110 (Flight)': {
-    'desc': "Airfare",
-    'expense_code': "E110",
-    'is_expense': True
-}
-            },
+            'is_expense': False
+        },
         'John Doe': {
-            'desc': ("Reviewed and summarized deposition transcript of John Doe; prepared exhibit index; "
-                     "updated case chronology spreadsheet for attorney review"),
+            'desc': "Reviewed and summarized deposition transcript of John Doe; prepared exhibit index; updated case chronology.",
             'tk_name': "Ryan Kinsey",
             'task': "L120",
             'activity': "A102",
@@ -133,8 +112,60 @@ CONFIG = {
             'expense_code': "E110",
             'is_expense': True
         },
+        'Partner Paralegal Work': {
+            'desc': "Paralegal-level filing, indexing, and docketing tasks performed by Partner for urgency/continuity.",
+            'tk_name': None,
+            'task': "L120",
+            'activity': "A102",
+            'is_expense': False
+        },
+        'Airfare E110 (Flight)': {
+            'desc': "Airfare",
+            'expense_code': "E110",
+            'is_expense': True
+        },
     }
 }
+
+# --- safety patch: ensure mandatory items are present ---
+try:
+    CONFIG.setdefault('MANDATORY_ITEMS', {})
+    CONFIG['MANDATORY_ITEMS'].update({
+        'KBCG': {
+            'desc': "KBCG e-licensing portal work; deficiency notice; follow-up scheduling; status review & outstanding items.",
+            'tk_name': "Tom Delaganis",
+            'task': "L140",
+            'activity': "A107",
+            'is_expense': False
+        },
+        'John Doe': {
+            'desc': "Reviewed and summarized deposition transcript of John Doe; prepared exhibit index; updated case chronology.",
+            'tk_name': "Ryan Kinsey",
+            'task': "L120",
+            'activity': "A102",
+            'is_expense': False
+        },
+        'Uber E110': {
+            'desc': "10-mile Uber ride to client's office",
+            'expense_code': "E110",
+            'is_expense': True
+        },
+        'Partner Paralegal Work': {
+            'desc': "Paralegal-level filing, indexing, and docketing tasks performed by Partner for urgency/continuity.",
+            'tk_name': None,
+            'task': "L120",
+            'activity': "A102",
+            'is_expense': False
+        },
+        'Airfare E110 (Flight)': {
+            'desc': "Airfare",
+            'expense_code': "E110",
+            'is_expense': True
+        },
+    })
+except Exception as _patch_err:
+    pass
+
 EXPENSE_DESCRIPTIONS = list(CONFIG['EXPENSE_CODES'].keys())
 OTHER_EXPENSE_DESCRIPTIONS = [desc for desc in EXPENSE_DESCRIPTIONS if CONFIG['EXPENSE_CODES'][desc] != "E101"]
 
