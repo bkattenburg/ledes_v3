@@ -100,8 +100,20 @@ CONFIG = {
             'tk_name': "Tom Delaganis",
             'task': "L140",
             'activity': "A107",
-            'is_expense': False
-        },
+            'is_expense': False,
+        'Partner Paralegal Work': {
+    'desc': "Paralegal-level filing, indexing, and docketing tasks performed by Partner for urgency/continuity.",
+    'tk_name': None,
+    'task': "L120",
+    'activity': "A102",
+    'is_expense': False
+},
+        'Airfare E110 (Flight)': {
+    'desc': "Airfare",
+    'expense_code': "E110",
+    'is_expense': True
+}
+            },
         'John Doe': {
             'desc': ("Reviewed and summarized deposition transcript of John Doe; prepared exhibit index; "
                      "updated case chronology spreadsheet for attorney review"),
