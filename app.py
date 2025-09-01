@@ -1529,3 +1529,13 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
+
+# --- Build marker ---
+BUILD_TAG = 'Admin+SpendAgent+AirfareE110+SanitizedDefaults'
+
+try:
+    import streamlit as st
+    st.sidebar.info(f'Build: {BUILD_TAG}')
+except Exception:
+    pass
