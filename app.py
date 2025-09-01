@@ -32,6 +32,18 @@ BILLING_PROFILES = [
     ("SimpleLegal", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
     ("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
+# --- Helper: find first Partner timekeeper ---
+def _find_first_partner(timekeepers):
+    try:
+        if not timekeepers:
+            return None
+        for tk in timekeepers:
+            if str(tk.get("TIMEKEEPER_CLASSIFICATION","")).strip().lower() == "partner":
+                return tk
+    except Exception:
+        pass
+    return None
+
 
 def get_profile(env: str):
     """Return (client_name, client_id, law_firm_name, law_firm_id) for the environment."""
@@ -58,6 +70,7 @@ CONFIG = {
         "Private investigators": "E120", "Arbitrators/mediators": "E121",
         "Local counsel": "E122", "Other professionals": "E123", "Other": "E124",
     },
+
     'DEFAULT_TASK_ACTIVITY_DESC': [
         ("L100", "A101", "Legal Research: Analyze legal precedents"),
         ("L110", "A101", "Legal Research: Review statutes and regulations"),
@@ -100,8 +113,20 @@ CONFIG = {
             'tk_name': "Tom Delaganis",
             'task': "L140",
             'activity': "A107",
-            'is_expense': False
-        },
+            'is_expense': False,
+        'Partner Paralegal Work': {
+    'desc': "Paralegal-level filing, indexing, and docketing tasks performed by Partner for urgency/continuity.",
+    'tk_name': None,
+    'task': "L120",
+    'activity': "A102",
+    'is_expense': False
+},
+'Airfare E110 (Flight)': {
+    'desc': "Airfare",
+    'expense_code': "E110",
+    'is_expense': True
+},
+            },
         'John Doe': {
             'desc': ("Reviewed and summarized deposition transcript of John Doe; prepared exhibit index; "
                      "updated case chronology spreadsheet for attorney review"),
@@ -112,6 +137,18 @@ CONFIG = {
         },
         'Uber E110': {
             'desc': "10-mile Uber ride to client's office",
+            'expense_code': "E110",
+            'is_expense': True
+        },
+        'Partner Paralegal Work': {
+            'desc': "Paralegal-level filing, indexing, and docketing tasks performed by Partner for urgency/continuity.",
+            'tk_name': None,
+            'task': "L120",
+            'activity': "A102",
+            'is_expense': False
+        },
+        'Airfare E110 (Flight)': {
+            'desc': "Airfare",
             'expense_code': "E110",
             'is_expense': True
         },
@@ -454,15 +491,95 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
 
     return rows, total_amount
 
-def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> List[Dict]:
-    """Ensure mandatory line items are included."""
+def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str,
+                            client_id: str, law_firm_id: str,
+                            billing_start_date: datetime.date, billing_end_date: datetime.date,
+                            selected_items: List[str]) -> List[Dict]:
+    """Ensure mandatory line items are included, including Spend Agent cases."""
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
+
     for item_name in selected_items:
-        item = CONFIG['MANDATORY_ITEMS'][item_name]
+        # Spend Agent special: Partner doing Paralegal work (fee)
+        if item_name == 'Partner Paralegal Work':
+            random_day_offset = random.randint(0, num_days - 1)
+            line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
+            partner = _find_first_partner(timekeeper_data)
+            tk_row = partner if partner else (timekeeper_data[0] if timekeeper_data else None)
+            tk_name = tk_row.get("TIMEKEEPER_NAME", "Partner (TBD)") if tk_row else "Partner (TBD)"
+            tk_id = tk_row.get("TIMEKEEPER_ID", "") if tk_row else ""
+            try:
+                rate = float(tk_row.get("RATE", 0.0)) if tk_row else 0.0
+            except Exception:
+                rate = 0.0
+            row = {
+                "INVOICE_DESCRIPTION": invoice_desc,
+                "CLIENT_ID": client_id,
+                "LAW_FIRM_ID": law_firm_id,
+                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"),
+                "TIMEKEEPER_NAME": tk_name,
+                "TIMEKEEPER_CLASSIFICATION": "Partner",
+                "TIMEKEEPER_ID": tk_id,
+                "TASK_CODE": "L120",
+                "ACTIVITY_CODE": "A102",
+                "EXPENSE_CODE": "",
+                "DESCRIPTION": "Paralegal work performed by Partner (filing, indexing, docketing) due to urgency/continuity.",
+                "HOURS": round(random.uniform(0.5, 3.0), 1),
+                "RATE": rate
+            }
+            row["LINE_ITEM_TOTAL"] = round(float(row["HOURS"]) * float(row["RATE"]), 2)
+            rows.append(row)
+            continue
+
+        # Spend Agent special: Airfare E110 expense with flight details
+        if item_name == 'Airfare E110 (Flight)':
+            random_day_offset = random.randint(0, num_days - 1)
+            line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
+            airline   = st.session_state.get("airfare_airline", "Airline")
+            flight_no = st.session_state.get("airfare_flight_number", "XX000")
+            fare_cls  = st.session_state.get("airfare_fare_class", "Y")
+            origin    = st.session_state.get("airfare_origin", "Origin City")
+            arrival   = st.session_state.get("airfare_arrival", "Arrival City")
+            try:
+                amount    = float(st.session_state.get("airfare_amount", 425.00))
+            except Exception:
+                amount = 425.00
+            desc = f"Airfare: {airline} {flight_no} ({fare_cls}) {origin} → {arrival}"
+            row = {
+                "INVOICE_DESCRIPTION": invoice_desc,
+                "CLIENT_ID": client_id,
+                "LAW_FIRM_ID": law_firm_id,
+                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"),
+                "TIMEKEEPER_NAME": "",
+                "TIMEKEEPER_CLASSIFICATION": "",
+                "TIMEKEEPER_ID": "",
+                "TASK_CODE": "",
+                "ACTIVITY_CODE": "",
+                "EXPENSE_CODE": "E110",
+                "DESCRIPTION": desc,
+                "HOURS": 1,
+                "RATE": round(amount, 2)
+            }
+            row["LINE_ITEM_TOTAL"] = row["RATE"]
+            rows.append(row)
+
+            # Prime receipt overrides for receipt generation
+            st.session_state["rcpt_travel_carrier"] = airline
+            st.session_state["rcpt_travel_flight"]  = flight_no
+            st.session_state["rcpt_travel_fare"]    = fare_cls
+            st.session_state["rcpt_travel_from"]    = origin
+            st.session_state["rcpt_travel_to"]      = arrival
+            continue
+
+        # Default handling for existing mandatory items
+        item = CONFIG['MANDATORY_ITEMS'].get(item_name)
+        if not item:
+            continue
+
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
-        if item['is_expense']:
+
+        if item.get('is_expense'):
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
                 "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
@@ -474,12 +591,14 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
         else:
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": item['tk_name'],
+                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": item.get('tk_name') or "",
                 "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": item['task'],
                 "ACTIVITY_CODE": item['activity'], "EXPENSE_CODE": "", "DESCRIPTION": item['desc'],
                 "HOURS": round(random.uniform(0.5, 8.0), 1), "RATE": 0.0
             }
-            row = _force_timekeeper_on_row(row, item['tk_name'], timekeeper_data)
+            if item.get('tk_name'):
+                row = _force_timekeeper_on_row(row, item['tk_name'], timekeeper_data)
+
         rows.append(row)
     return rows
 
@@ -1199,6 +1318,41 @@ with tab_objects[2]:
     if spend_agent:
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
         selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
+
+# --- Spend Agent: Airfare Details UI & force required items ---
+try:
+    if 'spend_agent' in globals() or 'spend_agent' in locals():
+        _spend_agent_val = spend_agent
+    else:
+        _spend_agent_val = st.session_state.get('spend_agent', False)
+except Exception:
+    _spend_agent_val = False
+
+if _spend_agent_val:
+    st.markdown("#### Airfare Details (E110)")
+    cfa, cfb, cfc = st.columns([1,1,1])
+    with cfa:
+        st.text_input("Airline (e.g., United, AA)", key="airfare_airline", value=st.session_state.get("airfare_airline","United"))
+        st.text_input("Fare Class (e.g., Y, B, F)", key="airfare_fare_class", value=st.session_state.get("airfare_fare_class","Y"))
+    with cfb:
+        st.text_input("Flight Number", key="airfare_flight_number", value=st.session_state.get("airfare_flight_number","UA1234"))
+        st.text_input("From (Origin City)", key="airfare_origin", value=st.session_state.get("airfare_origin","San Francisco"))
+    with cfc:
+        st.text_input("To (Arrival City)", key="airfare_arrival", value=st.session_state.get("airfare_arrival","New York"))
+        st.number_input("Airfare Amount ($)", min_value=50.0, max_value=10000.0, step=1.0, value=float(st.session_state.get("airfare_amount",425.00)), key="airfare_amount")
+
+    # Ensure Partner Paralegal Work and Airfare E110 are always included
+    try:
+        if 'selected_items' in globals() or 'selected_items' in locals():
+            # convert to set, add required, convert back
+            _sel = set(selected_items) if selected_items else set()
+            _sel.update({'Partner Paralegal Work', 'Airfare E110 (Flight)'})
+            selected_items = list(_sel)
+        else:
+            st.session_state['selected_items'] = list(set(st.session_state.get('selected_items', [])) | {'Partner Paralegal Work', 'Airfare E110 (Flight)'})
+    except Exception:
+        pass
+
     else:
         selected_items = []
 
