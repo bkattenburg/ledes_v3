@@ -106,7 +106,13 @@ CONFIG = {
     'tk_name': None,
     'task': "L120",
     'activity': "A102",
-    'is_expense': False
+    'is_expense': False,
+'Airfare E110 (Flight)': {
+    'desc': "Airfare",
+    'expense_code': "E110",
+    'is_expense': True
+},
+
 },
         'Airfare E110 (Flight)': {
     'desc': "Airfare",
@@ -1208,13 +1214,17 @@ with tab_objects[2]:
         )
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
     
-    if spend_agent:
-        st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-        selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
-    else:
-        selected_items = []
 
-
+if spend_agent:
+    st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
+    selected_items = st.multiselect(
+        "Mandatory Items",
+        options=list(CONFIG['MANDATORY_ITEMS'].keys()),
+        default=st.session_state.get('selected_items', [])
+    )
+    st.session_state['selected_items'] = selected_items
+else:
+    selected_items = []
 with tab_objects[3]:
     st.markdown("<h2 style='color: #1E1E1E;'>Output</h2>", unsafe_allow_html=True)
  #1E1E1E;'>Output Settings</h3>", unsafe_allow_html=True)
@@ -1344,7 +1354,7 @@ if generate_button:
                     task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, include_block_billed, faker
                 )
                 if spend_agent:
-                    rows = _ensure_mandatory_lines(rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id, current_start_date, current_end_date, selected_items)
+                    rows = _ensure_mandatory_lines(rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id, current_start_date, current_end_date, selected_items if spend_agent else [])
                 
                 df_invoice = pd.DataFrame(rows)
                 current_invoice_number = f"{invoice_number_base}-{i+1}"
