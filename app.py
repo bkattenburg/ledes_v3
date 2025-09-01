@@ -94,14 +94,17 @@ CONFIG = {
     'DEFAULT_INVOICE_DESCRIPTION': "Monthly Legal Services",
     'MANDATORY_ITEMS': {
         'KBCG': {
-            'desc': "KBCG e-licensing portal work; deficiency notice; follow-up scheduling; status review & outstanding items.",
+            'desc': ("Commenced data entry into the KBCG e-licensing portal for Piers Walter Vermont "
+                     "form 1005 application; Drafted deficiency notice to send to client re: same; "
+                     "Scheduled follow-up call with client to review application status and address outstanding deficiencies."),
             'tk_name': "Tom Delaganis",
             'task': "L140",
             'activity': "A107",
             'is_expense': False
         },
         'John Doe': {
-            'desc': "Reviewed and summarized deposition transcript of John Doe; prepared exhibit index; updated case chronology.",
+            'desc': ("Reviewed and summarized deposition transcript of John Doe; prepared exhibit index; "
+                     "updated case chronology spreadsheet for attorney review"),
             'tk_name': "Ryan Kinsey",
             'task': "L120",
             'activity': "A102",
@@ -109,63 +112,11 @@ CONFIG = {
         },
         'Uber E110': {
             'desc': "10-mile Uber ride to client's office",
-            'expense_code': "E110",
-            'is_expense': True
-        },
-        'Partner Paralegal Work': {
-            'desc': "Paralegal-level filing, indexing, and docketing tasks performed by Partner for urgency/continuity.",
-            'tk_name': None,
-            'task': "L120",
-            'activity': "A102",
-            'is_expense': False
-        },
-        'Airfare E110 (Flight)': {
-            'desc': "Airfare",
             'expense_code': "E110",
             'is_expense': True
         },
     }
 }
-
-# --- safety patch: ensure mandatory items are present ---
-try:
-    CONFIG.setdefault('MANDATORY_ITEMS', {})
-    CONFIG['MANDATORY_ITEMS'].update({
-        'KBCG': {
-            'desc': "KBCG e-licensing portal work; deficiency notice; follow-up scheduling; status review & outstanding items.",
-            'tk_name': "Tom Delaganis",
-            'task': "L140",
-            'activity': "A107",
-            'is_expense': False
-        },
-        'John Doe': {
-            'desc': "Reviewed and summarized deposition transcript of John Doe; prepared exhibit index; updated case chronology.",
-            'tk_name': "Ryan Kinsey",
-            'task': "L120",
-            'activity': "A102",
-            'is_expense': False
-        },
-        'Uber E110': {
-            'desc': "10-mile Uber ride to client's office",
-            'expense_code': "E110",
-            'is_expense': True
-        },
-        'Partner Paralegal Work': {
-            'desc': "Paralegal-level filing, indexing, and docketing tasks performed by Partner for urgency/continuity.",
-            'tk_name': None,
-            'task': "L120",
-            'activity': "A102",
-            'is_expense': False
-        },
-        'Airfare E110 (Flight)': {
-            'desc': "Airfare",
-            'expense_code': "E110",
-            'is_expense': True
-        },
-    })
-except Exception as _patch_err:
-    pass
-
 EXPENSE_DESCRIPTIONS = list(CONFIG['EXPENSE_CODES'].keys())
 OTHER_EXPENSE_DESCRIPTIONS = [desc for desc in EXPENSE_DESCRIPTIONS if CONFIG['EXPENSE_CODES'][desc] != "E101"]
 
@@ -508,6 +459,59 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
     for item_name in selected_items:
+        # --- Special handling for Spend Agent items ---
+        if item_name == 'Partner Paralegal Work':
+            tk_row = None
+            try:
+                for tk in timekeeper_data or []:
+                    if str(tk.get("TIMEKEEPER_CLASSIFICATION","")).strip().lower() == "partner":
+                        tk_row = tk
+                        break
+            except Exception:
+                tk_row = None
+            if tk_row is None and (timekeeper_data or []):
+                tk_row = (timekeeper_data or [None])[0]
+            tk_name = tk_row.get("TIMEKEEPER_NAME","Partner (TBD)") if tk_row else "Partner (TBD)"
+            rate = float(tk_row.get("RATE", 0.0)) if tk_row else 0.0
+            row = {
+                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": tk_name,
+                "TIMEKEEPER_CLASSIFICATION": "Partner", "TIMEKEEPER_ID": tk_row.get("TIMEKEEPER_ID","") if tk_row else "",
+                "TASK_CODE": "L120", "ACTIVITY_CODE": "A102", "EXPENSE_CODE": "",
+                "DESCRIPTION": "Paralegal work performed by Partner (filing, indexing, docketing).",
+                "HOURS": round(random.uniform(0.5, 3.0), 1), "RATE": rate
+            }
+            row = _force_timekeeper_on_row(row, tk_name, timekeeper_data)
+            rows.append(row)
+            continue
+
+        if item_name == 'Airfare E110 (Flight)':
+            airline   = st.session_state.get("airfare_airline", "Airline")
+            flight_no = st.session_state.get("airfare_flight_number", "XX000")
+            fare_cls  = st.session_state.get("airfare_fare_class", "Y")
+            origin    = st.session_state.get("airfare_origin", "Origin City")
+            arrival   = st.session_state.get("airfare_arrival", "Arrival City")
+            try:
+                amount = float(st.session_state.get("airfare_amount", 425.00))
+            except Exception:
+                amount = 425.00
+            desc = f"Airfare: {airline} {flight_no} ({fare_cls}) {origin} → {arrival}"
+            row = {
+                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
+                "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": "",
+                "ACTIVITY_CODE": "", "EXPENSE_CODE": "E110", "DESCRIPTION": desc,
+                "HOURS": 1, "RATE": round(amount, 2)
+            }
+            row["LINE_ITEM_TOTAL"] = row["RATE"]
+            rows.append(row)
+            st.session_state["rcpt_travel_carrier"] = airline
+            st.session_state["rcpt_travel_flight"]  = flight_no
+            st.session_state["rcpt_travel_fare"]    = fare_cls
+            st.session_state["rcpt_travel_from"]    = origin
+            st.session_state["rcpt_travel_to"]      = arrival
+            continue
+
         item = CONFIG['MANDATORY_ITEMS'][item_name]
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
@@ -1092,7 +1096,7 @@ csv_custom = sample_custom.to_csv(index=False).encode('utf-8')
 st.sidebar.download_button("Download Sample Custom Tasks CSV", csv_custom, "sample_custom_tasks.csv", "text/csv")
 
 # Dynamic Tabs
-tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output", "Admin"]
+tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
 # Email settings will live under the Output tab.
 tab_objects = st.tabs(tabs)
 
@@ -1246,16 +1250,35 @@ with tab_objects[2]:
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
     
 
-if spend_agent:
-    st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-    selected_items = st.multiselect(
-        "Mandatory Items",
-        options=list(CONFIG['MANDATORY_ITEMS'].keys()),
-        default=st.session_state.get('selected_items', [])
-    )
-    st.session_state['selected_items'] = selected_items
-else:
-    selected_items = []
+
+    # --- Mandatory Items (Spend Agent only) ---
+    if spend_agent:
+        st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
+        selected_items = st.multiselect(
+            "Mandatory Items",
+            options=list(CONFIG['MANDATORY_ITEMS'].keys()),
+            default=st.session_state.get('selected_items', [])
+        )
+        st.session_state['selected_items'] = selected_items
+    else:
+        selected_items = []
+
+# --- Airfare Details UI (E110) ---
+if spend_agent and ('Airfare E110 (Flight)' in (selected_items or [])):
+    st.markdown("#### Airfare Details (E110)")
+    c1, c2, c3 = st.columns([1,1,1])
+    with c1:
+        st.text_input("Airline", key="airfare_airline", value=st.session_state.get("airfare_airline","United"))
+        st.text_input("Fare Class", key="airfare_fare_class", value=st.session_state.get("airfare_fare_class","Y"))
+    with c2:
+        st.text_input("Flight Number", key="airfare_flight_number", value=st.session_state.get("airfare_flight_number","UA1234"))
+        st.text_input("From (Origin City)", key="airfare_origin", value=st.session_state.get("airfare_origin","San Francisco"))
+    with c3:
+        st.text_input("To (Arrival City)", key="airfare_arrival", value=st.session_state.get("airfare_arrival","New York"))
+        st.number_input("Airfare Amount ($)", min_value=50.0, max_value=10000.0, step=1.0, value=float(st.session_state.get("airfare_amount",425.00)), key="airfare_amount")
+
+
+
 with tab_objects[3]:
     st.markdown("<h2 style='color: #1E1E1E;'>Output</h2>", unsafe_allow_html=True)
  #1E1E1E;'>Output Settings</h3>", unsafe_allow_html=True)
@@ -1295,41 +1318,64 @@ with tab_objects[3]:
         combine_ledes = False
 
     generate_receipts = st.checkbox("Generate Sample Receipts for Expenses?", value=False)
-    if generate_receipts:
-        # moved: receipt_tabs = st.tabs(["Receipt Settings"])
-        # Receipt Settings moved to Admin tab
-        pass  # settings moved to Admin tab
+if generate_receipts:
+    receipt_tabs = st.tabs(["Receipt Settings"])
+    with receipt_tabs[0]:
+        st.caption("These settings affect only the generated sample receipts.")
+        with st.expander("Global Style", expanded=False):
+            st.slider(
+                "Receipt scale (affects font sizes)",
+                min_value=0.8, max_value=1.4, value=1.0, step=0.05,
+                key="rcpt_scale"
+            )
+            st.slider(
+                "Divider line weight",
+                min_value=1, max_value=4, value=1, step=1,
+                key="rcpt_line_weight"
+            )
+            st.checkbox(
+                "Use dashed dividers",
+                value=False,
+                key="rcpt_dashed"
+            )
+        with st.expander("Footer Policy Visibility", expanded=False):
+            st.checkbox("Show policy on Travel (E110)", value=True, key="rcpt_show_policy_travel")
+            st.checkbox("Show policy on Meals (E111)", value=True, key="rcpt_show_policy_meal")
+            st.checkbox("Show policy on Mileage (E109)", value=True, key="rcpt_show_policy_mileage")
+            st.checkbox("Show policy on Supplies/Other (E124)", value=True, key="rcpt_show_policy_supplies")
+            st.checkbox("Show policy on Other (generic)", value=True, key="rcpt_show_policy_generic")
+        with st.expander("Travel Details (E110)", expanded=False):
+            st.text_input("Carrier code (e.g., AA, UA)", value="", key="rcpt_travel_carrier")
+            st.text_input("Flight number", value="", key="rcpt_travel_flight")
+            st.text_input("Seat", value="", key="rcpt_travel_seat")
+            st.text_input("Fare class", value="", key="rcpt_travel_fare")
+            st.text_input("From (city)", value="", key="rcpt_travel_from")
+            st.text_input("To (city)", value="", key="rcpt_travel_to")
+            st.checkbox("Auto-generate blank travel fields", value=True, key="rcpt_travel_autogen")
+        with st.expander("Meal Details (E111)", expanded=False):
+            st.text_input("Table #", value="", key="rcpt_meal_table")
+            st.text_input("Server ID", value="", key="rcpt_meal_server")
+            st.checkbox("Include cashier line", value=True, key="rcpt_meal_show_cashier")
 
 
-with tab_objects[4]:
-    st.markdown("<h2 style='color: #1E1E1E;'>Admin</h2>", unsafe_allow_html=True)
 
-    # --- Receipt Settings (scoped to Admin) ---
-    st.markdown("### Receipt Settings")
-    st.slider("Receipt scale (affects font sizes)", min_value=0.8, max_value=1.4, value=1.0, step=0.05, key="rcpt_scale")
-    st.slider("Divider line weight", min_value=1, max_value=4, value=1, step=1, key="rcpt_line_weight")
-    st.checkbox("Use dashed dividers", value=bool(st.session_state.get("rcpt_dashed", False)), key="rcpt_dashed")
-    with st.expander("Footer Policy Visibility", expanded=False):
-        st.checkbox("Show policy on Travel (E110)", value=True, key="rcpt_show_policy_travel")
-        st.checkbox("Show policy on Meals (E111)", value=True, key="rcpt_show_policy_meal")
-        st.checkbox("Show policy on Mileage (E105)", value=True, key="rcpt_show_policy_mileage")
-        st.checkbox("Show policy on Supplies (E106/E118)", value=True, key="rcpt_show_policy_supplies")
-        st.checkbox("Show generic policy on other expenses", value=True, key="rcpt_show_policy_generic")
-
-    # --- Email Configuration (moved from Output; shown only if sending is enabled) ---
-    st.markdown("### Email Configuration")
-    if st.session_state.get("send_email", False):
-        recipient_email = st.text_input("Recipient Email Address:", key="recipient_email")
+# Email Configuration Tab (only created if send_email is True)
+if st.session_state.send_email:
+    email_tab_index = len(tabs) - 1
+    with tab_objects[email_tab_index]:
+        st.markdown("<h2 style='color: #1E1E1E;'>Email Configuration</h2>", unsafe_allow_html=True)
+        recipient_email = st.text_input("Recipient Email Address:")
         try:
             sender_email = st.secrets.email.email_from
             st.caption(f"Sender Email will be from: {st.secrets.get('email', {}).get('username', 'N/A')}")
         except AttributeError:
             st.caption("Sender Email: Not configured (check secrets.toml)")
-        st.text_input("Email Subject Template:", value=st.session_state.get("email_subject", "Your Generated Invoices"), key="email_subject")
-        st.text_area("Email Body Template:", value=st.session_state.get("email_body", "Please find the generated invoices attached."), height=150, key="email_body")
-    else:
-        st.info("Email sending is currently disabled.")
+        st.text_input("Email Subject Template:", value=f"LEDES Invoice for {matter_number_base} (Invoice #{{invoice_number}})", key="email_subject")
+        st.text_area("Email Body Template:", value=f"Please find the attached invoice files for matter {{matter_number}}.\n\nBest regards,\nYour Law Firm", height=150, key="email_body")
+else:
+    recipient_email = ""
 
+# Validation Logic
 is_valid_input = True
 if timekeeper_data is None:
     st.error("Please upload a valid timekeeper CSV file.")
@@ -1385,7 +1431,7 @@ if generate_button:
                     task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, include_block_billed, faker
                 )
                 if spend_agent:
-                    rows = _ensure_mandatory_lines(rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id, current_start_date, current_end_date, selected_items if spend_agent else [])
+                    rows = _ensure_mandatory_lines(rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id, current_start_date, current_end_date, selected_items)
                 
                 df_invoice = pd.DataFrame(rows)
                 current_invoice_number = f"{invoice_number_base}-{i+1}"
