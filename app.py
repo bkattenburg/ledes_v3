@@ -115,6 +115,19 @@ CONFIG = {
             'expense_code': "E110",
             'is_expense': True
         },
+        'Partner: Paralegal Tasks': {
+            'desc': "Partner-level review and organization of case files, tasks typically handled by a paralegal.",
+            'tk_name': "Tom Delaganis",
+            'task': "L350",
+            'activity': "A109",
+            'is_expense': False
+        },
+        'Airfare E110': {
+            'desc': "Airfare",
+            'expense_code': "E110",
+            'is_expense': True,
+            'requires_details': True # Flag for special handling
+        },
     }
 }
 EXPENSE_DESCRIPTIONS = list(CONFIG['EXPENSE_CODES'].keys())
@@ -459,6 +472,45 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
     for item_name in selected_items:
+        # Special handling for Airfare E110 to pull from UI
+        if item_name == 'Airfare E110':
+            # Gather details from session state
+            airline = st.session_state.get('airfare_airline', 'N/A')
+            flight_num = st.session_state.get('airfare_flight_number', 'N/A')
+            dep_city = st.session_state.get('airfare_departure_city', 'N/A')
+            arr_city = st.session_state.get('airfare_arrival_city', 'N/A')
+            is_roundtrip = st.session_state.get('airfare_roundtrip', False)
+            amount = float(st.session_state.get('airfare_amount', 0.0))
+
+            # Construct description
+            trip_type = " (Roundtrip)" if is_roundtrip else ""
+            description = f"Airfare: {airline} {flight_num}, {dep_city} to {arr_city}{trip_type}"
+            
+            random_day_offset = random.randint(0, num_days - 1)
+            line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
+
+            row = {
+                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
+                "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": "",
+                "ACTIVITY_CODE": "", "EXPENSE_CODE": "E110", "DESCRIPTION": description,
+                "HOURS": 1,  # Always 1 unit
+                "RATE": amount, # Unit cost
+                "LINE_ITEM_TOTAL": amount,
+                # Add details for receipt generation
+                "airfare_details": {
+                    "airline": airline,
+                    "flight_number": flight_num,
+                    "departure_city": dep_city,
+                    "arrival_city": arr_city,
+                    "is_roundtrip": is_roundtrip,
+                    "amount": amount
+                }
+            }
+            rows.append(row)
+            continue # Go to next mandatory item
+
+        # Original logic for other items
         item = CONFIG['MANDATORY_ITEMS'][item_name]
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
@@ -758,7 +810,7 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
         return masked
 
     def auth_code():
-        return f"APPROVED  AUTH {random.randint(100000,999999)}  REF {random.randint(1000,9999)}"
+        return f"APPROVED  AUTH {random.randint(100000, 999999)}  REF {random.randint(1000,9999)}"
 
     def pick_items(expense_code: str, desc: str, total: float):
         items = []
@@ -771,7 +823,7 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
                 ("Entree", entree_qty, entree_unit, round(entree_qty*entree_unit,2)),
                 ("Beverage", 1, drink_unit, drink_unit),
             ]
-        elif expense_code == "E110":
+        elif expense_code == "E110": # This is now for generic travel like rideshare
             miles = random.randint(3, 20)
             base = round(max(2.5, total * 0.15), 2)
             per_mile = round(max(0.9, (total - base) / max(miles,1)), 2)
@@ -797,7 +849,6 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
             items.append((f"{desc[:20]} {n}", 1, remaining, remaining))
         return items
 
-    merchant = faker_instance.company()
     m_addr = faker_instance.address().replace("\n", ", ")
     m_phone = faker_instance.phone_number()
     cashier = faker_instance.first_name()
@@ -810,29 +861,49 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     desc = str(expense_row.get("DESCRIPTION","")).strip() or "Item"
     total_amount = float(expense_row.get("LINE_ITEM_TOTAL", 0.0))
 
-    items = pick_items(exp_code, desc, total_amount)
+    # Check for specific airfare details to build the receipt content
+    airfare_details = expense_row.get("airfare_details")
+    if airfare_details:
+        merchant = airfare_details.get("airline", faker_instance.company())
+        # Create realistic line items for airfare
+        base_fare = round(total_amount * 0.75, 2)
+        taxes_fees = round(total_amount - base_fare, 2)
+        trip_type = "Roundtrip" if airfare_details.get("is_roundtrip") else "One-way"
+        flight_desc = f"Flight {airfare_details.get('flight_number', '')}"
+        route_desc = f"{airfare_details.get('departure_city', '')} -> {airfare_details.get('arrival_city', '')}"
+        items = [
+            (f"{trip_type} Airfare: {flight_desc}", 1, base_fare, base_fare),
+            (f"Route: {route_desc}", 0, 0, 0), # No cost item, just for display
+            ("Taxes and Carrier Fees", 1, taxes_fees, taxes_fees)
+        ]
+        tax = 0.0
+        tip = 0.0
+    else:
+        # Original logic if no specific airfare details are passed
+        merchant = faker_instance.company()
+        items = pick_items(exp_code, desc, total_amount)
+        tax_rate = TAX_MAP.get(exp_code, 0.085 if sum(i[3] for i in items) > 0 else 0.0)
+        tax = round(sum(i[3] for i in items) * tax_rate, 2)
+
+        tip = 0.0
+        if exp_code in ("E111", "E110"):
+            subtotal_for_tip = sum(i[3] for i in items)
+            target_total = total_amount
+            tip_guess = 0.15 if exp_code == "E111" else 0.10
+            tip = round(subtotal_for_tip * tip_guess, 2)
+            over = round((subtotal_for_tip + tax + tip) - target_total, 2)
+            if over > 0:
+                tip = max(0.0, round(tip - over, 2))
+            else:
+                tip = round(tip + abs(over), 2)
+    
     subtotal = round(sum(x[3] for x in items), 2)
-
-    tax_rate = TAX_MAP.get(exp_code, 0.085 if subtotal>0 else 0.0)
-    tax = round(subtotal * tax_rate, 2)
-
-    tip = 0.0
-    if exp_code in ("E111","E110"):
-        target_total = total_amount
-        tip_guess = 0.15 if exp_code=="E111" else 0.10
-        tip = round(subtotal * tip_guess, 2)
-        over = round((subtotal + tax + tip) - target_total, 2)
-        if over > 0:
-            tip = max(0.0, round(tip - over, 2))
-        else:
-            tip = round(tip + abs(over), 2)
-
     grand = round(subtotal + tax + tip, 2)
     drift = round(total_amount - grand, 2)
     if abs(drift) >= 0.01 and items:
         name, qty, unit, line_total = items[-1]
         line_total = round(line_total + drift, 2)
-        unit = round(line_total / max(qty,1), 2)
+        unit = round(line_total / max(qty, 1) if qty > 0 else line_total, 2)
         items[-1] = (name, qty, unit, line_total)
         subtotal = round(sum(x[3] for x in items), 2)
         grand = round(subtotal + tax + tip, 2)
@@ -898,8 +969,9 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
         for wrap_line in lines:
             draw.text((40, y), wrap_line, font=mono_font, fill=fg)
             if first:
-                draw.text((width-245, y), str(qty), font=mono_font, fill=fg)
-                draw.text((width-180, y), money(unit), font=mono_font, fill=fg)
+                if qty > 0: # Only show qty/price if relevant
+                    draw.text((width-245, y), str(qty), font=mono_font, fill=fg)
+                    draw.text((width-180, y), money(unit), font=mono_font, fill=fg)
                 draw.text((width-95, y), money(line_total), font=mono_font, fill=fg)
                 first = False
             y += line_y_gap-8
@@ -1199,6 +1271,20 @@ with tab_objects[2]:
     if spend_agent:
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
         selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
+        
+        # Conditional UI for Airfare Details
+        if 'Airfare E110' in selected_items:
+            st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
+            ac1, ac2 = st.columns(2)
+            with ac1:
+                st.text_input("Airline", key="airfare_airline", value="United Airlines")
+                st.text_input("Departure City", key="airfare_departure_city", value="Newark")
+                st.checkbox("Roundtrip", key="airfare_roundtrip", value=True)
+            with ac2:
+                st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
+                st.text_input("Arrival City", key="airfare_arrival_city", value="Los Angeles")
+                st.number_input("Amount", min_value=0.0, value=450.75, step=0.01, key="airfare_amount", help="This amount will be used for the airfare line item total.")
+
     else:
         selected_items = []
 
@@ -1358,6 +1444,9 @@ if generate_button:
                     rows = _ensure_mandatory_lines(rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id, current_start_date, current_end_date, selected_items)
                 
                 df_invoice = pd.DataFrame(rows)
+                # Recalculate total amount after adding mandatory lines
+                total_amount = df_invoice["LINE_ITEM_TOTAL"].sum()
+
                 current_invoice_number = f"{invoice_number_base}-{i+1}"
                 current_matter_number = matter_number_base
                 
@@ -1378,9 +1467,9 @@ if generate_button:
                     attachments_list.append((pdf_filename, pdf_buffer.getvalue()))
                 
                 if generate_receipts:
-                    for row in rows:
+                    for _, row in df_invoice.iterrows():
                         if row.get("EXPENSE_CODE") and row.get("EXPENSE_CODE") != "E101":  # Exclude Copying (E101)
-                            receipt_filename, receipt_data_buf = _create_receipt_image(row, faker)
+                            receipt_filename, receipt_data_buf = _create_receipt_image(row.to_dict(), faker)
                             if receipt_data_buf:
                                 attachments_list.append((receipt_filename, receipt_data_buf.getvalue()))
 
