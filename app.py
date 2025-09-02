@@ -111,9 +111,10 @@ CONFIG = {
             'is_expense': False
         },
         'Uber E110': {
-            'desc': "10-mile Uber ride to client's office",
+            'desc': "Uber ride to client's office",
             'expense_code': "E110",
-            'is_expense': True
+            'is_expense': True,
+            'requires_details': True # Flag for special handling
         },
         'Partner: Paralegal Tasks': {
             'desc': "Partner-level review and organization of case files, tasks typically handled by a paralegal.",
@@ -472,49 +473,48 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
     for item_name in selected_items:
-        # Special handling for Airfare E110 to pull from UI
-        if item_name == 'Airfare E110':
-            # Gather details from session state
-            airline = st.session_state.get('airfare_airline', 'N/A')
-            flight_num = st.session_state.get('airfare_flight_number', 'N/A')
-            dep_city = st.session_state.get('airfare_departure_city', 'N/A')
-            arr_city = st.session_state.get('airfare_arrival_city', 'N/A')
-            is_roundtrip = st.session_state.get('airfare_roundtrip', False)
-            amount = float(st.session_state.get('airfare_amount', 0.0))
-
-            # Construct description
-            trip_type = " (Roundtrip)" if is_roundtrip else ""
-            description = f"Airfare: {airline} {flight_num}, {dep_city} to {arr_city}{trip_type}"
-            
-            random_day_offset = random.randint(0, num_days - 1)
-            line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
-
-            row = {
-                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
-                "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": "",
-                "ACTIVITY_CODE": "", "EXPENSE_CODE": "E110", "DESCRIPTION": description,
-                "HOURS": 1,  # Always 1 unit
-                "RATE": amount, # Unit cost
-                "LINE_ITEM_TOTAL": amount,
-                # Add details for receipt generation
-                "airfare_details": {
-                    "airline": airline,
-                    "flight_number": flight_num,
-                    "departure_city": dep_city,
-                    "arrival_city": arr_city,
-                    "is_roundtrip": is_roundtrip,
-                    "amount": amount
-                }
-            }
-            rows.append(row)
-            continue # Go to next mandatory item
-
-        # Original logic for other items
-        item = CONFIG['MANDATORY_ITEMS'][item_name]
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
-        if item['is_expense']:
+        item = CONFIG['MANDATORY_ITEMS'][item_name]
+
+        # Special handling for items requiring UI details
+        if item.get('requires_details'):
+            if item_name == 'Airfare E110':
+                airline = st.session_state.get('airfare_airline', 'N/A')
+                flight_num = st.session_state.get('airfare_flight_number', 'N/A')
+                dep_city = st.session_state.get('airfare_departure_city', 'N/A')
+                arr_city = st.session_state.get('airfare_arrival_city', 'N/A')
+                is_roundtrip = st.session_state.get('airfare_roundtrip', False)
+                amount = float(st.session_state.get('airfare_amount', 0.0))
+                trip_type = " (Roundtrip)" if is_roundtrip else ""
+                description = f"Airfare: {airline} {flight_num}, {dep_city} to {arr_city}{trip_type}"
+                
+                row = {
+                    "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                    "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
+                    "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": "",
+                    "ACTIVITY_CODE": "", "EXPENSE_CODE": "E110", "DESCRIPTION": description,
+                    "HOURS": 1, "RATE": amount, "LINE_ITEM_TOTAL": amount,
+                    "airfare_details": {
+                        "airline": airline, "flight_number": flight_num,
+                        "departure_city": dep_city, "arrival_city": arr_city,
+                        "is_roundtrip": is_roundtrip, "amount": amount
+                    }
+                }
+                rows.append(row)
+            elif item_name == 'Uber E110':
+                amount = float(st.session_state.get('uber_amount', 0.0))
+                description = item['desc']
+                row = {
+                    "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                    "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
+                    "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": "",
+                    "ACTIVITY_CODE": "", "EXPENSE_CODE": "E110", "DESCRIPTION": description,
+                    "HOURS": 1, "RATE": amount, "LINE_ITEM_TOTAL": amount
+                }
+                rows.append(row)
+        # Original logic for other items
+        elif item['is_expense']:
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
                 "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
@@ -523,7 +523,8 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 "HOURS": random.randint(1, 10), "RATE": round(random.uniform(5.0, 100.0), 2)
             }
             row["LINE_ITEM_TOTAL"] = round(row["HOURS"] * row["RATE"], 2)
-        else:
+            rows.append(row)
+        else: # Fee items
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
                 "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": item['tk_name'],
@@ -532,7 +533,8 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 "HOURS": round(random.uniform(0.5, 8.0), 1), "RATE": 0.0
             }
             row = _force_timekeeper_on_row(row, item['tk_name'], timekeeper_data)
-        rows.append(row)
+            rows.append(row)
+            
     return rows
 
 def _validate_image_bytes(image_bytes: bytes) -> bool:
@@ -948,8 +950,7 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     draw.text((40, y), f"Date: {line_item_date.strftime('%a %b %d, %Y')}", font=mono_font, fill=fg)
     draw.text((width-300, y), f"Receipt #: {rnum}", font=mono_font, fill=fg)
     y += 30
-    draw.text((40, y), f"Cashier: {cashier}", font=mono_font, fill=(90,90,90))
-    y += 10
+    # Cashier line removed
     draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 16
 
     draw.text((40, y), "Item", font=small_font, fill=(90,90,90))
@@ -996,11 +997,8 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     draw.text((40, y), auth_code(), font=mono_font, fill=(90,90,90))
     y += 10
     draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
-
-    policy = "Returns within 30 days with receipt. Items must be unused and in original packaging."
-    for line in _tw.wrap(policy, width=70):
-        draw.text((40, y), line, font=tiny_font, fill=(90,90,90))
-        y += 20
+    
+    # Policy text removed
 
     y = height - 80
     x = 40
@@ -1280,6 +1278,11 @@ with tab_objects[2]:
                 st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
                 st.text_input("Arrival City", key="airfare_arrival_city", value="Los Angeles")
                 st.number_input("Amount", min_value=0.0, value=450.75, step=0.01, key="airfare_amount", help="This amount will be used for the airfare line item total.")
+        
+        # Conditional UI for Uber Details
+        if 'Uber E110' in selected_items:
+            st.markdown("<h4 style='color: #1E1E1E;'>Uber E110 Details</h4>", unsafe_allow_html=True)
+            st.number_input("Ride Amount", min_value=0.0, value=25.50, step=0.01, key="uber_amount", help="This amount will be used for the Uber ride line item total.")
 
     else:
         selected_items = []
