@@ -115,6 +115,19 @@ CONFIG = {
             'expense_code': "E110",
             'is_expense': True
         },
+        'Paralegal by Partner': {
+    'desc': "Paralegal work performed by Partner: assemble binders, index exhibits, and file documents",
+    'tk_name': "Tom Delaganis",
+    'task': "L120",
+    'activity': "A102",
+    'is_expense': False
+},
+        'Airfare E110': {
+    'desc': "Airfare",
+    'expense_code': "E110",
+    'is_expense': True
+}
+
     }
 }
 EXPENSE_DESCRIPTIONS = list(CONFIG['EXPENSE_CODES'].keys())
