@@ -115,7 +115,7 @@ CONFIG = {
             'expense_code': "E110",
             'is_expense': True
         },
-,
+
     'Paralegal by Partner': {
         'desc': "Paralegal work performed by Partner: assemble binders, index exhibits, and file documents",
         'tk_name': "Tom Delaganis",
@@ -1231,24 +1231,29 @@ with tab_objects[2]:
             format="%d"
         )
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
-    
-    if spend_agent:
-        st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-        selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
 
-if "Airfare E110" in selected_items:
-    st.markdown("### Flight Details", unsafe_allow_html=True)
-    st.text_input("Airline", key="flight_airline")
-    st.text_input("Flight Number", key="flight_number")
-    st.text_input("Fare Class", key="flight_fare_class")
-    col_f1, col_f2 = st.columns(2)
-    with col_f1:
-        st.text_input("Originating City", key="flight_origin_city", help="City or airport code")
-    with col_f2:
-        st.text_input("Arrival City", key="flight_arrival_city", help="City or airport code")
-    st.checkbox("Round Trip?", key="flight_round_trip")
-    else:
-        selected_items = []
+if spend_agent:
+    st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
+    selected_items = st.multiselect(
+        "Select Mandatory Items",
+        options=list(CONFIG['MANDATORY_ITEMS'].keys()),
+        default=list(CONFIG['MANDATORY_ITEMS'].keys())
+    )
+    if "Airfare E110" in selected_items:
+        st.markdown("### Flight Details", unsafe_allow_html=True)
+        st.text_input("Airline", key="flight_airline")
+        st.text_input("Flight Number", key="flight_number")
+        st.text_input("Fare Class", key="flight_fare_class")
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            st.text_input("Originating City", key="flight_origin_city", help="City or airport code")
+        with col_f2:
+            st.text_input("Arrival City", key="flight_arrival_city", help="City or airport code")
+        st.checkbox("Round Trip?", key="flight_round_trip")
+else:
+    selected_items = []
+
+
 
 
 with tab_objects[3]:
