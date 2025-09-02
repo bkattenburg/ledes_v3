@@ -700,20 +700,16 @@ def _create_pdf_invoice(
     elements.append(table)
 
     # Totals block (right-aligned)
-    try:
-        fees_total = float(df.loc[(df.get("EXPENSE_CODE") == "") | (df.get("EXPENSE_CODE").isna()), "LINE_ITEM_TOTAL"].astype(float).sum())
-    except Exception:
-        try:
-            fees_total = float(df[df["EXPENSE_CODE"] == ""]["LINE_ITEM_TOTAL"].astype(float).sum())
-        except Exception:
-            fees_total = 0.0
-    try:
-        expenses_total = float(df.loc[df.get("EXPENSE_CODE") != "", "LINE_ITEM_TOTAL"].astype(float).sum())
-    except Exception:
-        try:
-            expenses_total = float(df[df["EXPENSE_CODE"] != ""]["LINE_ITEM_TOTAL"].astype(float).sum())
-        except Exception:
-            expenses_total = 0.0
+    if 'EXPENSE_CODE' in df.columns:
+        # Create a boolean mask for fees. Fees are where EXPENSE_CODE is empty or NaN.
+        is_fee = df['EXPENSE_CODE'].fillna('').eq('')
+        fees_total = df.loc[is_fee, 'LINE_ITEM_TOTAL'].sum()
+        expenses_total = df.loc[~is_fee, 'LINE_ITEM_TOTAL'].sum()
+    else:
+        # If no 'EXPENSE_CODE' column, all are fees
+        fees_total = df['LINE_ITEM_TOTAL'].sum()
+        expenses_total = 0.0
+
 
     elements.append(Spacer(1, 0.2 * inch))
 
@@ -863,7 +859,7 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
 
     # Check for specific airfare details to build the receipt content
     airfare_details = expense_row.get("airfare_details")
-    if airfare_details:
+    if isinstance(airfare_details, dict):
         merchant = airfare_details.get("airline", faker_instance.company())
         # Create realistic line items for airfare
         base_fare = round(total_amount * 0.75, 2)
@@ -1537,3 +1533,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
