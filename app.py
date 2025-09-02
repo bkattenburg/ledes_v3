@@ -488,10 +488,10 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
             if item.get("expense_code") == "E110" and item_name == "Airfare E110":
                 try:
                     import streamlit as st
-                    amt = float(st.session_state.get("flight_amount", 0.0) or 0.0)
-                    row["LINE_ITEM_UNIT_COST"] = round(amt, 2)
+                    amt = st.session_state.get("flight_amount")
+                    row["LINE_ITEM_UNIT_COST"] = amt
                     row["LINE_ITEM_NUMBER_OF_UNITS"] = 1
-                    row["LINE_ITEM_TOTAL"] = round(amt, 2)
+                    row["LINE_ITEM_TOTAL"] = amt
                     row["DESCRIPTION"] = "Airfare"
                     row["FLIGHT_DETAILS"] = {
                         "airline": st.session_state.get("flight_airline", ""),
