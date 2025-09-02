@@ -115,6 +115,20 @@ CONFIG = {
             'expense_code': "E110",
             'is_expense': True
         },
+,
+    'Paralegal by Partner': {
+        'desc': "Paralegal work performed by Partner: assemble binders, index exhibits, and file documents",
+        'tk_name': "Tom Delaganis",
+        'task': "L120",
+        'activity': "A102",
+        'is_expense': False
+    },
+    'Airfare E110': {
+        'desc': "Airfare",
+        'expense_code': "E110",
+        'is_expense': True
+    }
+
     }
 }
 EXPENSE_DESCRIPTIONS = list(CONFIG['EXPENSE_CODES'].keys())
@@ -809,15 +823,17 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     exp_code = str(expense_row.get("EXPENSE_CODE", "")).strip()
     desc = str(expense_row.get("DESCRIPTION","")).strip() or "Item"
     total_amount = float(expense_row.get("LINE_ITEM_TOTAL", 0.0))
-
+    flight_details = expense_row.get("FLIGHT_DETAILS") if isinstance(expense_row, dict) else None
+    is_airfare = (exp_code == "E110") and (("airfare" in desc.lower()) or bool(flight_details))
     items = pick_items(exp_code, desc, total_amount)
+    if is_airfare:
+        items = [("Airfare Ticket", 1, round(total_amount, 2), round(total_amount, 2))]
     subtotal = round(sum(x[3] for x in items), 2)
 
     tax_rate = TAX_MAP.get(exp_code, 0.085 if subtotal>0 else 0.0)
     tax = round(subtotal * tax_rate, 2)
-
     tip = 0.0
-    if exp_code in ("E111","E110"):
+    if exp_code in ("E111","E110") and not is_airfare:
         target_total = total_amount
         tip_guess = 0.15 if exp_code=="E111" else 0.10
         tip = round(subtotal * tip_guess, 2)
@@ -884,6 +900,26 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     draw.text((40, y), f"Cashier: {cashier}", font=mono_font, fill=(90,90,90))
     y += 10
     draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 16
+
+    if is_airfare:
+        fd = flight_details or {}
+        draw.text((40, y), "Flight Details:", font=header_font, fill=fg); y += 26
+        al = fd.get("airline", "") or travel_overrides.get("carrier","")
+        fl = fd.get("flight_number", "") or travel_overrides.get("flight","")
+        fc = fd.get("fare_class", "") or travel_overrides.get("fare","")
+        fr = fd.get("origin", "") or travel_overrides.get("from","")
+        to = fd.get("arrival", "") or travel_overrides.get("to","")
+        rt = fd.get("round_trip", False)
+        for line in [f"Airline: {al}" if al else None,
+                     f"Flight: {fl}" if fl else None,
+                     f"Fare Class: {fc}" if fc else None,
+                     f"From: {fr}   To: {to}" if (fr or to) else None,
+                     f"Round Trip: {'Yes' if rt else 'No'}"]:
+            if line:
+                draw.text((60, y), line, font=mono_font, fill=fg)
+                y += 22
+        y += 6
+        draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
 
     draw.text((40, y), "Item", font=small_font, fill=(90,90,90))
     draw.text((width-255, y), "Qty", font=small_font, fill=(90,90,90))
@@ -1199,6 +1235,18 @@ with tab_objects[2]:
     if spend_agent:
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
         selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
+
+if "Airfare E110" in selected_items:
+    st.markdown("### Flight Details", unsafe_allow_html=True)
+    st.text_input("Airline", key="flight_airline")
+    st.text_input("Flight Number", key="flight_number")
+    st.text_input("Fare Class", key="flight_fare_class")
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        st.text_input("Originating City", key="flight_origin_city", help="City or airport code")
+    with col_f2:
+        st.text_input("Arrival City", key="flight_arrival_city", help="City or airport code")
+    st.checkbox("Round Trip?", key="flight_round_trip")
     else:
         selected_items = []
 
