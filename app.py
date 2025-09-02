@@ -240,6 +240,17 @@ def _create_ledes_line_1998b(row: Dict, line_no: int, inv_total: float, bill_sta
         rate = float(row["RATE"])
         line_total = float(row["LINE_ITEM_TOTAL"])
         is_expense = bool(row.get("EXPENSE_CODE") or row.get("LINE_ITEM_EXPENSE_CODE"))
+        # prefer explicit LINE_ITEM_* for expenses (no calculations)
+        if is_expense:
+            try:
+                explicit_units = row.get("LINE_ITEM_NUMBER_OF_UNITS")
+                if explicit_units not in (None, "", "None"):
+                    hours = float(explicit_units)
+                explicit_cost = row.get("LINE_ITEM_UNIT_COST")
+                if explicit_cost not in (None, "", "None"):
+                    rate = float(explicit_cost)
+            except Exception:
+                pass
         adj_type = "E" if is_expense else "F"
         task_code = "" if is_expense else row.get("TASK_CODE", "")
         activity_code = "" if is_expense else row.get("ACTIVITY_CODE", "")
@@ -478,6 +489,25 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
         if item['is_expense']:
+
+
+            # Direct assignments as requested (no math/rounding)
+            row["LINE_ITEM_NUMBER_OF_UNITS"] = 1
+            row["LINE_ITEM_UNIT_COST"] = amt
+            row["LINE_ITEM_TOTAL"] = amt
+            # Mirror into HOURS/RATE so legacy writer paths agree
+            row["HOURS"] = 1
+            row["RATE"] = amt
+            # Attach flight details for receipt
+            row["FLIGHT_DETAILS"] = {
+                "airline": airline,
+                "flight_number": flight_number,
+                "fare_class": fare_class,
+                "origin": origin,
+                "arrival": arrival,
+                "round_trip": round_trip,
+                "amount": amt,
+            }
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
                 "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
@@ -486,6 +516,44 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 "HOURS": random.randint(1, 10), "RATE": round(random.uniform(5.0, 100.0), 2)
             }
             row["LINE_ITEM_TOTAL"] = round(row["HOURS"] * row["RATE"], 2)
+
+        # Airfare E110 mandatory item override using Flight Details (no calculations)
+        if item.get("expense_code") == "E110" and item_name == "Airfare E110":
+            try:
+                import streamlit as st
+                amt = st.session_state.get("flight_amount")
+                airline = st.session_state.get("flight_airline", "")
+                flight_number = st.session_state.get("flight_number", "")
+                fare_class = st.session_state.get("flight_fare_class", "")
+                origin = st.session_state.get("flight_origin_city", "")
+                arrival = st.session_state.get("flight_arrival_city", "")
+                round_trip = bool(st.session_state.get("flight_round_trip", False))
+            except Exception:
+                amt = row.get("LINE_ITEM_TOTAL")
+                airline = row.get("AIRLINE","")
+                flight_number = row.get("FLIGHT_NUMBER","")
+                fare_class = row.get("FARE_CLASS","")
+                origin = row.get("ORIGIN","")
+                arrival = row.get("ARRIVAL","")
+                round_trip = bool(row.get("ROUND_TRIP", False))
+
+            # Direct assignments as requested (no math/rounding)
+            row["LINE_ITEM_NUMBER_OF_UNITS"] = 1
+            row["LINE_ITEM_UNIT_COST"] = amt
+            row["LINE_ITEM_TOTAL"] = amt
+            # Mirror into HOURS/RATE so legacy writer paths agree
+            row["HOURS"] = 1
+            row["RATE"] = amt
+            # Attach flight details for receipt
+            row["FLIGHT_DETAILS"] = {
+                "airline": airline,
+                "flight_number": flight_number,
+                "fare_class": fare_class,
+                "origin": origin,
+                "arrival": arrival,
+                "round_trip": round_trip,
+                "amount": amt,
+            }
         else:
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
@@ -896,9 +964,42 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     draw.text((40, y), f"Date: {line_item_date.strftime('%a %b %d, %Y')}", font=mono_font, fill=fg)
     draw.text((width-300, y), f"Receipt #: {rnum}", font=mono_font, fill=fg)
     y += 30
-    draw.text((40, y), f"Cashier: {cashier}", font=mono_font, fill=(90,90,90))
-    y += 10
     draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 16
+# Flight Details section for Airfare receipts
+if exp_code == "E110":
+    # Prefer row-attached details; fallback to session
+    fd = expense_row.get("FLIGHT_DETAILS", {}) if isinstance(expense_row, dict) else {}
+    try:
+        import streamlit as st
+    except Exception:
+        st = None
+    if not fd and st:
+        fd = {
+            "airline": st.session_state.get("flight_airline", ""),
+            "flight_number": st.session_state.get("flight_number", ""),
+            "fare_class": st.session_state.get("flight_fare_class", ""),
+            "origin": st.session_state.get("flight_origin_city", ""),
+            "arrival": st.session_state.get("flight_arrival_city", ""),
+            "round_trip": bool(st.session_state.get("flight_round_trip", False)),
+            "amount": st.session_state.get("flight_amount", total_amount),
+        }
+    # Draw if any detail is present
+    if any(str(fd.get(k, "")).strip() for k in ["airline","flight_number","fare_class","origin","arrival"]) or fd.get("round_trip"):
+        draw.text((40, y), "Flight Details", font=header_font, fill=fg); y += 26
+        rt = "Yes" if fd.get("round_trip") else "No"
+        lines_fd = [
+            f"Airline: {fd.get('airline','')}" if fd.get('airline') else None,
+            f"Flight: {fd.get('flight_number','')}" if fd.get('flight_number') else None,
+            f"Fare Class: {fd.get('fare_class','')}" if fd.get('fare_class') else None,
+            (f"From: {fd.get('origin','')}   To: {fd.get('arrival','')}" if (fd.get('origin') or fd.get('arrival')) else None),
+            f"Round Trip: {rt}"
+        ]
+        for _line in lines_fd:
+            if _line:
+                draw.text((60, y), _line, font=mono_font, fill=fg)
+                y += 20
+        y += 8
+        draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
 
     draw.text((40, y), "Item", font=small_font, fill=(90,90,90))
     draw.text((width-255, y), "Qty", font=small_font, fill=(90,90,90))
