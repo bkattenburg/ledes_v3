@@ -115,19 +115,6 @@ CONFIG = {
             'expense_code': "E110",
             'is_expense': True
         },
-        'Paralegal by Partner': {
-    'desc': "Paralegal work performed by Partner: assemble binders, index exhibits, and file documents",
-    'tk_name': "Tom Delaganis",
-    'task': "L120",
-    'activity': "A102",
-    'is_expense': False
-},
-        'Airfare E110': {
-    'desc': "Airfare",
-    'expense_code': "E110",
-    'is_expense': True
-}
-
     }
 }
 EXPENSE_DESCRIPTIONS = list(CONFIG['EXPENSE_CODES'].keys())
@@ -239,22 +226,21 @@ def _create_ledes_line_1998b(row: Dict, line_no: int, inv_total: float, bill_sta
         hours = float(row["HOURS"])
         rate = float(row["RATE"])
         line_total = float(row["LINE_ITEM_TOTAL"])
-        is_expense = bool(row.get("EXPENSE_CODE") or row.get("LINE_ITEM_EXPENSE_CODE"))
-        # prefer explicit LINE_ITEM_* for expenses (no calculations)
+        is_expense = bool(row["EXPENSE_CODE"])
+
+        # For expenses, prefer explicit fields if present (no calculations)
         if is_expense:
             try:
-                explicit_units = row.get("LINE_ITEM_NUMBER_OF_UNITS")
-                if explicit_units not in (None, "", "None"):
-                    hours = float(explicit_units)
-                explicit_cost = row.get("LINE_ITEM_UNIT_COST")
-                if explicit_cost not in (None, "", "None"):
-                    rate = float(explicit_cost)
+                if row.get("LINE_ITEM_NUMBER_OF_UNITS") not in (None, "", "None"):
+                    hours = float(row.get("LINE_ITEM_NUMBER_OF_UNITS"))
+                if row.get("LINE_ITEM_UNIT_COST") not in (None, "", "None"):
+                    rate = float(row.get("LINE_ITEM_UNIT_COST"))
             except Exception:
                 pass
         adj_type = "E" if is_expense else "F"
         task_code = "" if is_expense else row.get("TASK_CODE", "")
         activity_code = "" if is_expense else row.get("ACTIVITY_CODE", "")
-        expense_code = (row.get("EXPENSE_CODE") or row.get("LINE_ITEM_EXPENSE_CODE") or "") if is_expense else ""
+        expense_code = row.get("EXPENSE_CODE", "") if is_expense else ""
         timekeeper_id = "" if is_expense else row.get("TIMEKEEPER_ID", "")
         timekeeper_class = "" if is_expense else row.get("TIMEKEEPER_CLASSIFICATION", "")
         timekeeper_name = "" if is_expense else row.get("TIMEKEEPER_NAME", "")
@@ -301,11 +287,9 @@ def _create_ledes_1998b_content(rows: List[Dict], inv_total: float, bill_start: 
                   "LINE_ITEM_DESCRIPTION|LAW_FIRM_ID|LINE_ITEM_UNIT_COST|TIMEKEEPER_NAME|"
                   "TIMEKEEPER_CLASSIFICATION|CLIENT_MATTER_ID[]")
         lines = [header, fields]
-    seq = 0
-    for row in rows:
-        line = _create_ledes_line_1998b(row, seq + 1, inv_total, bill_start, bill_end, invoice_number, matter_number)
+    for i, row in enumerate(rows, start=1):
+        line = _create_ledes_line_1998b(row, i, inv_total, bill_start, bill_end, invoice_number, matter_number)
         if line:
-            seq += 1
             lines.append("|".join(map(str, line)) + "[]")
     return "\n".join(lines)
 
@@ -489,25 +473,6 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
         if item['is_expense']:
-
-
-            # Direct assignments as requested (no math/rounding)
-            row["LINE_ITEM_NUMBER_OF_UNITS"] = 1
-            row["LINE_ITEM_UNIT_COST"] = amt
-            row["LINE_ITEM_TOTAL"] = amt
-            # Mirror into HOURS/RATE so legacy writer paths agree
-            row["HOURS"] = 1
-            row["RATE"] = amt
-            # Attach flight details for receipt
-            row["FLIGHT_DETAILS"] = {
-                "airline": airline,
-                "flight_number": flight_number,
-                "fare_class": fare_class,
-                "origin": origin,
-                "arrival": arrival,
-                "round_trip": round_trip,
-                "amount": amt,
-            }
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
                 "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
@@ -517,43 +482,42 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
             }
             row["LINE_ITEM_TOTAL"] = round(row["HOURS"] * row["RATE"], 2)
 
-        # Airfare E110 mandatory item override using Flight Details (no calculations)
-        if item.get("expense_code") == "E110" and item_name == "Airfare E110":
-            try:
-                import streamlit as st
-                amt = st.session_state.get("flight_amount")
-                airline = st.session_state.get("flight_airline", "")
-                flight_number = st.session_state.get("flight_number", "")
-                fare_class = st.session_state.get("flight_fare_class", "")
-                origin = st.session_state.get("flight_origin_city", "")
-                arrival = st.session_state.get("flight_arrival_city", "")
-                round_trip = bool(st.session_state.get("flight_round_trip", False))
-            except Exception:
-                amt = row.get("LINE_ITEM_TOTAL")
-                airline = row.get("AIRLINE","")
-                flight_number = row.get("FLIGHT_NUMBER","")
-                fare_class = row.get("FARE_CLASS","")
-                origin = row.get("ORIGIN","")
-                arrival = row.get("ARRIVAL","")
-                round_trip = bool(row.get("ROUND_TRIP", False))
-
-            # Direct assignments as requested (no math/rounding)
-            row["LINE_ITEM_NUMBER_OF_UNITS"] = 1
-            row["LINE_ITEM_UNIT_COST"] = amt
-            row["LINE_ITEM_TOTAL"] = amt
-            # Mirror into HOURS/RATE so legacy writer paths agree
-            row["HOURS"] = 1
-            row["RATE"] = amt
-            # Attach flight details for receipt
-            row["FLIGHT_DETAILS"] = {
-                "airline": airline,
-                "flight_number": flight_number,
-                "fare_class": fare_class,
-                "origin": origin,
-                "arrival": arrival,
-                "round_trip": round_trip,
-                "amount": amt,
-            }
+            # Airfare E110 override: use Flight Details amount directly, attach details
+            if item.get('expense_code') == 'E110' and item_name == 'Airfare E110':
+                amt = None
+                try:
+                    import streamlit as st
+                    amt = st.session_state.get("flight_amount")
+                    airline = st.session_state.get("flight_airline", "")
+                    flight_number = st.session_state.get("flight_number", "")
+                    fare_class = st.session_state.get("flight_fare_class", "")
+                    origin = st.session_state.get("flight_origin_city", "")
+                    arrival = st.session_state.get("flight_arrival_city", "")
+                    round_trip = bool(st.session_state.get("flight_round_trip", False))
+                except Exception:
+                    airline = ""
+                    flight_number = ""
+                    fare_class = ""
+                    origin = ""
+                    arrival = ""
+                    round_trip = False
+                if amt in (None, "", "None"):
+                    amt = row.get("LINE_ITEM_TOTAL", row.get("RATE", 0.0))
+                row["LINE_ITEM_NUMBER_OF_UNITS"] = 1
+                row["LINE_ITEM_UNIT_COST"] = amt
+                row["LINE_ITEM_TOTAL"] = amt
+                row["HOURS"] = 1
+                row["RATE"] = amt
+                row["DESCRIPTION"] = "Airfare"
+                row["FLIGHT_DETAILS"] = {
+                    "airline": airline,
+                    "flight_number": flight_number,
+                    "fare_class": fare_class,
+                    "origin": origin,
+                    "arrival": arrival,
+                    "round_trip": round_trip,
+                    "amount": amt,
+                }
         else:
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
@@ -968,23 +932,21 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
 
     # Flight Details section for Airfare receipts
     if exp_code == "E110":
-        # Prefer row-attached details; fallback to session
-        fd = expense_row.get("FLIGHT_DETAILS", {}) if isinstance(expense_row, dict) else {}
-        try:
-            import streamlit as st
-        except Exception:
-            st = None
-        if not fd and st:
-            fd = {
-                "airline": st.session_state.get("flight_airline", ""),
-                "flight_number": st.session_state.get("flight_number", ""),
-                "fare_class": st.session_state.get("flight_fare_class", ""),
-                "origin": st.session_state.get("flight_origin_city", ""),
-                "arrival": st.session_state.get("flight_arrival_city", ""),
-                "round_trip": bool(st.session_state.get("flight_round_trip", False)),
-                "amount": st.session_state.get("flight_amount", total_amount),
-            }
-        # Draw if any detail present
+        fd = expense_row.get("FLIGHT_DETAILS", {}) if isinstance(row, dict) else {}
+        if not fd:
+            try:
+                import streamlit as st
+                fd = {
+                    "airline": st.session_state.get("flight_airline", ""),
+                    "flight_number": st.session_state.get("flight_number", ""),
+                    "fare_class": st.session_state.get("flight_fare_class", ""),
+                    "origin": st.session_state.get("flight_origin_city", ""),
+                    "arrival": st.session_state.get("flight_arrival_city", ""),
+                    "round_trip": bool(st.session_state.get("flight_round_trip", False)),
+                    "amount": st.session_state.get("flight_amount", total_amount),
+                }
+            except Exception:
+                fd = {}
         if any(str(fd.get(k, "")).strip() for k in ["airline","flight_number","fare_class","origin","arrival"]) or fd.get("round_trip"):
             draw.text((40, y), "Flight Details", font=header_font, fill=fg); y += 26
             rt = "Yes" if fd.get("round_trip") else "No"
@@ -1024,16 +986,17 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
         y += 2
     draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
 
-    def right_label(label, val, y):
+    def right_label(label, val):
+        nonlocal y
         draw.text((width-220, y), label, font=mono_font, fill=fg)
         draw.text((width-95, y), money(val), font=mono_font, fill=fg)
         y += 24
-        return y
-    y = right_label("Subtotal", subtotal, y)
+
+    right_label("Subtotal", subtotal)
     if tax > 0:
-        y = right_label(f"Tax ({int(tax_rate*100)}%)", tax, y)
+        right_label(f"Tax ({int(tax_rate*100)}%)", tax)
     if tip > 0:
-        y = right_label("Tip", tip, y)
+        right_label("Tip", tip)
     draw.text((width-220, y), "TOTAL", font=header_font, fill=fg)
     draw.text((width-95, y), money(round(subtotal + tax + tip, 2)), font=header_font, fill=fg)
     y += 30
@@ -1045,15 +1008,12 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     draw.text((40, y), auth_code(), font=mono_font, fill=(90,90,90))
     y += 10
     draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
-
-
     img_buffer = io.BytesIO()
     img.save(img_buffer, format="PNG")
     img_buffer.seek(0)
 
     filename = f"Receipt_{exp_code}_{line_item_date.strftime('%Y%m%d')}.png"
     return filename, img_buffer
-
 def _customize_email_body(matter_number: str, invoice_number: str) -> Tuple[str, str]:
     """Customize email subject and body with matter and invoice number."""
     subject = st.session_state.get("email_subject", f"LEDES Invoice for {matter_number} (Invoice #{invoice_number})")
@@ -1302,18 +1262,6 @@ with tab_objects[2]:
     if spend_agent:
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
         selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
-        if "Airfare E110" in selected_items:
-            st.markdown("### Flight Details", unsafe_allow_html=True)
-            st.text_input("Airline", key="flight_airline")
-            st.text_input("Flight Number", key="flight_number")
-            st.text_input("Fare Class", key="flight_fare_class")
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                st.text_input("Originating City", key="flight_origin_city", help="City or airport code")
-            with col_f2:
-                st.text_input("Arrival City", key="flight_arrival_city", help="City or airport code")
-            st.checkbox("Round Trip?", key="flight_round_trip")
-            st.number_input("Amount", min_value=0.0, value=0.0, step=1.0, key="flight_amount", help="Total airfare amount; used for unit cost/total with 1 unit.")
     else:
         selected_items = []
 
@@ -1358,7 +1306,45 @@ with tab_objects[3]:
 
     generate_receipts = st.checkbox("Generate Sample Receipts for Expenses?", value=False)
 if generate_receipts:
-    pass
+    receipt_tabs = st.tabs(["Receipt Settings"])
+    with receipt_tabs[0]:
+        st.caption("These settings affect only the generated sample receipts.")
+        with st.expander("Global Style", expanded=False):
+            st.slider(
+                "Receipt scale (affects font sizes)",
+                min_value=0.8, max_value=1.4, value=1.0, step=0.05,
+                key="rcpt_scale"
+            )
+            st.slider(
+                "Divider line weight",
+                min_value=1, max_value=4, value=1, step=1,
+                key="rcpt_line_weight"
+            )
+            st.checkbox(
+                "Use dashed dividers",
+                value=False,
+                key="rcpt_dashed"
+            )
+        with st.expander("Footer Policy Visibility", expanded=False):
+            st.checkbox("Show policy on Travel (E110)", value=True, key="rcpt_show_policy_travel")
+            st.checkbox("Show policy on Meals (E111)", value=True, key="rcpt_show_policy_meal")
+            st.checkbox("Show policy on Mileage (E109)", value=True, key="rcpt_show_policy_mileage")
+            st.checkbox("Show policy on Supplies/Other (E124)", value=True, key="rcpt_show_policy_supplies")
+            st.checkbox("Show policy on Other (generic)", value=True, key="rcpt_show_policy_generic")
+        with st.expander("Travel Details (E110)", expanded=False):
+            st.text_input("Carrier code (e.g., AA, UA)", value="", key="rcpt_travel_carrier")
+            st.text_input("Flight number", value="", key="rcpt_travel_flight")
+            st.text_input("Seat", value="", key="rcpt_travel_seat")
+            st.text_input("Fare class", value="", key="rcpt_travel_fare")
+            st.text_input("From (city)", value="", key="rcpt_travel_from")
+            st.text_input("To (city)", value="", key="rcpt_travel_to")
+            st.checkbox("Auto-generate blank travel fields", value=True, key="rcpt_travel_autogen")
+        with st.expander("Meal Details (E111)", expanded=False):
+            st.text_input("Table #", value="", key="rcpt_meal_table")
+            st.text_input("Server ID", value="", key="rcpt_meal_server")
+            st.checkbox("Include cashier line", value=True, key="rcpt_meal_show_cashier")
+
+
 
 # Email Configuration Tab (only created if send_email is True)
 if st.session_state.send_email:
