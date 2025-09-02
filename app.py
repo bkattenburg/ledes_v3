@@ -484,28 +484,26 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 "HOURS": random.randint(1, 10), "RATE": round(random.uniform(5.0, 100.0), 2)
             }
             row["LINE_ITEM_TOTAL"] = round(row["HOURS"] * row["RATE"], 2)
-
-        # Override for Airfare E110 mandatory item using Flight Details 'Amount' (units=1)
-        if item.get("expense_code") == "E110" and item_name == "Airfare E110":
-            try:
-                import streamlit as st
-                amt = float(st.session_state.get("flight_amount", 0.0) or 0.0)
-                row["LINE_ITEM_UNIT_COST"] = round(amt, 2)
-                row["LINE_ITEM_NUMBER_OF_UNITS"] = 1
-                row["LINE_ITEM_TOTAL"] = round(amt, 2)
-                row["DESCRIPTION"] = "Airfare"
-                row["FLIGHT_DETAILS"] = {
-                    "airline": st.session_state.get("flight_airline", ""),
-                    "flight_number": st.session_state.get("flight_number", ""),
-                    "fare_class": st.session_state.get("flight_fare_class", ""),
-                    "origin": st.session_state.get("flight_origin_city", ""),
-                    "arrival": st.session_state.get("flight_arrival_city", ""),
-                    "round_trip": bool(st.session_state.get("flight_round_trip", False)),
-                    "amount": amt
-                }
-            except Exception:
-                pass
-
+            # Override for Airfare E110 mandatory item using Flight Details 'Amount' (units=1)
+            if item.get("expense_code") == "E110" and item_name == "Airfare E110":
+                try:
+                    import streamlit as st
+                    amt = float(st.session_state.get("flight_amount", 0.0) or 0.0)
+                    row["LINE_ITEM_UNIT_COST"] = round(amt, 2)
+                    row["LINE_ITEM_NUMBER_OF_UNITS"] = 1
+                    row["LINE_ITEM_TOTAL"] = round(amt, 2)
+                    row["DESCRIPTION"] = "Airfare"
+                    row["FLIGHT_DETAILS"] = {
+                        "airline": st.session_state.get("flight_airline", ""),
+                        "flight_number": st.session_state.get("flight_number", ""),
+                        "fare_class": st.session_state.get("flight_fare_class", ""),
+                        "origin": st.session_state.get("flight_origin_city", ""),
+                        "arrival": st.session_state.get("flight_arrival_city", ""),
+                        "round_trip": bool(st.session_state.get("flight_round_trip", False)),
+                        "amount": amt
+                    }
+                except Exception:
+                    pass
         else:
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
@@ -1255,7 +1253,13 @@ with tab_objects[2]:
     
     if spend_agent:
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-        selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
+
+        selected_items = st.multiselect(
+            "Select Mandatory Items",
+            options=list(CONFIG['MANDATORY_ITEMS'].keys()),
+            default=list(CONFIG['MANDATORY_ITEMS'].keys()),
+            key="mandatory_items_select"
+        )
         if "Airfare E110" in selected_items:
             st.markdown("### Flight Details", unsafe_allow_html=True)
             st.text_input("Airline", key="flight_airline")
