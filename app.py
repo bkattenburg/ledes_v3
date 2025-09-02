@@ -485,6 +485,26 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 "HOURS": random.randint(1, 10), "RATE": round(random.uniform(5.0, 100.0), 2)
             }
             row["LINE_ITEM_TOTAL"] = round(row["HOURS"] * row["RATE"], 2)
+        
+            # If this is the Airfare E110 mandatory item, override from Flight Details 'Amount' (units=1)
+            if item.get("expense_code") == "E110" and item_name == "Airfare E110":
+                try:
+                    import streamlit as st
+                    amt = float(st.session_state.get("flight_amount", 0.0) or 0.0)
+                    row["LINE_ITEM_UNIT_COST"] = round(amt, 2)
+                    row["LINE_ITEM_NUMBER_OF_UNITS"] = 1
+                    row["LINE_ITEM_TOTAL"] = round(amt, 2)
+                    row["FLIGHT_DETAILS"] = {
+                        "airline": st.session_state.get("flight_airline", ""),
+                        "flight_number": st.session_state.get("flight_number", ""),
+                        "fare_class": st.session_state.get("flight_fare_class", ""),
+                        "origin": st.session_state.get("flight_origin_city", ""),
+                        "arrival": st.session_state.get("flight_arrival_city", ""),
+                        "round_trip": bool(st.session_state.get("flight_round_trip", False)),
+                        "amount": amt,
+                    }
+                except Exception:
+                    pass
         else:
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
@@ -1181,6 +1201,51 @@ with tab_objects[1]:
 with tab_objects[2]:
     st.markdown("<h2 style='color: #1E1E1E;'>Fees & Expenses</h2>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
+
+    if spend_agent:
+        st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
+        selected_items = st.multiselect(
+            "Select Mandatory Items",
+            options=list(CONFIG['MANDATORY_ITEMS'].keys()),
+            default=list(CONFIG['MANDATORY_ITEMS'].keys())
+        )
+        if "Airfare E110" in selected_items:
+            st.markdown("### Flight Details", unsafe_allow_html=True)
+            st.text_input("Airline", key="flight_airline")
+            st.text_input("Flight Number", key="flight_number")
+            st.text_input("Fare Class", key="flight_fare_class")
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                st.text_input("Originating City", key="flight_origin_city", help="City or airport code")
+            with col_f2:
+                st.text_input("Arrival City", key="flight_arrival_city", help="City or airport code")
+            st.checkbox("Round Trip?", key="flight_round_trip")
+            st.number_input("Amount", min_value=0.0, max_value=100000.0, value=0.0, step=1.0, key="flight_amount", help="Total airfare amount; used for unit cost and total with 1 unit.")
+    else:
+        selected_items = []
+
+if spend_agent:
+    st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
+    selected_items = st.multiselect(
+        "Select Mandatory Items",
+        options=list(CONFIG['MANDATORY_ITEMS'].keys()),
+        default=list(CONFIG['MANDATORY_ITEMS'].keys())
+    )
+    if "Airfare E110" in selected_items:
+        st.markdown("### Flight Details", unsafe_allow_html=True)
+        st.text_input("Airline", key="flight_airline")
+        st.text_input("Flight Number", key="flight_number")
+        st.text_input("Fare Class", key="flight_fare_class")
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            st.text_input("Originating City", key="flight_origin_city", help="City or airport code")
+        with col_f2:
+            st.text_input("Arrival City", key="flight_arrival_city", help="City or airport code")
+        st.checkbox("Round Trip?", key="flight_round_trip")
+        st.number_input("Amount", min_value=0.0, max_value=100000.0, value=0.0, step=1.0, key="flight_amount", help="Total airfare amount; used for unit cost and total with 1 unit.")
+else:
+    selected_items = []
+
     
     if timekeeper_data is None:
         st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
@@ -1231,30 +1296,6 @@ with tab_objects[2]:
             format="%d"
         )
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
-
-if spend_agent:
-    st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-    selected_items = st.multiselect(
-        "Select Mandatory Items",
-        options=list(CONFIG['MANDATORY_ITEMS'].keys()),
-        default=list(CONFIG['MANDATORY_ITEMS'].keys())
-    )
-    if "Airfare E110" in selected_items:
-        st.markdown("### Flight Details", unsafe_allow_html=True)
-        st.text_input("Airline", key="flight_airline")
-        st.text_input("Flight Number", key="flight_number")
-        st.text_input("Fare Class", key="flight_fare_class")
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            st.text_input("Originating City", key="flight_origin_city", help="City or airport code")
-        with col_f2:
-            st.text_input("Arrival City", key="flight_arrival_city", help="City or airport code")
-        st.checkbox("Round Trip?", key="flight_round_trip")
-else:
-    selected_items = []
-
-
-
 
 with tab_objects[3]:
     st.markdown("<h2 style='color: #1E1E1E;'>Output</h2>", unsafe_allow_html=True)
