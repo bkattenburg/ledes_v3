@@ -93,52 +93,29 @@ CONFIG = {
     'DEFAULT_LAW_FIRM_ID': "02-1234567",
     'DEFAULT_INVOICE_DESCRIPTION': "Monthly Legal Services",
     'MANDATORY_ITEMS': {
-        'Paralegal by Partner': {
-            'desc': "Paralegal work performed by Partner: assemble binders, index exhibits, and file documents",
+        'KBCG': {
+            'desc': ("Commenced data entry into the KBCG e-licensing portal for Piers Walter Vermont "
+                     "form 1005 application; Drafted deficiency notice to send to client re: same; "
+                     "Scheduled follow-up call with client to review application status and address outstanding deficiencies."),
             'tk_name': "Tom Delaganis",
+            'task': "L140",
+            'activity': "A107",
+            'is_expense': False
+        },
+        'John Doe': {
+            'desc': ("Reviewed and summarized deposition transcript of John Doe; prepared exhibit index; "
+                     "updated case chronology spreadsheet for attorney review"),
+            'tk_name': "Ryan Kinsey",
             'task': "L120",
             'activity': "A102",
             'is_expense': False
         },
-        'Airfare E110': {
-            'desc': "Airfare",
-            'expense_code': "E110",
-            'is_expense': True
-        },
         'Uber E110': {
-            'desc': "Ground transportation (rideshare)",
+            'desc': "10-mile Uber ride to client's office",
             'expense_code': "E110",
             'is_expense': True
         },
-        'Support Research': {
-            'desc': "Background research and document prep",
-            'tk_name': "Tom Delaganis",
-            'task': "L320",
-            'activity': "A102",
-            'is_expense': False
-        },
-        'Time Entry QA': {
-            'desc': "Time entry quality assurance and corrections",
-            'tk_name': "Tom Delaganis",
-            'task': "L110",
-            'activity': "A101",
-            'is_expense': False
-        }
-    },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    }
 }
 EXPENSE_DESCRIPTIONS = list(CONFIG['EXPENSE_CODES'].keys())
 OTHER_EXPENSE_DESCRIPTIONS = [desc for desc in EXPENSE_DESCRIPTIONS if CONFIG['EXPENSE_CODES'][desc] != "E101"]
@@ -494,43 +471,6 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 "HOURS": random.randint(1, 10), "RATE": round(random.uniform(5.0, 100.0), 2)
             }
             row["LINE_ITEM_TOTAL"] = round(row["HOURS"] * row["RATE"], 2)
-
-            # Airfare E110 override: use Flight Details amount and attach details (no calculations)
-            if item.get('expense_code') == 'E110' and item_name == 'Airfare E110':
-                amt = None
-                try:
-                    import streamlit as st
-                    amt = st.session_state.get("flight_amount")
-                    airline = st.session_state.get("flight_airline", "")
-                    flight_number = st.session_state.get("flight_number", "")
-                    fare_class = st.session_state.get("flight_fare_class", "")
-                    origin = st.session_state.get("flight_origin_city", "")
-                    arrival = st.session_state.get("flight_arrival_city", "")
-                    round_trip = bool(st.session_state.get("flight_round_trip", False))
-                except Exception:
-                    airline = ""
-                    flight_number = ""
-                    fare_class = ""
-                    origin = ""
-                    arrival = ""
-                    round_trip = False
-                if amt in (None, "", "None"):
-                    amt = row.get("LINE_ITEM_TOTAL", row.get("RATE", 0.0))
-                row["LINE_ITEM_NUMBER_OF_UNITS"] = 1
-                row["LINE_ITEM_UNIT_COST"] = amt
-                row["LINE_ITEM_TOTAL"] = amt
-                row["HOURS"] = 1
-                row["RATE"] = amt
-                row["DESCRIPTION"] = "Airfare"
-                row["FLIGHT_DETAILS"] = {
-                    "airline": airline,
-                    "flight_number": flight_number,
-                    "fare_class": fare_class,
-                    "origin": origin,
-                    "arrival": arrival,
-                    "round_trip": round_trip,
-                    "amount": amt,
-                }
         else:
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
@@ -539,9 +479,7 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 "ACTIVITY_CODE": item['activity'], "EXPENSE_CODE": "", "DESCRIPTION": item['desc'],
                 "HOURS": round(random.uniform(0.5, 8.0), 1), "RATE": 0.0
             }
-            tk = item.get('tk_name')
-            if tk:
-                row = _force_timekeeper_on_row(row, tk, timekeeper_data)
+            row = _force_timekeeper_on_row(row, item['tk_name'], timekeeper_data)
         rows.append(row)
     return rows
 
@@ -751,105 +689,275 @@ def _create_pdf_invoice(
     return buffer
 
 
-
 def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str, io.BytesIO]:
-    """Generate a simple receipt PNG for an expense line.
-    - No Cashier and no footer/policy.
-    - Shows Flight Details when EXPENSE_CODE == 'E110' (Airfare) and data exists.
-    """
-    from PIL import Image, ImageDraw, ImageFont
-    import random, datetime, io
+    """Enhanced realistic receipt generator (see chat notes for details)."""
+    width, height = 600, 950
+    bg = (252, 252, 252)
+    fg = (20, 20, 20)
+    faint = (90, 90, 90)
+    line_y_gap = 28
 
-    width, height = 640, 1000
-    img = Image.new("RGB", (width, height), (252, 252, 252))
-    draw = ImageDraw.Draw(img)
+    
+    # === Receipt Settings read from UI ===
     try:
-        header_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 20)
-        mono_font = ImageFont.truetype("DejaVuSansMono.ttf", 16)
-        small_font = ImageFont.truetype("DejaVuSans.ttf", 14)
+        import streamlit as st
     except Exception:
+        st = None
+    rcpt_scale = (st.session_state.get("rcpt_scale", 1.0) if st else 1.0)
+    rcpt_line_weight = int(st.session_state.get("rcpt_line_weight", 1)) if st else 1
+    rcpt_dashed = bool(st.session_state.get("rcpt_dashed", False)) if st else False
+    
+    show_policy_map = {
+        "travel": bool(st.session_state.get("rcpt_show_policy_travel", True)) if st else True,
+        "meal": bool(st.session_state.get("rcpt_show_policy_meal", True)) if st else True,
+        "mileage": bool(st.session_state.get("rcpt_show_policy_mileage", True)) if st else True,
+        "supplies": bool(st.session_state.get("rcpt_show_policy_supplies", True)) if st else True,
+        "generic": bool(st.session_state.get("rcpt_show_policy_generic", True)) if st else True,
+        "delivery": True,
+        "postage": True,
+        "rideshare": True,
+    }
+    
+    travel_overrides = {
+        "carrier": (st.session_state.get("rcpt_travel_carrier", "") if st else ""),
+        "flight": (st.session_state.get("rcpt_travel_flight", "") if st else ""),
+        "seat": (st.session_state.get("rcpt_travel_seat", "") if st else ""),
+        "fare": (st.session_state.get("rcpt_travel_fare", "") if st else ""),
+        "from": (st.session_state.get("rcpt_travel_from", "") if st else ""),
+        "to": (st.session_state.get("rcpt_travel_to", "") if st else ""),
+        "autogen": bool(st.session_state.get("rcpt_travel_autogen", True)) if st else True,
+    }
+    
+    meal_overrides = {
+        "table": (st.session_state.get("rcpt_meal_table", "") if st else ""),
+        "server": (st.session_state.get("rcpt_meal_server", "") if st else ""),
+        "show_cashier": bool(st.session_state.get("rcpt_meal_show_cashier", True)) if st else True,
+    }
+    
+
+    TAX_MAP = {
+        "E111": 0.085,
+        "E110": 0.000,
+        "E109": 0.000,
+        "E108": 0.000,
+        "E115": 0.085,
+        "E116": 0.085,
+        "E117": 0.085,
+    }
+
+    def money(x):
+        return f"${x:,.2f}"
+
+    def mask_card():
+        brands = ["VISA", "MC", "AMEX", "DISC"]
+        brand = random.choice(brands)
+        if brand == "AMEX":
+            masked = f"{brand} ****-******-*{random.randint(1000,9999)}"
+        else:
+            masked = f"{brand} ****-****-****-{random.randint(1000,9999)}"
+        return masked
+
+    def auth_code():
+        return f"APPROVED  AUTH {random.randint(100000,999999)}  REF {random.randint(1000,9999)}"
+
+    def pick_items(expense_code: str, desc: str, total: float):
+        items = []
+        if expense_code == "E111":
+            qtys = [1, 2]
+            entree_qty = random.choice(qtys)
+            entree_unit = round(total * 0.45 / max(entree_qty,1), 2)
+            drink_unit = round(total * 0.15, 2)
+            items = [
+                ("Entree", entree_qty, entree_unit, round(entree_qty*entree_unit,2)),
+                ("Beverage", 1, drink_unit, drink_unit),
+            ]
+        elif expense_code == "E110":
+            miles = random.randint(3, 20)
+            base = round(max(2.5, total * 0.15), 2)
+            per_mile = round(max(0.9, (total - base) / max(miles,1)), 2)
+            items = [
+                ("Base Fare", 1, base, base),
+                (f"Distance {miles} mi", 1, per_mile*miles, round(per_mile*miles,2)),
+            ]
+        elif expense_code == "E108":
+            weight = random.uniform(0.5, 4.0)
+            unit = round(total, 2)
+            items = [(f"USPS Priority Mail {weight:.1f} lb", 1, unit, unit)]
+        elif expense_code in ("E115","E116"):
+            pages = random.randint(50, 300)
+            unit = round(max(2.0, min(6.0, total/pages)), 2)
+            items = [(f"Transcript ({pages} pages)", pages, unit, round(pages*unit,2))]
+        else:
+            n = random.choice([2,3])
+            remaining = total
+            for i in range(n-1):
+                part = round(total * random.uniform(0.2, 0.5), 2)
+                remaining = round(remaining - part, 2)
+                items.append((f"{desc[:20]} {i+1}", 1, part, part))
+            items.append((f"{desc[:20]} {n}", 1, remaining, remaining))
+        return items
+
+    merchant = faker_instance.company()
+    m_addr = faker_instance.address().replace("\n", ", ")
+    m_phone = faker_instance.phone_number()
+    cashier = faker_instance.first_name()
+
+    try:
+        line_item_date = datetime.datetime.strptime(expense_row["LINE_ITEM_DATE"], "%Y-%m-%d").date()
+    except Exception:
+        line_item_date = datetime.datetime.today().date()
+    exp_code = str(expense_row.get("EXPENSE_CODE", "")).strip()
+    desc = str(expense_row.get("DESCRIPTION","")).strip() or "Item"
+    total_amount = float(expense_row.get("LINE_ITEM_TOTAL", 0.0))
+
+    items = pick_items(exp_code, desc, total_amount)
+    subtotal = round(sum(x[3] for x in items), 2)
+
+    tax_rate = TAX_MAP.get(exp_code, 0.085 if subtotal>0 else 0.0)
+    tax = round(subtotal * tax_rate, 2)
+
+    tip = 0.0
+    if exp_code in ("E111","E110"):
+        target_total = total_amount
+        tip_guess = 0.15 if exp_code=="E111" else 0.10
+        tip = round(subtotal * tip_guess, 2)
+        over = round((subtotal + tax + tip) - target_total, 2)
+        if over > 0:
+            tip = max(0.0, round(tip - over, 2))
+        else:
+            tip = round(tip + abs(over), 2)
+
+    grand = round(subtotal + tax + tip, 2)
+    drift = round(total_amount - grand, 2)
+    if abs(drift) >= 0.01 and items:
+        name, qty, unit, line_total = items[-1]
+        line_total = round(line_total + drift, 2)
+        unit = round(line_total / max(qty,1), 2)
+        items[-1] = (name, qty, unit, line_total)
+        subtotal = round(sum(x[3] for x in items), 2)
+        grand = round(subtotal + tax + tip, 2)
+
+    img = PILImage.new("RGB", (width, height), bg)
+    draw = ImageDraw.Draw(img)
+
+    try:
+        title_font = ImageFont.truetype("arial.ttf", max(12, int(34*rcpt_scale)))
+        header_font = ImageFont.truetype("arial.ttf", max(10, int(22*rcpt_scale)))
+        mono_font = ImageFont.truetype("arial.ttf", max(10, int(22*rcpt_scale)))
+        small_font = ImageFont.truetype("arial.ttf", max(8, int(18*rcpt_scale)))
+        tiny_font = ImageFont.truetype("arial.ttf", max(8, int(15*rcpt_scale)))
+    except Exception:
+        title_font = ImageFont.load_default()
         header_font = ImageFont.load_default()
         mono_font = ImageFont.load_default()
         small_font = ImageFont.load_default()
+        tiny_font = ImageFont.load_default()
 
-    def money(v):
-        try:
-            return f"${float(v):,.2f}"
-        except Exception:
-            return str(v)
+    def draw_hr(y, pad_left=40, pad_right=40, weight=1, dashed=False):
+        if dashed:
+            x = pad_left
+            dash = 8
+            gap = 6
+            while x < width - pad_right:
+                x2 = min(x + dash, width - pad_right)
+                draw.line([(x, y), (x2, y)], fill=faint, width=weight)
+                x = x2 + gap
+        else:
+            draw.line([(pad_left, y), (width - pad_right, y)], fill=faint, width=weight)
 
-    def hr(y):
-        draw.line((40, y, width-40, y), fill=(200,200,200), width=1)
+    y = 30
+    title = "RECEIPT"
+    tw = draw.textlength(title, font=title_font)
+    draw.text(((width - tw) / 2, y), title, font=title_font, fill=fg)
+    y += 42
 
-    # Merchant / header
-    y = 40
-    merchant = getattr(faker_instance, "company", lambda: "ACME Corp.")()
-    addr = getattr(faker_instance, "address", lambda: "123 Main St\nCity, ST 00000")()
-    draw.text((40, y), merchant, font=header_font, fill=(10,10,10)); y += 28
-    for line in str(addr).splitlines():
-        draw.text((40, y), line, font=small_font, fill=(50,50,50)); y += 18
+    for line in (merchant, m_addr, f"Tel: {m_phone}"):
+        draw.text((40, y), line, font=header_font, fill=fg)
+        y += 26
     y += 6
-    hr(y); y += 12
+    draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
 
-    # Basics from row
-    desc = str(expense_row.get("DESCRIPTION") or expense_row.get("INVOICE_DESCRIPTION") or "Expense")
-    exp_code = expense_row.get("EXPENSE_CODE") or expense_row.get("LINE_ITEM_EXPENSE_CODE") or ""
-    total = expense_row.get("LINE_ITEM_TOTAL") or 0.0
-    unit_cost = expense_row.get("LINE_ITEM_UNIT_COST") or total
-    units = expense_row.get("LINE_ITEM_NUMBER_OF_UNITS") or 1
+    rnum = f"{random.randint(100000, 999999)}-{random.randint(10,99)}"
+    draw.text((40, y), f"Date: {line_item_date.strftime('%a %b %d, %Y')}", font=mono_font, fill=fg)
+    draw.text((width-300, y), f"Receipt #: {rnum}", font=mono_font, fill=fg)
+    y += 30
+    draw.text((40, y), f"Cashier: {cashier}", font=mono_font, fill=(90,90,90))
+    y += 10
+    draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 16
 
-    # Items table header
-    draw.text((40, y), "Item", font=header_font, fill=(20,20,20))
-    draw.text((width-260, y), "Units", font=header_font, fill=(20,20,20))
-    draw.text((width-180, y), "Unit Cost", font=header_font, fill=(20,20,20))
-    draw.text((width-80, y), "Total", font=header_font, fill=(20,20,20)); y += 24
-    hr(y); y += 10
+    draw.text((40, y), "Item", font=small_font, fill=(90,90,90))
+    draw.text((width-255, y), "Qty", font=small_font, fill=(90,90,90))
+    draw.text((width-180, y), "Price", font=small_font, fill=(90,90,90))
+    draw.text((width-95, y), "Total", font=small_font, fill=(90,90,90))
+    y += 22
 
-    # Item row
-    draw.text((40, y), f"{desc} ({exp_code})", font=mono_font, fill=(20,20,20))
-    draw.text((width-260, y), str(units), font=mono_font, fill=(20,20,20))
-    draw.text((width-180, y), money(unit_cost), font=mono_font, fill=(20,20,20))
-    draw.text((width-80, y), money(total), font=mono_font, fill=(20,20,20)); y += 28
-    hr(y); y += 12
+    import textwrap as _tw
+    for name, qty, unit, line_total in items:
+        lines = _tw.wrap(name, width=32) or ["Item"]
+        first = True
+        for wrap_line in lines:
+            draw.text((40, y), wrap_line, font=mono_font, fill=fg)
+            if first:
+                draw.text((width-245, y), str(qty), font=mono_font, fill=fg)
+                draw.text((width-180, y), money(unit), font=mono_font, fill=fg)
+                draw.text((width-95, y), money(line_total), font=mono_font, fill=fg)
+                first = False
+            y += line_y_gap-8
+        y += 2
+    draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
 
-    # Flight Details section (Airfare E110)
-    if str(exp_code).strip().upper() == "E110":
-        fd = expense_row.get("FLIGHT_DETAILS", {}) if isinstance(expense_row, dict) else {}
-        # Rely on line-item attachment
-        if any(str(fd.get(k, "")).strip() for k in ["airline","flight_number","fare_class","origin","arrival"]) or bool(fd.get("round_trip", False)):
-            draw.text((40, y), "Flight Details", font=header_font, fill=(20,20,20)); y += 24
-            parts = []
-            if fd.get("airline"): parts.append(f"Airline: {fd['airline']}")
-            if fd.get("flight_number"): parts.append(f"Flight: {fd['flight_number']}")
-            if fd.get("fare_class"): parts.append(f"Fare Class: {fd['fare_class']}")
-            if fd.get("origin") or fd.get("arrival"): parts.append(f"From: {fd.get('origin','')}  To: {fd.get('arrival','')}")
-            parts.append(f"Round Trip: {'Yes' if fd.get('round_trip') else 'No'}")
-            for p in parts:
-                draw.text((60, y), p, font=mono_font, fill=(20,20,20)); y += 20
-            y += 10
-            hr(y); y += 12
+    def right_label(label, val):
+        nonlocal y
+        draw.text((width-220, y), label, font=mono_font, fill=fg)
+        draw.text((width-95, y), money(val), font=mono_font, fill=fg)
+        y += 24
 
-    # Totals section
-    draw.text((width-200, y), "Subtotal:", font=mono_font, fill=(20,20,20))
-    draw.text((width-80, y), money(total), font=mono_font, fill=(20,20,20)); y += 24
-    draw.text((width-200, y), "Tax:", font=mono_font, fill=(20,20,20))
-    draw.text((width-80, y), money(0), font=mono_font, fill=(20,20,20)); y += 24
-    draw.text((width-200, y), "Tip:", font=mono_font, fill=(20,20,20))
-    draw.text((width-80, y), money(0), font=mono_font, fill=(20,20,20)); y += 24
-    hr(y); y += 12
-    draw.text((width-200, y), "Total:", font=header_font, fill=(10,10,10))
-    draw.text((width-80, y), money(total), font=header_font, fill=(10,10,10)); y += 32
+    right_label("Subtotal", subtotal)
+    if tax > 0:
+        right_label(f"Tax ({int(tax_rate*100)}%)", tax)
+    if tip > 0:
+        right_label("Tip", tip)
+    draw.text((width-220, y), "TOTAL", font=header_font, fill=fg)
+    draw.text((width-95, y), money(round(subtotal + tax + tip, 2)), font=header_font, fill=fg)
+    y += 30
+    draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
 
-    # Save to buffer
+    pm = mask_card()
+    draw.text((40, y), pm, font=mono_font, fill=fg)
+    y += 26
+    draw.text((40, y), auth_code(), font=mono_font, fill=(90,90,90))
+    y += 10
+    draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
+
+    policy = "Returns within 30 days with receipt. Items must be unused and in original packaging."
+    for line in _tw.wrap(policy, width=70):
+        draw.text((40, y), line, font=tiny_font, fill=(90,90,90))
+        y += 20
+
+    y = height - 80
+    x = 40
+    random.seed(rnum)
+    for _ in range(60):
+        bar_h = random.randint(20, 50)
+        bar_w = random.choice([1,1,2])
+        draw.rectangle([x, y, x+bar_w, y+bar_h], fill=(90,90,90))
+        x += bar_w + 3
+        if x > width - 40:
+            break
+
     img_buffer = io.BytesIO()
     img.save(img_buffer, format="PNG")
     img_buffer.seek(0)
 
-    filename = f"receipt_{random.randint(10000,99999)}.png"
+    filename = f"Receipt_{exp_code}_{line_item_date.strftime('%Y%m%d')}.png"
     return filename, img_buffer
-
-
-
+def _customize_email_body(matter_number: str, invoice_number: str) -> Tuple[str, str]:
+    """Customize email subject and body with matter and invoice number."""
+    subject = st.session_state.get("email_subject", f"LEDES Invoice for {matter_number} (Invoice #{invoice_number})")
+    body = st.session_state.get("email_body", f"Please find the attached invoice files for matter {matter_number}.\n\nBest regards,\nYour Law Firm")
+    subject = subject.format(matter_number=matter_number, invoice_number=invoice_number)
+    body = body.format(matter_number=matter_number, invoice_number=invoice_number)
+    return subject, body
 
 def _send_email_with_attachment(recipient_email: str, subject: str, body: str, attachments: List[Tuple[str, bytes]]) -> bool:
     """Send email with attachments."""
@@ -881,27 +989,6 @@ def _send_email_with_attachment(recipient_email: str, subject: str, body: str, a
         st.error(f"Error sending email: {e}")
         logging.error(f"Email sending failed: {e}")
         return False
-
-
-
-# --- Email subject/body helper (robust fallback) ---
-def _customize_email_body(*args, **kwargs):
-    """Return (subject, body) for invoice email.
-    Accepts any positional/keyword args to prevent NameError when caller evolves.
-    Heuristic: find the last string-y arg as a subject suffix.
-    """
-    subject_suffix = ""
-    for a in reversed(args):
-        if isinstance(a, str) and a.strip():
-            subject_suffix = a.strip()
-            break
-    subject_hint = kwargs.get("subject") or kwargs.get("subject_hint") or ""
-    if isinstance(subject_hint, str) and subject_hint.strip():
-        subject_suffix = subject_hint.strip()
-
-    subject = f"Invoice {subject_suffix}".strip() if subject_suffix else "Invoice"
-    body = "Please find attached your invoice(s)."
-    return subject, body
 
 # --- Streamlit App ---
 st.markdown("<h1 style='color: #1E1E1E;'>LEDES Invoice Generator</h1>", unsafe_allow_html=True)
@@ -1111,19 +1198,7 @@ with tab_objects[2]:
     
     if spend_agent:
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-        selected_items = st.multiselect("Select Mandatory Items", options=list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
-        if "Airfare E110" in selected_items:
-            st.markdown("### Flight Details", unsafe_allow_html=True)
-            st.text_input("Airline", key="flight_airline")
-            st.text_input("Flight Number", key="flight_number")
-            st.text_input("Fare Class", key="flight_fare_class")
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                st.text_input("Originating City", key="flight_origin_city", help="City or airport code")
-            with col_f2:
-                st.text_input("Arrival City", key="flight_arrival_city", help="City or airport code")
-            st.checkbox("Round Trip?", key="flight_round_trip")
-            st.number_input("Amount", min_value=0.0, value=0.0, step=1.0, key="flight_amount", help="Total airfare amount; used for unit cost/total with 1 unit.")
+        selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
     else:
         selected_items = []
 
