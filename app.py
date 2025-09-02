@@ -920,8 +920,6 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     draw.text((40, y), f"Date: {line_item_date.strftime('%a %b %d, %Y')}", font=mono_font, fill=fg)
     draw.text((width-300, y), f"Receipt #: {rnum}", font=mono_font, fill=fg)
     y += 30
-    draw.text((40, y), f"Cashier: {cashier}", font=mono_font, fill=(90,90,90))
-    y += 10
     draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 16
     # Render Flight Details for Airfare receipts
     if exp_code == "E110":
@@ -1330,43 +1328,9 @@ with tab_objects[3]:
 
     generate_receipts = st.checkbox("Generate Sample Receipts for Expenses?", value=False)
 if generate_receipts:
-    receipt_tabs = st.tabs(["Receipt Settings"])
-    with receipt_tabs[0]:
-        st.caption("These settings affect only the generated sample receipts.")
-        with st.expander("Global Style", expanded=False):
-            st.slider(
-                "Receipt scale (affects font sizes)",
-                min_value=0.8, max_value=1.4, value=1.0, step=0.05,
-                key="rcpt_scale"
-            )
-            st.slider(
-                "Divider line weight",
-                min_value=1, max_value=4, value=1, step=1,
-                key="rcpt_line_weight"
-            )
-            st.checkbox(
-                "Use dashed dividers",
-                value=False,
-                key="rcpt_dashed"
-            )
-        with st.expander("Footer Policy Visibility", expanded=False):
-            st.checkbox("Show policy on Travel (E110)", value=True, key="rcpt_show_policy_travel")
-            st.checkbox("Show policy on Meals (E111)", value=True, key="rcpt_show_policy_meal")
-            st.checkbox("Show policy on Mileage (E109)", value=True, key="rcpt_show_policy_mileage")
-            st.checkbox("Show policy on Supplies/Other (E124)", value=True, key="rcpt_show_policy_supplies")
-            st.checkbox("Show policy on Other (generic)", value=True, key="rcpt_show_policy_generic")
-        with st.expander("Travel Details (E110)", expanded=False):
-            st.text_input("Carrier code (e.g., AA, UA)", value="", key="rcpt_travel_carrier")
-            st.text_input("Flight number", value="", key="rcpt_travel_flight")
-            st.text_input("Seat", value="", key="rcpt_travel_seat")
-            st.text_input("Fare class", value="", key="rcpt_travel_fare")
-            st.text_input("From (city)", value="", key="rcpt_travel_from")
-            st.text_input("To (city)", value="", key="rcpt_travel_to")
-            st.checkbox("Auto-generate blank travel fields", value=True, key="rcpt_travel_autogen")
-        with st.expander("Meal Details (E111)", expanded=False):
-            st.text_input("Table #", value="", key="rcpt_meal_table")
-            st.text_input("Server ID", value="", key="rcpt_meal_server")
-            st.checkbox("Include cashier line", value=True, key="rcpt_meal_show_cashier")
+    pass
+
+
 
 
 
