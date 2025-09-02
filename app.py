@@ -882,6 +882,27 @@ def _send_email_with_attachment(recipient_email: str, subject: str, body: str, a
         logging.error(f"Email sending failed: {e}")
         return False
 
+
+
+# --- Email subject/body helper (robust fallback) ---
+def _customize_email_body(*args, **kwargs):
+    """Return (subject, body) for invoice email.
+    Accepts any positional/keyword args to prevent NameError when caller evolves.
+    Heuristic: find the last string-y arg as a subject suffix.
+    """
+    subject_suffix = ""
+    for a in reversed(args):
+        if isinstance(a, str) and a.strip():
+            subject_suffix = a.strip()
+            break
+    subject_hint = kwargs.get("subject") or kwargs.get("subject_hint") or ""
+    if isinstance(subject_hint, str) and subject_hint.strip():
+        subject_suffix = subject_hint.strip()
+
+    subject = f"Invoice {subject_suffix}".strip() if subject_suffix else "Invoice"
+    body = "Please find attached your invoice(s)."
+    return subject, body
+
 # --- Streamlit App ---
 st.markdown("<h1 style='color: #1E1E1E;'>LEDES Invoice Generator</h1>", unsafe_allow_html=True)
 st.markdown("Generate and optionally email LEDES and PDF invoices.", unsafe_allow_html=True)
