@@ -1022,17 +1022,16 @@ if exp_code == "E110":
         y += 2
     draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
 
-    def right_label(label, val):
-        nonlocal y
+    def right_label(label, val, y):
         draw.text((width-220, y), label, font=mono_font, fill=fg)
         draw.text((width-95, y), money(val), font=mono_font, fill=fg)
         y += 24
-
-    right_label("Subtotal", subtotal)
+        return y
+    y = right_label("Subtotal", subtotal, y)
     if tax > 0:
-        right_label(f"Tax ({int(tax_rate*100)}%)", tax)
+        y = right_label(f"Tax ({int(tax_rate*100)}%)", tax, y)
     if tip > 0:
-        right_label("Tip", tip)
+        y = right_label("Tip", tip, y)
     draw.text((width-220, y), "TOTAL", font=header_font, fill=fg)
     draw.text((width-95, y), money(round(subtotal + tax + tip, 2)), font=header_font, fill=fg)
     y += 30
@@ -1045,21 +1044,6 @@ if exp_code == "E110":
     y += 10
     draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
 
-    policy = "Returns within 30 days with receipt. Items must be unused and in original packaging."
-    for line in _tw.wrap(policy, width=70):
-        draw.text((40, y), line, font=tiny_font, fill=(90,90,90))
-        y += 20
-
-    y = height - 80
-    x = 40
-    random.seed(rnum)
-    for _ in range(60):
-        bar_h = random.randint(20, 50)
-        bar_w = random.choice([1,1,2])
-        draw.rectangle([x, y, x+bar_w, y+bar_h], fill=(90,90,90))
-        x += bar_w + 3
-        if x > width - 40:
-            break
 
     img_buffer = io.BytesIO()
     img.save(img_buffer, format="PNG")
@@ -1067,6 +1051,7 @@ if exp_code == "E110":
 
     filename = f"Receipt_{exp_code}_{line_item_date.strftime('%Y%m%d')}.png"
     return filename, img_buffer
+
 def _customize_email_body(matter_number: str, invoice_number: str) -> Tuple[str, str]:
     """Customize email subject and body with matter and invoice number."""
     subject = st.session_state.get("email_subject", f"LEDES Invoice for {matter_number} (Invoice #{invoice_number})")
