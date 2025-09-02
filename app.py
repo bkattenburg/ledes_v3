@@ -1214,6 +1214,18 @@ with tab_objects[2]:
     if spend_agent:
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
         selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
+        if "Airfare E110" in selected_items:
+            st.markdown("### Flight Details", unsafe_allow_html=True)
+            st.text_input("Airline", key="flight_airline")
+            st.text_input("Flight Number", key="flight_number")
+            st.text_input("Fare Class", key="flight_fare_class")
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                st.text_input("Originating City", key="flight_origin_city", help="City or airport code")
+            with col_f2:
+                st.text_input("Arrival City", key="flight_arrival_city", help="City or airport code")
+            st.checkbox("Round Trip?", key="flight_round_trip")
+            st.number_input("Amount", min_value=0.0, value=0.0, step=1.0, key="flight_amount", help="Total airfare amount; used for unit cost/total with 1 unit.")
     else:
         selected_items = []
 
@@ -1258,45 +1270,7 @@ with tab_objects[3]:
 
     generate_receipts = st.checkbox("Generate Sample Receipts for Expenses?", value=False)
 if generate_receipts:
-    receipt_tabs = st.tabs(["Receipt Settings"])
-    with receipt_tabs[0]:
-        st.caption("These settings affect only the generated sample receipts.")
-        with st.expander("Global Style", expanded=False):
-            st.slider(
-                "Receipt scale (affects font sizes)",
-                min_value=0.8, max_value=1.4, value=1.0, step=0.05,
-                key="rcpt_scale"
-            )
-            st.slider(
-                "Divider line weight",
-                min_value=1, max_value=4, value=1, step=1,
-                key="rcpt_line_weight"
-            )
-            st.checkbox(
-                "Use dashed dividers",
-                value=False,
-                key="rcpt_dashed"
-            )
-        with st.expander("Footer Policy Visibility", expanded=False):
-            st.checkbox("Show policy on Travel (E110)", value=True, key="rcpt_show_policy_travel")
-            st.checkbox("Show policy on Meals (E111)", value=True, key="rcpt_show_policy_meal")
-            st.checkbox("Show policy on Mileage (E109)", value=True, key="rcpt_show_policy_mileage")
-            st.checkbox("Show policy on Supplies/Other (E124)", value=True, key="rcpt_show_policy_supplies")
-            st.checkbox("Show policy on Other (generic)", value=True, key="rcpt_show_policy_generic")
-        with st.expander("Travel Details (E110)", expanded=False):
-            st.text_input("Carrier code (e.g., AA, UA)", value="", key="rcpt_travel_carrier")
-            st.text_input("Flight number", value="", key="rcpt_travel_flight")
-            st.text_input("Seat", value="", key="rcpt_travel_seat")
-            st.text_input("Fare class", value="", key="rcpt_travel_fare")
-            st.text_input("From (city)", value="", key="rcpt_travel_from")
-            st.text_input("To (city)", value="", key="rcpt_travel_to")
-            st.checkbox("Auto-generate blank travel fields", value=True, key="rcpt_travel_autogen")
-        with st.expander("Meal Details (E111)", expanded=False):
-            st.text_input("Table #", value="", key="rcpt_meal_table")
-            st.text_input("Server ID", value="", key="rcpt_meal_server")
-            st.checkbox("Include cashier line", value=True, key="rcpt_meal_show_cashier")
-
-
+    pass
 
 # Email Configuration Tab (only created if send_email is True)
 if st.session_state.send_email:
