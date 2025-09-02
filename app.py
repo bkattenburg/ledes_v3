@@ -1208,7 +1208,7 @@ with tab_objects[2]:
             "Select Mandatory Items",
             options=list(CONFIG['MANDATORY_ITEMS'].keys()),
             default=list(CONFIG['MANDATORY_ITEMS'].keys())
-        )
+        , key="mandatory_items_select")
         if "Airfare E110" in selected_items:
             st.markdown("### Flight Details", unsafe_allow_html=True)
             st.text_input("Airline", key="flight_airline")
@@ -1224,8 +1224,6 @@ with tab_objects[2]:
     else:
         selected_items = []
 
-if spend_agent:
-    st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
     selected_items = st.multiselect(
         "Select Mandatory Items",
         options=list(CONFIG['MANDATORY_ITEMS'].keys()),
@@ -1243,10 +1241,8 @@ if spend_agent:
             st.text_input("Arrival City", key="flight_arrival_city", help="City or airport code")
         st.checkbox("Round Trip?", key="flight_round_trip")
         st.number_input("Amount", min_value=0.0, max_value=100000.0, value=0.0, step=1.0, key="flight_amount", help="Total airfare amount; used for unit cost and total with 1 unit.")
-else:
-    selected_items = []
-
-    
+    else:
+        selected_items = []
     if timekeeper_data is None:
         st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
         fees = 0
