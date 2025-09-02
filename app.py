@@ -965,41 +965,43 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     draw.text((width-300, y), f"Receipt #: {rnum}", font=mono_font, fill=fg)
     y += 30
     draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 16
-# Flight Details section for Airfare receipts
-if exp_code == "E110":
-    # Prefer row-attached details; fallback to session
-    fd = expense_row.get("FLIGHT_DETAILS", {}) if isinstance(expense_row, dict) else {}
-    try:
-        import streamlit as st
-    except Exception:
-        st = None
-    if not fd and st:
-        fd = {
-            "airline": st.session_state.get("flight_airline", ""),
-            "flight_number": st.session_state.get("flight_number", ""),
-            "fare_class": st.session_state.get("flight_fare_class", ""),
-            "origin": st.session_state.get("flight_origin_city", ""),
-            "arrival": st.session_state.get("flight_arrival_city", ""),
-            "round_trip": bool(st.session_state.get("flight_round_trip", False)),
-            "amount": st.session_state.get("flight_amount", total_amount),
-        }
-    # Draw if any detail is present
-    if any(str(fd.get(k, "")).strip() for k in ["airline","flight_number","fare_class","origin","arrival"]) or fd.get("round_trip"):
-        draw.text((40, y), "Flight Details", font=header_font, fill=fg); y += 26
-        rt = "Yes" if fd.get("round_trip") else "No"
-        lines_fd = [
-            f"Airline: {fd.get('airline','')}" if fd.get('airline') else None,
-            f"Flight: {fd.get('flight_number','')}" if fd.get('flight_number') else None,
-            f"Fare Class: {fd.get('fare_class','')}" if fd.get('fare_class') else None,
-            (f"From: {fd.get('origin','')}   To: {fd.get('arrival','')}" if (fd.get('origin') or fd.get('arrival')) else None),
-            f"Round Trip: {rt}"
-        ]
-        for _line in lines_fd:
-            if _line:
-                draw.text((60, y), _line, font=mono_font, fill=fg)
-                y += 20
-        y += 8
-        draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
+
+    # Flight Details section for Airfare receipts
+    if exp_code == "E110":
+        # Prefer row-attached details; fallback to session
+        fd = expense_row.get("FLIGHT_DETAILS", {}) if isinstance(expense_row, dict) else {}
+        try:
+            import streamlit as st
+        except Exception:
+            st = None
+        if not fd and st:
+            fd = {
+                "airline": st.session_state.get("flight_airline", ""),
+                "flight_number": st.session_state.get("flight_number", ""),
+                "fare_class": st.session_state.get("flight_fare_class", ""),
+                "origin": st.session_state.get("flight_origin_city", ""),
+                "arrival": st.session_state.get("flight_arrival_city", ""),
+                "round_trip": bool(st.session_state.get("flight_round_trip", False)),
+                "amount": st.session_state.get("flight_amount", total_amount),
+            }
+        # Draw if any detail present
+        if any(str(fd.get(k, "")).strip() for k in ["airline","flight_number","fare_class","origin","arrival"]) or fd.get("round_trip"):
+            draw.text((40, y), "Flight Details", font=header_font, fill=fg); y += 26
+            rt = "Yes" if fd.get("round_trip") else "No"
+            lines_fd = [
+                f"Airline: {fd.get('airline','')}" if fd.get('airline') else None,
+                f"Flight: {fd.get('flight_number','')}" if fd.get('flight_number') else None,
+                f"Fare Class: {fd.get('fare_class','')}" if fd.get('fare_class') else None,
+                (f"From: {fd.get('origin','')}   To: {fd.get('arrival','')}" if (fd.get('origin') or fd.get('arrival')) else None),
+                f"Round Trip: {rt}"
+            ]
+            for _line in lines_fd:
+                if _line:
+                    draw.text((60, y), _line, font=mono_font, fill=fg)
+                    y += 20
+            y += 8
+            draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
+
 
     draw.text((40, y), "Item", font=small_font, fill=(90,90,90))
     draw.text((width-255, y), "Qty", font=small_font, fill=(90,90,90))
