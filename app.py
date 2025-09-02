@@ -1229,20 +1229,6 @@ with tab_objects[2]:
         options=list(CONFIG['MANDATORY_ITEMS'].keys()),
         default=list(CONFIG['MANDATORY_ITEMS'].keys())
     )
-    if "Airfare E110" in selected_items:
-        st.markdown("### Flight Details", unsafe_allow_html=True)
-        st.text_input("Airline", key="flight_airline")
-        st.text_input("Flight Number", key="flight_number")
-        st.text_input("Fare Class", key="flight_fare_class")
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            st.text_input("Originating City", key="flight_origin_city", help="City or airport code")
-        with col_f2:
-            st.text_input("Arrival City", key="flight_arrival_city", help="City or airport code")
-        st.checkbox("Round Trip?", key="flight_round_trip")
-        st.number_input("Amount", min_value=0.0, max_value=100000.0, value=0.0, step=1.0, key="flight_amount", help="Total airfare amount; used for unit cost and total with 1 unit.")
-    else:
-        selected_items = []
     if timekeeper_data is None:
         st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
         fees = 0
