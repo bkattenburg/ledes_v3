@@ -112,12 +112,14 @@ CONFIG = {
         },
         'Support Research': {
             'desc': "Background research and document prep",
+            'tk_name': "Tom Delaganis",
             'task': "L320",
             'activity': "A102",
             'is_expense': False
         },
         'Time Entry QA': {
             'desc': "Time entry quality assurance and corrections",
+            'tk_name': "Tom Delaganis",
             'task': "L110",
             'activity': "A101",
             'is_expense': False
@@ -537,7 +539,9 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 "ACTIVITY_CODE": item['activity'], "EXPENSE_CODE": "", "DESCRIPTION": item['desc'],
                 "HOURS": round(random.uniform(0.5, 8.0), 1), "RATE": 0.0
             }
-            row = _force_timekeeper_on_row(row, item['tk_name'], timekeeper_data)
+            tk = item.get('tk_name')
+            if tk:
+                row = _force_timekeeper_on_row(row, tk, timekeeper_data)
         rows.append(row)
     return rows
 
