@@ -484,6 +484,28 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 "HOURS": random.randint(1, 10), "RATE": round(random.uniform(5.0, 100.0), 2)
             }
             row["LINE_ITEM_TOTAL"] = round(row["HOURS"] * row["RATE"], 2)
+
+        # Override for Airfare E110 mandatory item using Flight Details 'Amount' (units=1)
+        if item.get("expense_code") == "E110" and item_name == "Airfare E110":
+            try:
+                import streamlit as st
+                amt = float(st.session_state.get("flight_amount", 0.0) or 0.0)
+                row["LINE_ITEM_UNIT_COST"] = round(amt, 2)
+                row["LINE_ITEM_NUMBER_OF_UNITS"] = 1
+                row["LINE_ITEM_TOTAL"] = round(amt, 2)
+                row["DESCRIPTION"] = "Airfare"
+                row["FLIGHT_DETAILS"] = {
+                    "airline": st.session_state.get("flight_airline", ""),
+                    "flight_number": st.session_state.get("flight_number", ""),
+                    "fare_class": st.session_state.get("flight_fare_class", ""),
+                    "origin": st.session_state.get("flight_origin_city", ""),
+                    "arrival": st.session_state.get("flight_arrival_city", ""),
+                    "round_trip": bool(st.session_state.get("flight_round_trip", False)),
+                    "amount": amt
+                }
+            except Exception:
+                pass
+
         else:
             row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
@@ -823,14 +845,16 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     desc = str(expense_row.get("DESCRIPTION","")).strip() or "Item"
     total_amount = float(expense_row.get("LINE_ITEM_TOTAL", 0.0))
 
+    flight_details = expense_row.get("FLIGHT_DETAILS") if isinstance(expense_row, dict) else None
+    is_airfare = (exp_code == "E110") and (("airfare" in desc.lower()) or bool(flight_details))
     items = pick_items(exp_code, desc, total_amount)
+    if is_airfare:
+        items = [("Airfare Ticket", 1, round(total_amount, 2), round(total_amount, 2))]
     subtotal = round(sum(x[3] for x in items), 2)
-
     tax_rate = TAX_MAP.get(exp_code, 0.085 if subtotal>0 else 0.0)
     tax = round(subtotal * tax_rate, 2)
-
     tip = 0.0
-    if exp_code in ("E111","E110"):
+    if exp_code in ("E111","E110") and not is_airfare:
         target_total = total_amount
         tip_guess = 0.15 if exp_code=="E111" else 0.10
         tip = round(subtotal * tip_guess, 2)
@@ -839,7 +863,6 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
             tip = max(0.0, round(tip - over, 2))
         else:
             tip = round(tip + abs(over), 2)
-
     grand = round(subtotal + tax + tip, 2)
     drift = round(total_amount - grand, 2)
     if abs(drift) >= 0.01 and items:
@@ -897,6 +920,27 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     draw.text((40, y), f"Cashier: {cashier}", font=mono_font, fill=(90,90,90))
     y += 10
     draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 16
+    if is_airfare:
+        fd = flight_details or {}
+        draw.text((40, y), "Flight Details:", font=header_font, fill=fg); y += 26
+        al = fd.get("airline", "")
+        fl = fd.get("flight_number", "")
+        fc = fd.get("fare_class", "")
+        fr = fd.get("origin", "")
+        to = fd.get("arrival", "")
+        rt = fd.get("round_trip", False)
+        amt = fd.get("amount", total_amount)
+        for line in [f"Airline: {al}" if al else None,
+                     f"Flight: {fl}" if fl else None,
+                     f"Fare Class: {fc}" if fc else None,
+                     f"From: {fr}   To: {to}" if (fr or to) else None,
+                     f"Round Trip: {'Yes' if rt else 'No'}",
+                     f"Amount: ${amt:,.2f}"]:
+            if line:
+                draw.text((60, y), line, font=mono_font, fill=fg)
+                y += 22
+        y += 6
+        draw_hr(y, weight=rcpt_line_weight, dashed=rcpt_dashed); y += 14
 
     draw.text((40, y), "Item", font=small_font, fill=(90,90,90))
     draw.text((width-255, y), "Qty", font=small_font, fill=(90,90,90))
