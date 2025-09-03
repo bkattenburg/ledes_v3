@@ -118,7 +118,7 @@ CONFIG = {
         },
         'Partner: Paralegal Tasks': {
             'desc': "Preparation and organization of exhibits for upcoming deposition; creation of exhibit binders for distribution to all counsel.",
-            'tk_name': "Tom Delaganis",
+            'tk_name': "Ryan Kinsey",
             'task': "L330",
             'activity': "A110",
             'is_expense': False
