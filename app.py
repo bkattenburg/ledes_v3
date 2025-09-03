@@ -793,12 +793,11 @@ st.markdown("""
 This app generates mock invoices for testing billing systems.
 """)
 
-col1, col2 = st.columns(2)
+tab1, tab2, tab3, tab4 = st.tabs(["Invoice Generation", "Mandatory Items", "Optional Items", "Email Invoices"])
 
-with col1:
+with tab1:
     st.header("Invoice Generation Settings")
-    st.markdown("---")
-
+    
     env_selection = st.selectbox(
         'Select Billing Profile',
         [p[0] for p in BILLING_PROFILES]
@@ -836,7 +835,7 @@ with col1:
 
     timekeeper_file = st.file_uploader("Upload Timekeeper CSV", type=['csv'])
     custom_tasks_file = st.file_uploader("Upload Custom Task/Activity CSV", type=['csv'])
-
+    
     generate_ledes = st.checkbox("Generate LEDES 1998B", value=True)
     generate_pdf = st.checkbox("Generate PDF Invoice", value=True)
     generate_receipts = st.checkbox("Generate Receipts", value=False)
@@ -849,25 +848,9 @@ with col1:
     with col_block:
         include_block_billed = st.checkbox("Include Block Billed Item", value=False)
 
-    st.subheader("Tunable Expenses (E109, E110, E105)")
-    mileage_rate_e109 = st.slider("Mileage Rate (E109)", min_value=0.5, max_value=1.0, value=0.65, step=0.01)
-    st.session_state["mileage_rate_e109"] = mileage_rate_e109
-    
-    copying_rate_e101 = st.slider("Copying Rate per Page (E101)", min_value=0.1, max_value=0.5, value=0.24, step=0.01)
-    st.session_state["copying_rate_e101"] = copying_rate_e101
-
-    travel_range_e110 = st.slider("Out-of-Town Travel Range (E110)", min_value=50, max_value=1500, value=(100, 800))
-    st.session_state["travel_range_e110"] = travel_range_e110
-    
-    telephone_range_e105 = st.slider("Telephone Range (E105)", min_value=1, max_value=100, value=(5, 15))
-    st.session_state["telephone_range_e105"] = telephone_range_e105
-
-
-with col2:
+with tab2:
     st.header("Mandatory Line Items")
-    st.markdown("---")
-    
-    st.subheader("Mandatory Items")
+    st.info("Select these items to be included in all generated invoices.")
     mandatory_items = st.multiselect(
         "Select Mandatory Line Items to Include:",
         options=list(CONFIG['MANDATORY_ITEMS'].keys())
@@ -901,131 +884,191 @@ with col2:
             with st.expander("Uber Details"):
                 st.session_state['uber_amount'] = st.number_input("Amount", min_value=0.0, value=25.0, step=1.0, key="uber_amount_input")
 
-    st.markdown("---")
-    if st.button("Generate Invoices"):
-        status = st.status("Generating invoices...", expanded=True)
-        status.update(label="Loading timekeepers...", state="running")
-        timekeeper_data = _load_timekeepers(timekeeper_file)
-        custom_tasks_data = _load_custom_task_activity_data(custom_tasks_file)
-        if custom_tasks_data is not None:
-            task_activity_desc = custom_tasks_data
-        else:
-            task_activity_desc = CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
-            
-        if not timekeeper_data:
-            st.error("Timekeeper data is required to generate fee lines. Please upload a valid CSV.")
-            status.update(label="Failed to generate invoices.", state="error")
-            st.stop()
+with tab3:
+    st.header("Optional Invoice Features")
+    
+    st.subheader("Tunable Expenses (E109, E110, E105)")
+    st.info("Adjust expense generation parameters for more realistic data.")
+    mileage_rate_e109 = st.slider("Mileage Rate (E109)", min_value=0.5, max_value=1.0, value=0.65, step=0.01)
+    st.session_state["mileage_rate_e109"] = mileage_rate_e109
+    
+    copying_rate_e101 = st.slider("Copying Rate per Page (E101)", min_value=0.1, max_value=0.5, value=0.24, step=0.01)
+    st.session_state["copying_rate_e101"] = copying_rate_e101
 
-        faker = Faker()
-        attachments_list = []
+    travel_range_e110 = st.slider("Out-of-Town Travel Range (E110)", min_value=50, max_value=1500, value=(100, 800))
+    st.session_state["travel_range_e110"] = travel_range_e110
+    
+    telephone_range_e105 = st.slider("Telephone Range (E105)", min_value=1, max_value=100, value=(5, 15))
+    st.session_state["telephone_range_e105"] = telephone_range_e105
+
+with tab4:
+    st.header("Email Invoices")
+    st.info("Configure SMTP settings to send the generated invoices via email.")
+    with st.expander("SMTP Settings"):
+        email_sender = st.text_input("Sender Email")
+        email_password = st.text_input("Sender Password (App Specific)", type="password")
+        email_receiver = st.text_input("Receiver Email")
+        smtp_server = st.text_input("SMTP Server", value="smtp.gmail.com")
+        smtp_port = st.number_input("SMTP Port", value=587)
+    
+    send_email = st.checkbox("Send Invoices via Email")
+    
+    st.subheader("Email Content")
+    email_subject = st.text_input("Email Subject", value="Invoice from Law Firm")
+    email_body = st.text_area("Email Body", value="Attached please find the invoice(s) for your review.")
+
+
+if st.button("Generate Invoices"):
+    status = st.status("Generating invoices...", expanded=True)
+    status.update(label="Loading timekeepers...", state="running")
+    timekeeper_data = _load_timekeepers(timekeeper_file)
+    custom_tasks_data = _load_custom_task_activity_data(custom_tasks_file)
+    if custom_tasks_data is not None:
+        task_activity_desc = custom_tasks_data
+    else:
+        task_activity_desc = CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
         
-        status.update(label="Generating invoice data...", state="running")
+    if not timekeeper_data:
+        st.error("Timekeeper data is required to generate fee lines. Please upload a valid CSV.")
+        status.update(label="Failed to generate invoices.", state="error")
+        st.stop()
+
+    faker = Faker()
+    attachments_list = []
+    
+    status.update(label="Generating invoice data...", state="running")
+    
+    for i in range(1, num_invoices + 1):
+        invoice_num_str = f"{invoice_number}-{str(i).zfill(2)}"
+        matter_number = f"MATTER-{str(i).zfill(2)}"
         
-        for i in range(1, num_invoices + 1):
-            invoice_num_str = f"{invoice_number}-{str(i).zfill(2)}"
-            matter_number = f"MATTER-{str(i).zfill(2)}"
-            
-            # Generate primary invoice data
-            invoice_rows, total_amount = _generate_invoice_data(
-                num_fee_lines, num_expense_lines, timekeeper_data, client_id, law_firm_id,
-                invoice_desc, billing_start_date, billing_end_date, task_activity_desc,
-                CONFIG['MAJOR_TASK_CODES'], st.session_state.get("max_hours_per_tk_per_day", 8),
-                include_block_billed, faker
+        # Generate primary invoice data
+        invoice_rows, total_amount = _generate_invoice_data(
+            num_fee_lines, num_expense_lines, timekeeper_data, client_id, law_firm_id,
+            invoice_desc, billing_start_date, billing_end_date, task_activity_desc,
+            CONFIG['MAJOR_TASK_CODES'], st.session_state.get("max_hours_per_tk_per_day", 8),
+            include_block_billed, faker
+        )
+
+        # Add mandatory lines if selected
+        if mandatory_items:
+            mandatory_rows = _ensure_mandatory_lines(
+                [], timekeeper_data, invoice_desc, client_id, law_firm_id,
+                billing_start_date, billing_end_date, mandatory_items
             )
-
-            # Add mandatory lines if selected
-            if mandatory_items:
-                mandatory_rows = _ensure_mandatory_lines(
-                    [], timekeeper_data, invoice_desc, client_id, law_firm_id,
-                    billing_start_date, billing_end_date, mandatory_items
-                )
-                invoice_rows.extend(mandatory_rows)
-                total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in invoice_rows)
+            invoice_rows.extend(mandatory_rows)
+            total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in invoice_rows)
+        
+        df_invoice = pd.DataFrame(invoice_rows)
+        
+        if generate_pdf:
+            status.update(label=f"Creating PDF for {invoice_num_str}...", state="running")
+            logo_bytes = _get_logo_bytes(custom_logo, law_firm_id, include_logo_pdf)
+            pdf_bytes = _create_pdf_invoice(df_invoice, total_amount, invoice_num_str, invoice_date,
+                                             billing_start_date, billing_end_date, client_id,
+                                             law_firm_id, logo_bytes, include_logo_pdf, client_name,
+                                             law_firm_name)
+            attachments_list.append((f"{invoice_num_str}.pdf", pdf_bytes.getvalue()))
             
-            df_invoice = pd.DataFrame(invoice_rows)
-            
-            if generate_pdf:
-                status.update(label=f"Creating PDF for {invoice_num_str}...", state="running")
-                logo_bytes = _get_logo_bytes(custom_logo, law_firm_id, include_logo_pdf)
-                pdf_bytes = _create_pdf_invoice(df_invoice, total_amount, invoice_num_str, invoice_date,
-                                                 billing_start_date, billing_end_date, client_id,
-                                                 law_firm_id, logo_bytes, include_logo_pdf, client_name,
-                                                 law_firm_name)
-                attachments_list.append((f"{invoice_num_str}.pdf", pdf_bytes.getvalue()))
-                
-            if generate_ledes:
-                status.update(label=f"Creating LEDES file for {invoice_num_str}...", state="running")
-                ledes_content = _create_ledes_1998b_content(invoice_rows, total_amount, billing_start_date,
-                                                            billing_end_date, invoice_num_str, matter_number,
-                                                            is_first_invoice=True)
-                attachments_list.append((f"{invoice_num_str}.txt", ledes_content.encode('utf-8')))
+        if generate_ledes:
+            status.update(label=f"Creating LEDES file for {invoice_num_str}...", state="running")
+            ledes_content = _create_ledes_1998b_content(invoice_rows, total_amount, billing_start_date,
+                                                        billing_end_date, invoice_num_str, matter_number,
+                                                        is_first_invoice=True)
+            attachments_list.append((f"{invoice_num_str}.txt", ledes_content.encode('utf-8')))
 
-            if generate_receipts and any(r.get("airfare_details") or "Uber" in r.get("DESCRIPTION", "") for r in invoice_rows):
-                status.update(label=f"Creating receipts for {invoice_num_str}...", state="running")
-                for row in invoice_rows:
-                    if row.get("airfare_details"):
-                        receipt_bytes = _create_image_receipt("Airfare", float(row["LINE_ITEM_TOTAL"]))
-                        attachments_list.append((f"{invoice_num_str}-AirfareReceipt.png", receipt_bytes.getvalue()))
-                    if "Uber" in row.get("DESCRIPTION", ""):
-                        receipt_bytes = _create_image_receipt("Uber", float(row["LINE_ITEM_TOTAL"]))
-                        attachments_list.append((f"{invoice_num_str}-UberReceipt.png", receipt_bytes.getvalue()))
+        if generate_receipts and any(r.get("airfare_details") or "Uber" in r.get("DESCRIPTION", "") for r in invoice_rows):
+            status.update(label=f"Creating receipts for {invoice_num_str}...", state="running")
+            for row in invoice_rows:
+                if row.get("airfare_details"):
+                    receipt_bytes = _create_image_receipt("Airfare", float(row["LINE_ITEM_TOTAL"]))
+                    attachments_list.append((f"{invoice_num_str}-AirfareReceipt.png", receipt_bytes.getvalue()))
+                if "Uber" in row.get("DESCRIPTION", ""):
+                    receipt_bytes = _create_image_receipt("Uber", float(row["LINE_ITEM_TOTAL"]))
+                    attachments_list.append((f"{invoice_num_str}-UberReceipt.png", receipt_bytes.getvalue()))
 
-        st.subheader("Download Files")
-        if not attachments_list:
-            st.warning("No files were generated based on your selections.")
-        else:
-            if generate_pdf and generate_ledes and generate_receipts and zip_receipts:
+    st.subheader("Download Files")
+    if not attachments_list:
+        st.warning("No files were generated based on your selections.")
+    else:
+        if generate_pdf and generate_ledes and generate_receipts and zip_receipts:
+            zip_buf = io.BytesIO()
+            with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for filename, data in attachments_list:
+                    zip_file.writestr(filename, data)
+            zip_buf.seek(0)
+            st.download_button(
+                label="Download Invoices and Receipts as ZIP",
+                data=zip_buf.getvalue(),
+                file_name="invoices_and_receipts.zip",
+                mime="application/zip",
+                key="download_pdf_zip"
+            )
+        elif generate_receipts and zip_receipts:
+            receipt_list = [item for item in attachments_list if "Receipt" in item[0]]
+            if receipt_list:
                 zip_buf = io.BytesIO()
                 with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                    for filename, data in attachments_list:
+                    for filename, data in receipt_list:
                         zip_file.writestr(filename, data)
                 zip_buf.seek(0)
                 st.download_button(
-                    label="Download Invoices and Receipts as ZIP",
+                    label="Download Receipts as ZIP",
                     data=zip_buf.getvalue(),
-                    file_name="invoices_and_receipts.zip",
+                    file_name="receipts.zip",
                     mime="application/zip",
-                    key="download_pdf_zip"
-                )
-            elif generate_receipts and zip_receipts:
-                receipt_list = [item for item in attachments_list if "Receipt" in item[0]]
-                if receipt_list:
-                    zip_buf = io.BytesIO()
-                    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                        for filename, data in receipt_list:
-                            zip_file.writestr(filename, data)
-                    zip_buf.seek(0)
-                    st.download_button(
-                        label="Download Receipts as ZIP",
-                        data=zip_buf.getvalue(),
-                        file_name="receipts.zip",
-                        mime="application/zip",
-                        key="download_receipts_zip"
-                    )
-                else:
-                    st.warning("No receipts were generated to zip.")
-            elif num_invoices > 1:
-                zip_buf = io.BytesIO()
-                with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                    for filename, data in attachments_list:
-                        zip_file.writestr(filename, data)
-                zip_buf.seek(0)
-                st.download_button(
-                    label="Download All Invoices as ZIP",
-                    data=zip_buf.getvalue(),
-                    file_name="invoices.zip",
-                    mime="application/zip",
-                    key="download_zip"
+                    key="download_receipts_zip"
                 )
             else:
-                st.subheader("Generated Invoice(s)")
+                st.warning("No receipts were generated to zip.")
+        elif num_invoices > 1:
+            zip_buf = io.BytesIO()
+            with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 for filename, data in attachments_list:
-                    st.download_button(
-                        label=f"Download {filename}",
-                        data=data,
-                        file_name=filename,
-                        mime="text/plain" if filename.endswith(".txt") else ("application/pdf" if filename.endswith(".pdf") else "image/png"),
-                        key=f"download_{filename}"
-                    )
+                    zip_file.writestr(filename, data)
+            zip_buf.seek(0)
+            st.download_button(
+                label="Download All Invoices as ZIP",
+                data=zip_buf.getvalue(),
+                file_name="invoices.zip",
+                mime="application/zip",
+                key="download_zip"
+            )
+        else:
+            st.subheader("Generated Invoice(s)")
+            for filename, data in attachments_list:
+                st.download_button(
+                    label=f"Download {filename}",
+                    data=data,
+                    file_name=filename,
+                    mime="text/plain" if filename.endswith(".txt") else ("application/pdf" if filename.endswith(".pdf") else "image/png"),
+                    key=f"download_{filename}"
+                )
+
+    if send_email:
+        status.update(label="Sending email...", state="running")
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = email_sender
+            msg['To'] = email_receiver
+            msg['Subject'] = email_subject
+            msg.attach(MIMEText(email_body))
+            
+            for filename, data in attachments_list:
+                part = MIMEApplication(data, Name=filename)
+                part['Content-Disposition'] = f'attachment; filename="{filename}"'
+                msg.attach(part)
+                
+            with smtplib.SMTP(smtp_server, smtp_port) as server:
+                server.starttls()
+                server.login(email_sender, email_password)
+                server.sendmail(email_sender, email_receiver, msg.as_string())
+            
+            status.update(label="Email sent successfully!", state="complete")
+            st.success("Email sent successfully!")
+        except Exception as e:
+            logging.error(f"Email failed to send: {e}")
+            status.update(label="Email failed to send.", state="error")
+            st.error(f"Failed to send email. Error: {e}")
+    else:
         status.update(label="Invoice generation complete!", state="complete")
