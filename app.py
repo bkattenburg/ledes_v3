@@ -486,8 +486,9 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 arr_city = st.session_state.get('airfare_arrival_city', 'N/A')
                 is_roundtrip = st.session_state.get('airfare_roundtrip', False)
                 amount = float(st.session_state.get('airfare_amount', 0.0))
+                fare_class = st.session_state.get('airfare_fare_class', 'Economy/Coach')
                 trip_type = " (Roundtrip)" if is_roundtrip else ""
-                description = f"Airfare: {airline} {flight_num}, {dep_city} to {arr_city}{trip_type}"
+                description = f"Airfare ({fare_class}): {airline} {flight_num}, {dep_city} to {arr_city}{trip_type}"
                 
                 row = {
                     "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
@@ -498,7 +499,8 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                     "airfare_details": {
                         "airline": airline, "flight_number": flight_num,
                         "departure_city": dep_city, "arrival_city": arr_city,
-                        "is_roundtrip": is_roundtrip, "amount": amount
+                        "is_roundtrip": is_roundtrip, "amount": amount,
+                        "fare_class": fare_class
                     }
                 }
                 rows.append(row)
@@ -833,11 +835,13 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
         base_fare = round(total_amount * 0.75, 2)
         taxes_fees = round(total_amount - base_fare, 2)
         trip_type = "Roundtrip" if airfare_details.get("is_roundtrip") else "One-way"
+        fare_class = airfare_details.get("fare_class", "Coach")
         flight_desc = f"Flight {airfare_details.get('flight_number', '')}"
         route_desc = f"{airfare_details.get('departure_city', '')} -> {airfare_details.get('arrival_city', '')}"
         items = [
             (f"{trip_type} Airfare: {flight_desc}", 1, base_fare, base_fare),
-            (f"Route: {route_desc}", 0, 0, 0), # No cost item, just for display
+            (f"Class: {fare_class}", 0, 0, 0),
+            (f"Route: {route_desc}", 0, 0, 0),
             ("Taxes and Carrier Fees", 1, taxes_fees, taxes_fees)
         ]
         tax = 0.0
@@ -1244,6 +1248,12 @@ with tab_objects[2]:
                 st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
                 st.text_input("Arrival City", key="airfare_arrival_city", value="Los Angeles")
                 st.number_input("Amount", min_value=0.0, value=450.75, step=0.01, key="airfare_amount", help="This amount will be used for the airfare line item total.")
+            st.selectbox(
+                "Fare Class",
+                options=["First", "Business", "Premium Economy", "Economy/Coach"],
+                key="airfare_fare_class",
+                help="Select the standard airline fare class (e.g., First, Business, Coach). This will be added to the line item description."
+            )
         
         # Conditional UI for Uber Details
         if 'Uber E110' in selected_items:
@@ -1256,7 +1266,6 @@ with tab_objects[2]:
 
 with tab_objects[3]:
     st.markdown("<h2 style='color: #1E1E1E;'>Output</h2>", unsafe_allow_html=True)
- #1E1E1E;'>Output Settings</h3>", unsafe_allow_html=True)
     include_block_billed = st.checkbox("Include Block Billed Line Items", value=True)
     include_pdf = st.checkbox("Include PDF Invoice", value=False)
     
@@ -1293,6 +1302,9 @@ with tab_objects[3]:
         combine_ledes = False
 
     generate_receipts = st.checkbox("Generate Sample Receipts for Expenses?", value=False)
+    zip_receipts = False
+    if generate_receipts:
+        zip_receipts = st.checkbox("Zip Receipts", value=True, key="zip_receipts", help="Combine all generated receipt images into a single ZIP file.")
 
 # Email Configuration Tab (only created if send_email is True)
 if st.session_state.send_email:
@@ -1344,7 +1356,10 @@ if generate_button:
         st.warning(f"You have selected to generate {num_invoices} invoices, but provided {len(descriptions)} descriptions. Please provide one description per period.")
     else:
         attachments_list = []
+        receipt_files = []
         combined_ledes_content = ""
+        zip_receipts_enabled = st.session_state.get('zip_receipts', False) if generate_receipts else False
+
         with st.status("Generating invoices...") as status:
             current_end_date = billing_end_date
             current_start_date = billing_start_date
@@ -1393,27 +1408,46 @@ if generate_button:
                 
                 if generate_receipts:
                     for _, row in df_invoice.iterrows():
-                        if row.get("EXPENSE_CODE") and row.get("EXPENSE_CODE") != "E101":  # Exclude Copying (E101)
+                        if row.get("EXPENSE_CODE") and row.get("EXPENSE_CODE") != "E101":
                             receipt_filename, receipt_data_buf = _create_receipt_image(row.to_dict(), faker)
                             if receipt_data_buf:
-                                attachments_list.append((receipt_filename, receipt_data_buf.getvalue()))
+                                receipt_files.append((receipt_filename, receipt_data_buf.getvalue()))
+
+            # Process receipts after loop
+            if receipt_files:
+                if zip_receipts_enabled:
+                    zip_buf = io.BytesIO()
+                    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                        for filename, data in receipt_files:
+                            zip_file.writestr(filename, data)
+                    zip_buf.seek(0)
+                    attachments_list.append(("receipts.zip", zip_buf.getvalue()))
+                else:
+                    attachments_list.extend(receipt_files)
 
             # Final download/email logic
+            def get_mime_type(filename):
+                if filename.endswith(".txt"): return "text/plain"
+                if filename.endswith(".pdf"): return "application/pdf"
+                if filename.endswith(".png"): return "image/png"
+                if filename.endswith(".zip"): return "application/zip"
+                return "application/octet-stream"
+
             if st.session_state.send_email:
                 subject, body = _customize_email_body(current_matter_number, f"{invoice_number_base}-Combined" if combine_ledes else f"{current_invoice_number}")
                 
                 if combine_ledes:
                     attachments_to_send = [("LEDES_Combined.txt", combined_ledes_content.encode('utf-8'))]
-                    attachments_to_send.extend([item for item in attachments_list if item[0].endswith(".pdf") or item[0].endswith(".png")])
+                    attachments_to_send.extend(attachments_list) # attachments_list already has PDFs and receipts (zipped or not)
                     if not _send_email_with_attachment(recipient_email, subject, body, attachments_to_send):
                         st.subheader("Invoice(s) Failed to Email - Download below:")
                         for filename, data in attachments_to_send:
-                            st.download_button(label=f"Download {filename}", data=data, file_name=filename, mime="text/plain" if filename.endswith(".txt") else ("application/pdf" if filename.endswith(".pdf") else "image/png"), key=f"download_failed_{filename}")
+                            st.download_button(label=f"Download {filename}", data=data, file_name=filename, mime=get_mime_type(filename), key=f"download_failed_{filename}")
                 else:
                     if not _send_email_with_attachment(recipient_email, subject, body, attachments_list):
                         st.subheader("Invoice(s) Failed to Email - Download below:")
                         for filename, data in attachments_list:
-                            st.download_button(label=f"Download {filename}", data=data, file_name=filename, mime="text/plain" if filename.endswith(".txt") else ("application/pdf" if filename.endswith(".pdf") else "image/png"), key=f"download_failed_{filename}")
+                            st.download_button(label=f"Download {filename}", data=data, file_name=filename, mime=get_mime_type(filename), key=f"download_failed_{filename}")
             else:
                 if combine_ledes:
                     st.subheader("Generated Combined LEDES Invoice")
@@ -1424,28 +1458,28 @@ if generate_button:
                         mime="text/plain",
                         key="download_combined_ledes"
                     )
-                    pdf_and_receipt_attachments = [item for item in attachments_list if item[0].endswith(".pdf") or item[0].endswith(".png")]
-                    if pdf_and_receipt_attachments:
+                    other_attachments = attachments_list
+                    if other_attachments:
                         zip_buf = io.BytesIO()
                         with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                            for filename, data in pdf_and_receipt_attachments:
+                            for filename, data in other_attachments:
                                 zip_file.writestr(filename, data)
                         zip_buf.seek(0)
                         st.download_button(
-                            label="Download All PDF Invoices & Receipts as ZIP",
+                            label="Download All PDFs & Receipts as ZIP",
                             data=zip_buf.getvalue(),
                             file_name="invoices_and_receipts.zip",
                             mime="application/zip",
                             key="download_pdf_zip"
                         )
-                elif num_invoices > 1:
+                elif num_invoices > 1 or (generate_receipts and zip_receipts_enabled):
                     zip_buf = io.BytesIO()
                     with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                         for filename, data in attachments_list:
                             zip_file.writestr(filename, data)
                     zip_buf.seek(0)
                     st.download_button(
-                        label="Download All Invoices as ZIP",
+                        label="Download All Files as ZIP",
                         data=zip_buf.getvalue(),
                         file_name="invoices.zip",
                         mime="application/zip",
@@ -1458,8 +1492,7 @@ if generate_button:
                             label=f"Download {filename}",
                             data=data,
                             file_name=filename,
-                            mime="text/plain" if filename.endswith(".txt") else ("application/pdf" if filename.endswith(".pdf") else "image/png"),
+                            mime=get_mime_type(filename),
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
-
