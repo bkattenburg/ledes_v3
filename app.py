@@ -117,10 +117,10 @@ CONFIG = {
             'requires_details': True # Flag for special handling
         },
         'Partner: Paralegal Tasks': {
-            'desc': "Preparation and organization of exhibits for upcoming deposition and creation of exhibit binders for distribution to all counsel.",
+            'desc': "Prepared trial binder including witness lists and exhibit summaries.",
             'tk_name': "Ryan Kinsey",
-            'task': "L330",
-            'activity': "A110",
+            'task': "L140",
+            'activity': "A103",
             'is_expense': False
         },
         'Airfare E110': {
