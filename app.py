@@ -117,10 +117,10 @@ CONFIG = {
             'requires_details': True # Flag for special handling
         },
         'Partner: Paralegal Tasks': {
-            'desc': "Partner-level review and organization of case files, tasks typically handled by a paralegal.",
+            'desc': "Preparation and organization of exhibits for upcoming deposition; creation of exhibit binders for distribution to all counsel.",
             'tk_name': "Tom Delaganis",
-            'task': "L350",
-            'activity': "A109",
+            'task': "L330",
+            'activity': "A110",
             'is_expense': False
         },
         'Airfare E110': {
