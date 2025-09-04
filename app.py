@@ -1260,7 +1260,28 @@ with tab_objects[2]:
     
     if spend_agent:
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-        selected_items = st.multiselect("Select Mandatory Items to Include", list(CONFIG['MANDATORY_ITEMS'].keys()), default=list(CONFIG['MANDATORY_ITEMS'].keys()))
+        
+        # Conditionally filter mandatory items based on the selected environment profile
+        selected_env = st.session_state.get("selected_env", "Onit ELM")
+        all_mandatory_items = list(CONFIG['MANDATORY_ITEMS'].keys())
+
+        if selected_env == 'SimpleLegal':
+            # Filter for items that are expenses with code E110
+            available_items = [
+                name for name, details in CONFIG['MANDATORY_ITEMS'].items()
+                if details.get('is_expense') and details.get('expense_code') == 'E110'
+            ]
+            default_selection = available_items
+            st.info("For the 'SimpleLegal' profile, only E110 mandatory expenses are available.")
+        else:
+            available_items = all_mandatory_items
+            default_selection = all_mandatory_items
+
+        selected_items = st.multiselect(
+            "Select Mandatory Items to Include",
+            options=available_items,
+            default=default_selection
+        )
         
         # Conditional UI for Airfare Details
         if 'Airfare E110' in selected_items:
