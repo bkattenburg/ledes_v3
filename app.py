@@ -1447,8 +1447,11 @@ if generate_button:
                     attachments_list.append((ledes_filename, ledes_content_part.encode('utf-8')))
                 
                 if include_pdf:
-                    use_custom_logo = st.session_state.get('use_custom_logo_checkbox', False)
-                    logo_bytes = _get_logo_bytes(uploaded_logo, law_firm_id, use_custom_logo)
+                    logo_bytes = None
+                    if include_logo:
+                        use_custom_logo = st.session_state.get('use_custom_logo_checkbox', False)
+                        logo_bytes = _get_logo_bytes(uploaded_logo, law_firm_id, use_custom_logo)
+                    
                     pdf_buffer = _create_pdf_invoice(df=df_invoice, total_amount=total_amount, invoice_number=current_invoice_number, invoice_date=current_end_date, billing_start_date=current_start_date, billing_end_date=current_end_date, client_id=client_id, law_firm_id=law_firm_id, logo_bytes=logo_bytes, include_logo=include_logo, client_name=client_name, law_firm_name=law_firm_name)
                     pdf_filename = f"Invoice_{current_invoice_number}.pdf"
                     attachments_list.append((pdf_filename, pdf_buffer.getvalue()))
