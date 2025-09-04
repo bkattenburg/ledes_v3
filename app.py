@@ -441,31 +441,57 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
     rows = []
     rows.extend(_generate_fees(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc))
     rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
-    total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
-
+    
     # Filter for fees only before creating block billed items
     fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
     
     if include_block_billed and fee_rows:
-        block_size = random.randint(2, 5)
-        selected_rows = random.sample(fee_rows, min(block_size, len(fee_rows)))
-        total_hours = sum(float(row["HOURS"]) for row in selected_rows)
-        total_amount_block = sum(float(row["LINE_ITEM_TOTAL"]) for row in selected_rows)
-        descriptions = [row["DESCRIPTION"] for row in selected_rows]
-        block_description = "; ".join(descriptions)
-        block_row = {
-            "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-            "LINE_ITEM_DATE": selected_rows[0]["LINE_ITEM_DATE"], "TIMEKEEPER_NAME": selected_rows[0]["TIMEKEEPER_NAME"],
-            "TIMEKEEPER_CLASSIFICATION": selected_rows[0]["TIMEKEEPER_CLASSIFICATION"],
-            "TIMEKEEPER_ID": selected_rows[0]["TIMEKEEPER_ID"], "TASK_CODE": selected_rows[0]["TASK_CODE"],
-            "ACTIVITY_CODE": selected_rows[0]["ACTIVITY_CODE"], "EXPENSE_CODE": "",
-            "DESCRIPTION": block_description, "HOURS": total_hours, "RATE": selected_rows[0]["RATE"],
-            "LINE_ITEM_TOTAL": total_amount_block
-        }
-        rows = [row for row in rows if row not in selected_rows]
-        rows.append(block_row)
-        total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
+        # Group fee rows by timekeeper and date to find candidates for block billing
+        from collections import defaultdict
+        daily_tk_groups = defaultdict(list)
+        for row in fee_rows:
+            key = (row["TIMEKEEPER_ID"], row["LINE_ITEM_DATE"])
+            daily_tk_groups[key].append(row)
+            
+        # Find groups with multiple tasks that are within the max daily hours limit
+        eligible_groups = []
+        for key, group_rows in daily_tk_groups.items():
+            if len(group_rows) > 1:
+                total_hours = sum(float(r["HOURS"]) for r in group_rows)
+                if total_hours <= max_hours_per_tk_per_day:
+                    eligible_groups.append(group_rows)
 
+        # If we found an eligible group, randomly pick one to convert into a block
+        if eligible_groups:
+            selected_rows = random.choice(eligible_groups)
+            
+            # Sum the hours and totals from the selected group
+            total_hours = sum(float(row["HOURS"]) for row in selected_rows)
+            total_amount_block = sum(float(row["LINE_ITEM_TOTAL"]) for row in selected_rows)
+            descriptions = [row["DESCRIPTION"] for row in selected_rows]
+            block_description = "; ".join(descriptions)
+            
+            # Since all rows in the group are for the same TK and date, we can safely take details from the first row
+            first_row = selected_rows[0]
+            
+            block_row = {
+                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                "LINE_ITEM_DATE": first_row["LINE_ITEM_DATE"], "TIMEKEEPER_NAME": first_row["TIMEKEEPER_NAME"],
+                "TIMEKEEPER_CLASSIFICATION": first_row["TIMEKEEPER_CLASSIFICATION"],
+                "TIMEKEEPER_ID": first_row["TIMEKEEPER_ID"], "TASK_CODE": first_row["TASK_CODE"],
+                "ACTIVITY_CODE": first_row["ACTIVITY_CODE"], "EXPENSE_CODE": "",
+                "DESCRIPTION": block_description, "HOURS": round(total_hours, 2), "RATE": first_row["RATE"],
+                "LINE_ITEM_TOTAL": round(total_amount_block, 2)
+            }
+            
+            # Remove the original individual rows and add the new consolidated block_row
+            rows_to_remove_ids = {id(row) for row in selected_rows}
+            new_rows = [row for row in rows if id(row) not in rows_to_remove_ids]
+            new_rows.append(block_row)
+            rows = new_rows
+
+    # Final total calculation
+    total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
 
 def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> List[Dict]:
