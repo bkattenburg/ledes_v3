@@ -144,26 +144,31 @@ def _find_timekeeper_by_name(timekeepers: List[Dict], name: str) -> Optional[Dic
             return tk
     return None
 
-def _force_timekeeper_on_row(row: Dict, forced_name: str, timekeepers: List[Dict]) -> Dict:
-    """Assign timekeeper details to a row if applicable."""
+def _force_timekeeper_on_row(row: Dict, forced_name: str, timekeepers: List[Dict]) -> Optional[Dict]:
+    """
+    Assign timekeeper details to a row if a match is found.
+    Returns the updated row on success, or None on failure.
+    """
     if row.get("EXPENSE_CODE"):
         return row
-    tk = _find_timekeeper_by_name(timekeepers, forced_name)
-    if tk is None and timekeepers:
-        tk = timekeepers[0]
-    if tk is None:
-        row["TIMEKEEPER_NAME"] = forced_name
-        return row
+
     row["TIMEKEEPER_NAME"] = forced_name
-    row["TIMEKEEPER_ID"] = tk.get("TIMEKEEPER_ID", row.get("TIMEKEEPER_ID", ""))
-    row["TIMEKEEPER_CLASSIFICATION"] = tk.get("TIMEKEEPER_CLASSIFICATION", row.get("TIMEKEEPER_CLASSIFICATION", ""))
-    try:
-        row["RATE"] = float(tk.get("RATE", row.get("RATE", 0.0)))
-        hours = float(row.get("HOURS", 0))
-        row["LINE_ITEM_TOTAL"] = round(hours * float(row["RATE"]), 2)
-    except Exception as e:
-        logging.error(f"Error setting timekeeper rate: {e}")
-    return row
+    tk = _find_timekeeper_by_name(timekeepers, forced_name)
+    
+    # If a matching timekeeper was found, populate details and return the row.
+    if tk:
+        row["TIMEKEEPER_ID"] = tk.get("TIMEKEEPER_ID", "")
+        row["TIMEKEEPER_CLASSIFICATION"] = tk.get("TIMEKEEPER_CLASSIFICATION", "")
+        try:
+            row["RATE"] = float(tk.get("RATE", 0.0))
+            hours = float(row.get("HOURS", 0))
+            row["LINE_ITEM_TOTAL"] = round(hours * float(row["RATE"]), 2)
+        except Exception as e:
+            logging.error(f"Error setting timekeeper rate: {e}")
+        return row
+    
+    # If no match was found, return None to signal that this row should be skipped.
+    return None
 
 def _process_description(description: str, faker_instance: Faker) -> str:
     """Process description by replacing placeholders and dates."""
@@ -494,10 +499,12 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
 
-def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> List[Dict]:
-    """Ensure mandatory line items are included."""
+def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> Tuple[List[Dict], List[str]]:
+    """Ensure mandatory line items are included and return a list of any skipped items."""
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
+    skipped_items = []
+
     for item_name in selected_items:
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
@@ -553,17 +560,23 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
             row["LINE_ITEM_TOTAL"] = round(row["HOURS"] * row["RATE"], 2)
             rows.append(row)
         else: # Fee items
-            row = {
+            row_template = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
                 "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": item['tk_name'],
                 "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": item['task'],
                 "ACTIVITY_CODE": item['activity'], "EXPENSE_CODE": "", "DESCRIPTION": item['desc'],
                 "HOURS": round(random.uniform(0.5, 8.0), 1), "RATE": 0.0
             }
-            row = _force_timekeeper_on_row(row, item['tk_name'], timekeeper_data)
-            rows.append(row)
+            # Attempt to process the row
+            processed_row = _force_timekeeper_on_row(row_template, item['tk_name'], timekeeper_data)
             
-    return rows
+            # Only add the row if the timekeeper was found
+            if processed_row:
+                rows.append(processed_row)
+            else:
+                skipped_items.append(item_name) # Otherwise, log it as skipped
+            
+    return rows, skipped_items
 
 def _validate_image_bytes(image_bytes: bytes) -> bool:
     """Validate that the provided bytes represent a valid image."""
@@ -1427,12 +1440,23 @@ if generate_button:
                     current_invoice_desc, current_start_date, current_end_date,
                     task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, include_block_billed, faker
                 )
+
+                skipped_mandatory_items = []
                 if spend_agent:
-                    rows = _ensure_mandatory_lines(rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id, current_start_date, current_end_date, selected_items)
+                    rows, skipped_mandatory_items = _ensure_mandatory_lines(
+                        rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id, 
+                        current_start_date, current_end_date, selected_items
+                    )
                 
                 df_invoice = pd.DataFrame(rows)
-                # Recalculate total amount after adding mandatory lines
+                # Recalculate total amount after adding/skipping mandatory lines
                 total_amount = df_invoice["LINE_ITEM_TOTAL"].sum()
+                
+                if skipped_mandatory_items:
+                    skipped_list = ", ".join(f"'{item}'" for item in skipped_mandatory_items)
+                    st.warning(
+                        f"**Mandatory Items Skipped:** The following items were not added to the invoice because their assigned timekeepers were not found in your CSV file: **{skipped_list}**"
+                    )
 
                 current_invoice_number = f"{invoice_number_base}-{i+1}"
                 current_matter_number = matter_number_base
