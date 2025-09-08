@@ -1285,7 +1285,7 @@ with tab_objects[2]:
                 help="Per-page rate used for E101 Copying expenses."
             )
         st.caption("Number of expense line items to generate")
-       expenses = st.slider(
+        expenses = st.slider(
             "Number of Expense Line Items",
             min_value=0,
             max_value=50,
