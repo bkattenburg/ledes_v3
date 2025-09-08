@@ -22,6 +22,20 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont
 import zipfile
 
+# --- Presets Configuration ---
+PRESETS = {
+    "Custom": {"fees": 20, "expenses": 5},
+    "Small": {"fees": 10, "expenses": 5},
+    "Medium": {"fees": 25, "expenses": 15},
+    "Large": {"fees": 100, "expenses": 25},
+}
+
+def apply_preset():
+    preset_name = st.session_state.invoice_preset
+    if preset_name in PRESETS:
+        preset = PRESETS[preset_name]
+        st.session_state.fee_slider = preset["fees"]
+        st.session_state.expense_slider = preset["expenses"]
 
 # ===============================
 # Billing Profiles Configuration
@@ -1220,6 +1234,15 @@ with tab_objects[1]:
 with tab_objects[2]:
     st.markdown("<h2 style='color: #1E1E1E;'>Fees & Expenses</h2>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
+
+    # In the "Fees & Expenses" tab, before the sliders
+    st.selectbox(
+        "Invoice Size Presets",
+        options=list(PRESETS.keys()),
+        key="invoice_preset",
+        on_change=apply_preset,
+        help="Select a preset to quickly adjust the number of fee and expense lines below."
+    )
     
     if timekeeper_data is None:
         st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
@@ -1232,8 +1255,8 @@ with tab_objects[2]:
             "Number of Fee Line Items",
             min_value=1,
             max_value=max_fees,
-            value=min(20, max_fees),
-            format="%d"
+            key="fee_slider",  # Add key
+            value=st.session_state.get("fee_slider", min(20, max_fees)) # Change value
         )
         st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
         with st.expander("Adjust Expense Amounts", expanded=False):
@@ -1262,12 +1285,12 @@ with tab_objects[2]:
                 help="Per-page rate used for E101 Copying expenses."
             )
         st.caption("Number of expense line items to generate")
-        expenses = st.slider(
+       expenses = st.slider(
             "Number of Expense Line Items",
             min_value=0,
             max_value=50,
-            value=5,
-            format="%d"
+            key="expense_slider",  # Add key
+            value=st.session_state.get("expense_slider", 5) # Change value
         )
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
     
