@@ -1,0 +1,21 @@
+# .streamlit/config.toml
+
+[theme]
+# The preset Streamlit theme that your custom theme inherits from.
+base = "dark"
+
+# Primary accent color for interactive elements.
+primaryColor = "#2e96ff"  # A nice, clear blue
+
+# Background color for the main content area.
+backgroundColor = "#0a0a0a"
+
+# Background color for sidebar and most interactive widgets.
+secondaryBackgroundColor = "#1c1c1e"
+
+# Color used for almost all text.
+textColor = "#fafafa"
+
+# Font family for all text in the app.
+# Options are "sans serif", "serif", or "monospace".
+font = "sans serif"
