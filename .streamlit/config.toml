@@ -21,7 +21,6 @@ textColor = "#fafafa"
 font = "sans serif"
 
 [theme]
-base = "Onit"
 primaryColor="#3661ff"
 backgroundColor="#cad5ff"
 secondaryBackgroundColor="#7692ff"
