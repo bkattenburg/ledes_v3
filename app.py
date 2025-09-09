@@ -24,6 +24,38 @@ import zipfile
 
 st.markdown("""
     <style>
+        /* --- ERROR (Red) --- */
+        div[data-testid="stAlert"][data-alert-container-variant="error"] {
+            background-color: #fce4e4;
+            color: #8b0000; /* Dark Red Text */
+            border-color: #8b0000;
+        }
+
+        /* --- WARNING (Yellow) --- */
+        div[data-testid="stAlert"][data-alert-container-variant="warning"] {
+            background-color: #fff3cd;
+            color: #664d03; /* Dark Yellow/Brown Text */
+            border-color: #ffc107;
+        }
+        
+        /* --- INFO (Blue) --- */
+        div[data-testid="stAlert"][data-alert-container-variant="info"] {
+            background-color: #d1ecf1;
+            color: #0c5460; /* Dark Blue/Teal Text */
+            border-color: #bee5eb;
+        }
+
+        /* --- SUCCESS (Green) --- */
+        div[data-testid="stAlert"][data-alert-container-variant="success"] {
+            background-color: #d4edda;
+            color: #155724; /* Dark Green Text */
+            border-color: #c3e6cb;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+    <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
         
         html, body, [class*="css"]  {
