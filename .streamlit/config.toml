@@ -5,23 +5,21 @@
 base = "dark"
 
 # Primary accent color for interactive elements.
-primaryColor = "#2e96ff"  # A nice, clear blue
+#primaryColor = "#2e96ff"  # A nice, clear blue
+primaryColor = "#3661ff"  # Onit Blue
 
 # Background color for the main content area.
-backgroundColor = "#0a0a0a"
+#backgroundColor = "#0a0a0a"
+backgroundColor = "#cad5ff"
 
 # Background color for sidebar and most interactive widgets.
-secondaryBackgroundColor = "#1c1c1e"
+#secondaryBackgroundColor = "#1c1c1e"
+secondaryBackgroundColor = "#7692ff"
 
 # Color used for almost all text.
-textColor = "#fafafa"
+#textColor = "#fafafa"
+textColor = "#000000"
 
 # Font family for all text in the app.
 # Options are "sans serif", "serif", or "monospace".
 font = "sans serif"
-
-[theme]
-primaryColor="#3661ff"
-backgroundColor="#cad5ff"
-secondaryBackgroundColor="#7692ff"
-textColor="#000000"
