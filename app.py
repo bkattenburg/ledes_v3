@@ -22,37 +22,37 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont
 import zipfile
 
-st.markdown("""
-    <style>
-        /* --- ERROR (Red) --- */
-        div[data-testid="stAlert"][data-alert-container-variant="error"] {
-            background-color: #000000;
-            color: #ff0000; /* Bright Red Text */
-            border-color: #8b0000 !important;
-        }
-
-        /* --- WARNING (Yellow) --- */
-        div[data-testid="stAlert"][data-alert-container-variant="warning"] {
-            background-color: #fff3cd;
-            color: #664d03; /* Dark Yellow/Brown Text */
-            border-color: #ffc107 !important;
-        }
-        
-        /* --- INFO (Blue) --- */
-        div[data-testid="stAlert"][data-alert-container-variant="info"] {
-            background-color: #d1ecf1;
-            color: #0c5460; /* Dark Blue/Teal Text */
-            border-color: #bee5eb !important;
-        }
-
-        /* --- SUCCESS (Green) --- */
-        div[data-testid="stAlert"][data-alert-container-variant="success"] {
-            background-color: #d4edda;
-            color: #155724; /* Dark Green Text */
-            border-color: #c3e6cb !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+#st.markdown("""
+#    <style>
+#        /* --- ERROR (Red) --- */
+#        div[data-testid="stAlert"][data-alert-container-variant="error"] {
+#            background-color: #000000;
+#            color: #ff0000; /* Bright Red Text */
+#            border-color: #8b0000 !important;
+#        }
+#
+#        /* --- WARNING (Yellow) --- */
+#        div[data-testid="stAlert"][data-alert-container-variant="warning"] {
+#            background-color: #fff3cd;
+#            color: #664d03; /* Dark Yellow/Brown Text */
+#            border-color: #ffc107 !important;
+#        }
+#        
+#        /* --- INFO (Blue) --- */
+#        div[data-testid="stAlert"][data-alert-container-variant="info"] {
+#            background-color: #d1ecf1;
+#            color: #0c5460; /* Dark Blue/Teal Text */
+#            border-color: #bee5eb !important;
+#        }
+#
+#        /* --- SUCCESS (Green) --- */
+#        div[data-testid="stAlert"][data-alert-container-variant="success"] {
+#            background-color: #d4edda;
+#            color: #155724; /* Dark Green Text */
+#            border-color: #c3e6cb !important;
+#        }
+#    </style>
+#""", unsafe_allow_html=True)
 
 st.markdown("""
     <style>
