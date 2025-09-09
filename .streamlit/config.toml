@@ -19,3 +19,10 @@ textColor = "#fafafa"
 # Font family for all text in the app.
 # Options are "sans serif", "serif", or "monospace".
 font = "sans serif"
+
+[theme]
+base = "Onit"
+primaryColor="#3661ff"
+backgroundColor="#cad5ff"
+secondaryBackgroundColor="#7692ff"
+textColor="#000000"
