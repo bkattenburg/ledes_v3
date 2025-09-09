@@ -10,7 +10,7 @@ primaryColor = "#3661ff"  # Onit Blue
 
 # Background color for the main content area.
 #backgroundColor = "#0a0a0a"
-backgroundColor = "#cad5ff"
+backgroundColor = "#ffffff"
 
 # Background color for sidebar and most interactive widgets.
 #secondaryBackgroundColor = "#1c1c1e"
