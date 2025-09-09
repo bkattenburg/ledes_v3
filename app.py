@@ -22,6 +22,16 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont
 import zipfile
 
+st.markdown("""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        
+        html, body, [class*="css"]  {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- Presets Configuration ---
 PRESETS = {
     "Custom": {"fees": 20, "expenses": 5},
