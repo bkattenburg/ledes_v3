@@ -27,7 +27,7 @@ st.markdown("""
         /* --- ERROR (Red) --- */
         div[data-testid="stAlert"][data-alert-container-variant="error"] {
             background-color: #fce4e4;
-            color: #8b0000; /* Dark Red Text */
+            color: #ff0000; /* Bright Red Text */
             border-color: #8b0000;
         }
 
