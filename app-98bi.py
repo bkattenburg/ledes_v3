@@ -237,8 +237,8 @@ def _create_ledes_line_1998b(row: Dict, line_no: int, inv_total: float, bill_sta
     """Create a single LEDES 1998B line."""
     try:
         date_obj = datetime.datetime.strptime(row["LINE_ITEM_DATE"], "%Y-%m-%d").date()
-        hours = float(row["HOURS"])
-        rate = float(row["RATE"])
+        hours = float(row.get("HOURS", 0.0))
+        rate = float(row.get("RATE", 0.0))
         line_total = float(row["LINE_ITEM_TOTAL"])
         is_expense = bool(row["EXPENSE_CODE"])
         adj_type = "E" if is_expense else "F"
