@@ -297,7 +297,7 @@ def _create_ledes_1998b_content(rows: List[Dict], inv_total: float, bill_start: 
             lines.append("|".join(map(str, line)) + "[]")
     return "\n".join(lines)
 
-def _create_ledes_line_1998bi(row: Dict, line_no: int, inv_total_incl_tax: float, bill_start: datetime.date, bill_end: datetime.date, invoice_number: str, matter_number: str) -> List[str]:
+def _create_ledes_line_1998bi(row: Dict, line_no: int, inv_total_incl_tax: float, bill_start: datetime.date, bill_end: datetime.date, invoice_number: str, matter_number: str, tax_type: str) -> List[str]:
     """Create a single LEDES 1998BI line."""
     try:
         date_obj = datetime.datetime.strptime(row["LINE_ITEM_DATE"], "%Y-%m-%d").date()
@@ -323,13 +323,13 @@ def _create_ledes_line_1998bi(row: Dict, line_no: int, inv_total_incl_tax: float
             str(row.get("INVOICE_DESCRIPTION", "")), str(line_no), adj_type, f"{hours:.1f}" if adj_type == "F" else f"{int(hours)}",
             "0.00", f"{line_total_excl_tax:.2f}", f"{tax_rate:.2f}", f"{tax_amount:.2f}", f"{line_total_incl_tax:.2f}",
             date_obj.strftime("%Y%m%d"), task_code, expense_code, activity_code, timekeeper_id, description,
-            f"{rate:.2f}", timekeeper_name, timekeeper_class, matter_number, "0.00"
+            f"{rate:.2f}", timekeeper_name, timekeeper_class, matter_number, tax_type
         ]
     except Exception as e:
         logging.error(f"Error creating LEDES 1998BI line: {e}")
         return []
 
-def _create_ledes_1998bi_content(rows: List[Dict], bill_start: datetime.date, bill_end: datetime.date, invoice_number: str, matter_number: str) -> str:
+def _create_ledes_1998bi_content(rows: List[Dict], bill_start: datetime.date, bill_end: datetime.date, invoice_number: str, matter_number: str, tax_type: str) -> str:
     """Generate LEDES 1998BI content from invoice rows."""
     header = "LEDES1998BI[]"
     fields = ("INVOICE_DATE|INVOICE_NUMBER|CLIENT_ID|LAW_FIRM_ID|LAW_FIRM_MATTER_ID|INVOICE_TOTAL_INCL_TAX|"
@@ -343,7 +343,7 @@ def _create_ledes_1998bi_content(rows: List[Dict], bill_start: datetime.date, bi
     total_incl_tax = total_excl_tax + total_tax
     lines = [header, fields]
     for i, row in enumerate(rows, start=1):
-        line = _create_ledes_line_1998bi(row, i, total_incl_tax, bill_start, bill_end, invoice_number, matter_number)
+        line = _create_ledes_line_1998bi(row, i, total_incl_tax, bill_start, bill_end, invoice_number, matter_number, tax_type)
         if line:
             lines.append("|".join(map(str, line)) + "[]")
     return "\n".join(lines)
@@ -648,8 +648,7 @@ def _create_pdf_invoice(df: pd.DataFrame, invoice_number: str, invoice_date: dat
     header_info_style = ParagraphStyle('HeaderInfo', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=12)
     right_align_style = ParagraphStyle('RightAlign', parent=styles['Normal'], alignment=TA_RIGHT)
     
-    # Header
-    # ... (header table logic remains the same)
+    # Header logic remains the same...
 
     # Table headers
     header_cols = ["Date", "Task", "Act", "Timekeeper", "Description", "Hours", "Rate", "Subtotal"]
@@ -713,8 +712,7 @@ def _create_pdf_invoice(df: pd.DataFrame, invoice_number: str, invoice_date: dat
 
 def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str, io.BytesIO]:
     """Enhanced realistic receipt generator."""
-    # This function remains unchanged from the previous complete version
-    # It does not need to be aware of tax, as it just matches the line item total
+    # This function remains unchanged
     img = PILImage.new("RGB", (600, 800), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     try:
@@ -728,7 +726,7 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     img.save(img_buffer, format="PNG")
     img_buffer.seek(0)
     
-    filename = f"Receipt_{expense_row['EXPENSE_CODE']}_{expense_row['LINE_ITEM_DATE']}.png"
+    filename = f"Receipt_{expense_row.get('EXPENSE_CODE', 'NA')}_{expense_row['LINE_ITEM_DATE']}.png"
     return filename, img_buffer
 
 
@@ -816,6 +814,8 @@ if st.session_state.send_email:
     tabs.append("Email Configuration")
 
 tab_objects = st.tabs(tabs)
+recipient_email = ""
+
 
 with tab_objects[0]: # Data Sources
     st.markdown("<h3 style='color: #1E1E1E;'>Data Sources</h3>", unsafe_allow_html=True)
@@ -825,7 +825,6 @@ with tab_objects[0]: # Data Sources
         st.success(f"Loaded {len(timekeeper_data)} timekeepers.")
     
     use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
-    uploaded_custom_tasks_file = None
     if use_custom_tasks:
         uploaded_custom_tasks_file = st.file_uploader("Upload Custom Line Items CSV (custom_details.csv)", type="csv")
         task_activity_desc = _load_custom_task_activity_data(uploaded_custom_tasks_file) or CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
@@ -856,6 +855,8 @@ with tab_objects[1]: # Invoice Details
             "VAT / Tax Rate (%)", min_value=0.0, max_value=100.0, value=19.0,
             step=0.1, key="tax_rate_input", help="Enter the tax rate for 1998BI invoices."
         )
+        st.text_input("Tax Type", value="VAT", key="tax_type", help="e.g., VAT, GST")
+
     
     today = datetime.date.today()
     billing_start_date = st.date_input("Billing Start Date", value=today.replace(day=1) - datetime.timedelta(days=30))
@@ -880,10 +881,12 @@ with tab_objects[2]: # Fees & Expenses
             if selected_env == 'SimpleLegal':
                 available_items = [name for name, details in CONFIG['MANDATORY_ITEMS'].items() if details.get('is_expense')]
                 st.info("For 'SimpleLegal' profile, only expense-based mandatory items are available.")
+                default_items = available_items
             else:
                 available_items = all_mandatory_items
+                default_items = all_mandatory_items
             
-            selected_items = st.multiselect("Select Mandatory Items", options=available_items, default=available_items)
+            selected_items = st.multiselect("Select Mandatory Items", options=available_items, default=default_items)
 
             if 'Airfare E110' in selected_items:
                 st.text_input("Airline", "United Airlines", key="airfare_airline")
@@ -931,6 +934,7 @@ if generate_button:
         faker = Faker()
         tax_rate_percent = st.session_state.get("tax_rate_input", 0.0) if ledes_version == "1998BI" else 0.0
         tax_rate_decimal = tax_rate_percent / 100.0
+        tax_type = st.session_state.get("tax_type", "") if ledes_version == "1998BI" else ""
 
         attachments_list = []
         receipt_files = []
@@ -964,7 +968,7 @@ if generate_button:
                     ledes_content_part = _create_ledes_1998b_content(df_invoice.to_dict('records'), total_amount_excl_tax, billing_start_date, billing_end_date, current_invoice_number, current_matter_number)
                     ledes_filename = f"LEDES_1998B_{current_invoice_number}.txt"
                 elif ledes_version == "1998BI":
-                    ledes_content_part = _create_ledes_1998bi_content(df_invoice.to_dict('records'), billing_start_date, billing_end_date, current_invoice_number, current_matter_number)
+                    ledes_content_part = _create_ledes_1998bi_content(df_invoice.to_dict('records'), billing_start_date, billing_end_date, current_invoice_number, current_matter_number, tax_type)
                     ledes_filename = f"LEDES_1998BI_{current_invoice_number}.txt"
                 else:
                     st.warning("XML 2.1 is not yet implemented.")
@@ -974,14 +978,14 @@ if generate_button:
 
                 if include_pdf:
                     logo_bytes = None
-                    if include_logo:
+                    if 'include_logo' in locals() and include_logo:
                         current_use_custom = use_custom_logo if 'use_custom_logo' in locals() else False
                         current_uploaded_logo = uploaded_logo if 'uploaded_logo' in locals() else None
                         logo_bytes = _get_logo_bytes(current_uploaded_logo, law_firm_id, current_use_custom)
                     pdf_buffer = _create_pdf_invoice(
                         df_invoice, current_invoice_number, billing_end_date,
                         billing_start_date, billing_end_date, client_id, law_firm_id,
-                        logo_bytes, include_logo, client_name, law_firm_name, tax_rate_percent
+                        logo_bytes, include_logo if 'include_logo' in locals() else False, client_name, law_firm_name, tax_rate_percent
                     )
                     attachments_list.append((f"Invoice_{current_invoice_number}.pdf", pdf_buffer.getvalue()))
 
