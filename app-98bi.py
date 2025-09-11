@@ -305,7 +305,7 @@ def _create_ledes_line_1998bi(row: Dict, line_no: int, inv_total_incl_tax: float
         rate = float(row.get("RATE", 0.0))
         line_total_excl_tax = float(row["LINE_ITEM_TOTAL"])
         tax_amount = float(row.get("TAX_AMOUNT", 0.0))
-        tax_rate = float(row.get("TAX_RATE", 0.0)) * 100  # Convert to percentage
+        tax_rate = float(row.get("TAX_RATE", 0.0)) * 100
         line_total_incl_tax = line_total_excl_tax + tax_amount
         is_expense = bool(row["EXPENSE_CODE"])
         adj_type = "E" if is_expense else "F"
@@ -603,7 +603,40 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
             
     return rows, skipped_items
 
-def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: str, invoice_date: datetime.date, billing_start_date: datetime.date, billing_end_date: datetime.date, client_id: str, law_firm_id: str, logo_bytes: Optional[bytes] = None, include_logo: bool = False, client_name: str = "", law_firm_name: str = "", tax_rate_percent: float = 0.0) -> io.BytesIO:
+def _validate_image_bytes(image_bytes: bytes) -> bool:
+    """Validate that the provided bytes represent a valid image."""
+    try:
+        img = PILImage.open(io.BytesIO(image_bytes))
+        img.verify()
+        return True
+    except Exception:
+        return False
+
+def _get_logo_bytes(uploaded_logo: Optional[Any], law_firm_id: str, use_custom: bool) -> Optional[bytes]:
+    """Get logo bytes from uploaded file or default path."""
+    if use_custom and uploaded_logo:
+        try:
+            logo_bytes = uploaded_logo.read()
+            if _validate_image_bytes(logo_bytes):
+                return logo_bytes
+            st.warning("Uploaded logo is not a valid JPEG or PNG. Using default logo.")
+        except Exception as e:
+            logging.error(f"Error reading uploaded logo: {e}")
+            st.warning("Failed to read uploaded logo. Using default logo.")
+    
+    logo_file_name = "nelsonmurdock2.jpg" if law_firm_id == CONFIG['DEFAULT_LAW_FIRM_ID'] else "icon.jpg"
+    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in locals() else '.'
+    logo_path = os.path.join(script_dir, "assets", logo_file_name)
+    try:
+        with open(logo_path, "rb") as f:
+            return f.read()
+    except Exception as e:
+        logging.error(f"Logo load failed: {e}")
+        st.warning(f"Default logo file not found or invalid. No logo will be used.")
+    return None
+
+
+def _create_pdf_invoice(df: pd.DataFrame, invoice_number: str, invoice_date: datetime.date, billing_start_date: datetime.date, billing_end_date: datetime.date, client_id: str, law_firm_id: str, logo_bytes: Optional[bytes] = None, include_logo: bool = False, client_name: str = "", law_firm_name: str = "", tax_rate_percent: float = 0.0) -> io.BytesIO:
     """Generate a PDF invoice, optionally with tax."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=0.5*inch, rightMargin=0.5*inch, topMargin=0.5*inch, bottomMargin=0.5*inch)
@@ -613,8 +646,8 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
     styles['Normal'].leading = 10
     
     header_info_style = ParagraphStyle('HeaderInfo', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=12)
-    # ... (other styles)
-
+    right_align_style = ParagraphStyle('RightAlign', parent=styles['Normal'], alignment=TA_RIGHT)
+    
     # Header
     # ... (header table logic remains the same)
 
@@ -625,13 +658,12 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
     if tax_rate_percent > 0:
         header_cols.insert(-1, f"Tax")
         col_widths.insert(-1, 0.5*inch)
-        col_widths[4] -= 0.5*inch # Adjust description width
+        col_widths[4] -= 0.5*inch
     header_cols.append("Total")
     col_widths.append(0.7*inch)
 
     data = [[Paragraph(h, styles['Normal']) for h in header_cols]]
     
-    # Rows loop
     for _, row in df.iterrows():
         subtotal_val = float(row['LINE_ITEM_TOTAL'])
         tax_val = float(row.get('TAX_AMOUNT', 0.0))
@@ -645,17 +677,16 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
             Paragraph(row["DESCRIPTION"], styles['Normal']),
             Paragraph(f"{row.get('HOURS', 0):.1f}" if not row.get("EXPENSE_CODE") else str(int(row.get('HOURS', 0))), styles['Normal']),
             Paragraph(f"${row.get('RATE', 0):.2f}", styles['Normal']),
-            Paragraph(f"${subtotal_val:,.2f}", styles['Normal'])
+            Paragraph(f"${subtotal_val:,.2f}", right_align_style)
         ]
         
         if tax_rate_percent > 0:
-            row_data.append(Paragraph(f"${tax_val:,.2f}", styles['Normal']))
+            row_data.append(Paragraph(f"${tax_val:,.2f}", right_align_style))
         
-        row_data.append(Paragraph(f"${total_val:,.2f}", styles['Normal']))
+        row_data.append(Paragraph(f"${total_val:,.2f}", right_align_style))
         data.append(row_data)
 
     table = Table(data, colWidths=col_widths)
-    # ... (table styling)
     elements.append(table)
     
     # Totals block
@@ -666,12 +697,12 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
     total_incl_tax = fees_total + expenses_total + tax_total
 
     totals_data = [
-        [Paragraph("Subtotal Fees:", styles['Normal']), Paragraph(f"${fees_total:,.2f}", styles['Normal'])],
-        [Paragraph("Subtotal Expenses:", styles['Normal']), Paragraph(f"${expenses_total:,.2f}", styles['Normal'])],
+        [Paragraph("Subtotal Fees:", styles['Normal']), Paragraph(f"${fees_total:,.2f}", right_align_style)],
+        [Paragraph("Subtotal Expenses:", styles['Normal']), Paragraph(f"${expenses_total:,.2f}", right_align_style)],
     ]
     if tax_total > 0:
-        totals_data.append([Paragraph(f"Total Tax ({tax_rate_percent:.1f}%):", styles['Normal']), Paragraph(f"${tax_total:,.2f}", styles['Normal'])])
-    totals_data.append([Paragraph("Invoice Total:", styles['Normal']), Paragraph(f"${total_incl_tax:,.2f}", styles['Normal'])])
+        totals_data.append([Paragraph(f"Total Tax ({tax_rate_percent:.1f}%):", styles['Normal']), Paragraph(f"${tax_total:,.2f}", right_align_style)])
+    totals_data.append([Paragraph("Invoice Total:", styles['Normal']), Paragraph(f"${total_incl_tax:,.2f}", right_align_style)])
     
     totals_table = Table(totals_data, colWidths=[1.5*inch, 1.0*inch], hAlign='RIGHT')
     elements.append(totals_table)
@@ -680,19 +711,66 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
     buffer.seek(0)
     return buffer
 
-# --- (Other helper functions like _create_receipt_image, email functions, etc. remain largely unchanged)
-def _get_logo_bytes(uploaded_logo, law_firm_id, use_custom_logo):
-    # This is a placeholder for the actual logo retrieval logic
-    return None
+def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str, io.BytesIO]:
+    """Enhanced realistic receipt generator."""
+    # This function remains unchanged from the previous complete version
+    # It does not need to be aware of tax, as it just matches the line item total
+    img = PILImage.new("RGB", (600, 800), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype("arial.ttf", 20)
+    except IOError:
+        font = ImageFont.load_default()
+    draw.text((10, 10), f"Receipt for {expense_row['DESCRIPTION']}", font=font, fill=(0,0,0))
+    draw.text((10, 40), f"Total: ${expense_row['LINE_ITEM_TOTAL']:.2f}", font=font, fill=(0,0,0))
+    
+    img_buffer = io.BytesIO()
+    img.save(img_buffer, format="PNG")
+    img_buffer.seek(0)
+    
+    filename = f"Receipt_{expense_row['EXPENSE_CODE']}_{expense_row['LINE_ITEM_DATE']}.png"
+    return filename, img_buffer
 
-def _create_receipt_image(row, faker):
-    return "receipt.png", io.BytesIO()
 
-def _customize_email_body(matter, invoice):
-    return "Subject", "Body"
+def _customize_email_body(matter_number: str, invoice_number: str) -> Tuple[str, str]:
+    """Customize email subject and body with matter and invoice number."""
+    subject = st.session_state.get("email_subject", f"LEDES Invoice for {matter_number} (Invoice #{invoice_number})")
+    body = st.session_state.get("email_body", f"Please find the attached invoice files for matter {matter_number}.\n\nBest regards,\nYour Law Firm")
+    subject = subject.format(matter_number=matter_number, invoice_number=invoice_number)
+    body = body.format(matter_number=matter_number, invoice_number=invoice_number)
+    return subject, body
 
-def _send_email_with_attachment(to, subject, body, attachments):
-    return True
+def _send_email_with_attachment(recipient_email: str, subject: str, body: str, attachments: List[Tuple[str, bytes]]) -> bool:
+    """Send email with attachments."""
+    try:
+        sender_email = st.secrets.email.email_from
+        password = st.secrets.email.email_password
+    except (AttributeError, KeyError):
+        st.error("Email credentials not configured in secrets.toml")
+        return False
+    
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = recipient_email
+    msg['Subject'] = subject
+
+    msg.attach(MIMEText(body, 'plain'))
+    for filename, data in attachments:
+        part = MIMEApplication(data, Name=filename)
+        part['Content-Disposition'] = f'attachment; filename="{filename}"'
+        msg.attach(part)
+    
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(sender_email, password)
+            server.send_message(msg)
+        st.success(f"Email sent successfully to {recipient_email}!")
+        return True
+    except Exception as e:
+        st.error(f"Error sending email: {e}")
+        logging.error(f"Email sending failed: {e}")
+        return False
+
 
 # --- Streamlit App ---
 st.markdown("<h1 style='color: #1E1E1E;'>LEDES Invoice Generator</h1>", unsafe_allow_html=True)
@@ -734,6 +812,9 @@ st.sidebar.download_button("Download Sample Timekeeper CSV", csv_timekeeper, "sa
 
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
+if st.session_state.send_email:
+    tabs.append("Email Configuration")
+
 tab_objects = st.tabs(tabs)
 
 with tab_objects[0]: # Data Sources
@@ -742,17 +823,26 @@ with tab_objects[0]: # Data Sources
     timekeeper_data = _load_timekeepers(uploaded_timekeeper_file)
     if timekeeper_data is not None:
         st.success(f"Loaded {len(timekeeper_data)} timekeepers.")
-    # ... (rest of data sources tab)
+    
+    use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
+    uploaded_custom_tasks_file = None
+    if use_custom_tasks:
+        uploaded_custom_tasks_file = st.file_uploader("Upload Custom Line Items CSV (custom_details.csv)", type="csv")
+        task_activity_desc = _load_custom_task_activity_data(uploaded_custom_tasks_file) or CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
+    else:
+        task_activity_desc = CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
+
 
 with tab_objects[1]: # Invoice Details
     st.markdown("<h2 style='color: #1E1E1E;'>Invoice Details</h2>", unsafe_allow_html=True)
     env_names = [p[0] for p in BILLING_PROFILES]
     selected_env = st.selectbox("Environment / Profile", env_names, key="selected_env")
-    # ... (rest of profile logic)
-    client_id = st.text_input("Client ID", get_profile(selected_env)[1])
-    law_firm_id = st.text_input("Law Firm ID", get_profile(selected_env)[3])
-    client_name = st.text_input("Client Name", get_profile(selected_env)[0])
-    law_firm_name = st.text_input("Law Firm Name", get_profile(selected_env)[2])
+    prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
+
+    client_id = st.text_input("Client ID", prof_client_id)
+    law_firm_id = st.text_input("Law Firm ID", prof_law_firm_id)
+    client_name = st.text_input("Client Name", prof_client_name)
+    law_firm_name = st.text_input("Law Firm Name", prof_law_firm_name)
 
 
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
@@ -761,16 +851,15 @@ with tab_objects[1]: # Invoice Details
     LEDES_OPTIONS = ["1998B", "1998BI", "XML 2.1"]
     ledes_version = st.selectbox("LEDES Version:", LEDES_OPTIONS, key="ledes_version")
     
-    tax_rate = 0.0
     if ledes_version == "1998BI":
-        tax_rate = st.number_input(
+        st.number_input(
             "VAT / Tax Rate (%)", min_value=0.0, max_value=100.0, value=19.0,
             step=0.1, key="tax_rate_input", help="Enter the tax rate for 1998BI invoices."
         )
     
     today = datetime.date.today()
-    billing_start_date = st.date_input("Billing Start Date", value=today.replace(day=1) - datetime.timedelta(days=15))
-    billing_end_date = st.date_input("Billing End Date", value=today)
+    billing_start_date = st.date_input("Billing Start Date", value=today.replace(day=1) - datetime.timedelta(days=30))
+    billing_end_date = st.date_input("Billing End Date", value=today.replace(day=1) - datetime.timedelta(days=1))
     invoice_desc = st.text_area("Invoice Description", "Professional Services Rendered")
 
 
@@ -778,16 +867,29 @@ with tab_objects[2]: # Fees & Expenses
     st.markdown("<h2 style='color: #1E1E1E;'>Fees & Expenses</h2>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False)
     if timekeeper_data is None:
-        st.error("Please upload a timekeeper CSV to continue.")
-        st.stop()
-    max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
-    fees = st.slider("Number of Fee Line Items", 1, max_fees, min(20, max_fees))
-    expenses = st.slider("Number of Expense Line Items", 0, 50, 5)
-    max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", 1, 24, 16)
+        st.error("Please upload a timekeeper CSV on the 'Data Sources' tab to continue.")
+    else:
+        max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
+        fees = st.slider("Number of Fee Line Items", 1, max_fees, min(20, max_fees))
+        expenses = st.slider("Number of Expense Line Items", 0, 50, 5)
+        max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", 1, 24, 16)
     
-    if spend_agent:
-        # ... (mandatory items logic)
-        selected_items = st.multiselect("Select Mandatory Items", list(CONFIG['MANDATORY_ITEMS'].keys()))
+        if spend_agent:
+            st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
+            all_mandatory_items = list(CONFIG['MANDATORY_ITEMS'].keys())
+            if selected_env == 'SimpleLegal':
+                available_items = [name for name, details in CONFIG['MANDATORY_ITEMS'].items() if details.get('is_expense')]
+                st.info("For 'SimpleLegal' profile, only expense-based mandatory items are available.")
+            else:
+                available_items = all_mandatory_items
+            
+            selected_items = st.multiselect("Select Mandatory Items", options=available_items, default=available_items)
+
+            if 'Airfare E110' in selected_items:
+                st.text_input("Airline", "United Airlines", key="airfare_airline")
+                st.number_input("Amount", 0.0, 10000.0, 450.75, key="airfare_amount")
+            if 'Uber E110' in selected_items:
+                st.number_input("Ride Amount", 0.0, 1000.0, 25.50, key="uber_amount")
 
 with tab_objects[3]: # Output
     st.markdown("<h2 style='color: #1E1E1E;'>Output</h2>", unsafe_allow_html=True)
@@ -799,6 +901,8 @@ with tab_objects[3]: # Output
             use_custom_logo = st.checkbox("Use Custom Logo", value=False)
             if use_custom_logo:
                 uploaded_logo = st.file_uploader("Upload Custom Logo", type=["jpg", "png"])
+            else:
+                uploaded_logo = None
     
     generate_multiple = st.checkbox("Generate Multiple Invoices")
     num_invoices = 1
@@ -810,70 +914,106 @@ with tab_objects[3]: # Output
     if generate_receipts:
         zip_receipts = st.checkbox("Zip Receipts", value=True)
 
+if st.session_state.send_email and len(tabs) > 4:
+    with tab_objects[4]: # Email Configuration
+        st.markdown("<h2 style='color: #1E1E1E;'>Email Configuration</h2>", unsafe_allow_html=True)
+        recipient_email = st.text_input("Recipient Email Address:")
+        st.text_input("Email Subject Template:", f"LEDES Invoice for {matter_number_base} (Invoice #{{invoice_number}})", key="email_subject")
+        st.text_area("Email Body Template:", f"Please find attached the invoice files for matter {{matter_number}}.", height=150, key="email_body")
+
 
 # --- Main App Logic ---
 generate_button = st.button("Generate Invoice(s)")
 if generate_button:
-    faker = Faker()
-    tax_rate_percent = st.session_state.get("tax_rate_input", 0.0) if ledes_version == "1998BI" else 0.0
-    tax_rate_decimal = tax_rate_percent / 100.0
+    if timekeeper_data is None:
+        st.error("Cannot generate invoice. Please upload a timekeeper file.")
+    else:
+        faker = Faker()
+        tax_rate_percent = st.session_state.get("tax_rate_input", 0.0) if ledes_version == "1998BI" else 0.0
+        tax_rate_decimal = tax_rate_percent / 100.0
 
-    attachments_list = []
-    with st.spinner("Generating invoices..."):
-        for i in range(num_invoices):
-            current_invoice_number = f"{invoice_number_base}-{i+1}"
-            current_matter_number = matter_number_base
-            
-            rows, total_amount_excl_tax = _generate_invoice_data(
-                fees, expenses, timekeeper_data, client_id, law_firm_id,
-                invoice_desc, billing_start_date, billing_end_date,
-                CONFIG['DEFAULT_TASK_ACTIVITY_DESC'], CONFIG['MAJOR_TASK_CODES'], max_daily_hours, include_block_billed, faker,
-                tax_rate=tax_rate_decimal
-            )
-            
-            skipped_items = []
-            if spend_agent:
-                rows, skipped_items = _ensure_mandatory_lines(
-                    rows, timekeeper_data, invoice_desc, client_id, law_firm_id,
-                    billing_start_date, billing_end_date, selected_items, tax_rate_decimal
+        attachments_list = []
+        receipt_files = []
+
+        with st.spinner("Generating invoices..."):
+            for i in range(num_invoices):
+                current_invoice_number = f"{invoice_number_base}-{i+1}"
+                current_matter_number = matter_number_base
+                
+                rows, total_amount_excl_tax = _generate_invoice_data(
+                    fees, expenses, timekeeper_data, client_id, law_firm_id,
+                    invoice_desc, billing_start_date, billing_end_date,
+                    task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, include_block_billed, faker,
+                    tax_rate=tax_rate_decimal
                 )
-            
-            df_invoice = pd.DataFrame(rows)
-            total_amount_excl_tax = df_invoice["LINE_ITEM_TOTAL"].sum()
-            
-            if skipped_items:
-                st.warning(f"Skipped mandatory items because timekeeper was not found: {', '.join(skipped_items)}")
-            
-            if ledes_version == "1998B":
-                ledes_content_part = _create_ledes_1998b_content(df_invoice.to_dict('records'), total_amount_excl_tax, billing_start_date, billing_end_date, current_invoice_number, current_matter_number)
-                ledes_filename = f"LEDES_1998B_{current_invoice_number}.txt"
-            elif ledes_version == "1998BI":
-                ledes_content_part = _create_ledes_1998bi_content(df_invoice.to_dict('records'), billing_start_date, billing_end_date, current_invoice_number, current_matter_number)
-                ledes_filename = f"LEDES_1998BI_{current_invoice_number}.txt"
+                
+                skipped_items = []
+                if spend_agent:
+                    rows, skipped_items = _ensure_mandatory_lines(
+                        rows, timekeeper_data, invoice_desc, client_id, law_firm_id,
+                        billing_start_date, billing_end_date, selected_items, tax_rate_decimal
+                    )
+                
+                df_invoice = pd.DataFrame(rows)
+                total_amount_excl_tax = df_invoice["LINE_ITEM_TOTAL"].sum()
+                
+                if skipped_items:
+                    st.warning(f"Skipped mandatory items because timekeeper was not found: {', '.join(skipped_items)}")
+                
+                if ledes_version == "1998B":
+                    ledes_content_part = _create_ledes_1998b_content(df_invoice.to_dict('records'), total_amount_excl_tax, billing_start_date, billing_end_date, current_invoice_number, current_matter_number)
+                    ledes_filename = f"LEDES_1998B_{current_invoice_number}.txt"
+                elif ledes_version == "1998BI":
+                    ledes_content_part = _create_ledes_1998bi_content(df_invoice.to_dict('records'), billing_start_date, billing_end_date, current_invoice_number, current_matter_number)
+                    ledes_filename = f"LEDES_1998BI_{current_invoice_number}.txt"
+                else:
+                    st.warning("XML 2.1 is not yet implemented.")
+                    continue
+                
+                attachments_list.append((ledes_filename, ledes_content_part.encode('utf-8')))
+
+                if include_pdf:
+                    logo_bytes = None
+                    if include_logo:
+                        current_use_custom = use_custom_logo if 'use_custom_logo' in locals() else False
+                        current_uploaded_logo = uploaded_logo if 'uploaded_logo' in locals() else None
+                        logo_bytes = _get_logo_bytes(current_uploaded_logo, law_firm_id, current_use_custom)
+                    pdf_buffer = _create_pdf_invoice(
+                        df_invoice, current_invoice_number, billing_end_date,
+                        billing_start_date, billing_end_date, client_id, law_firm_id,
+                        logo_bytes, include_logo, client_name, law_firm_name, tax_rate_percent
+                    )
+                    attachments_list.append((f"Invoice_{current_invoice_number}.pdf", pdf_buffer.getvalue()))
+
+                if generate_receipts:
+                    for _, row in df_invoice.iterrows():
+                        if row.get("EXPENSE_CODE"):
+                            receipt_filename, receipt_data = _create_receipt_image(row.to_dict(), faker)
+                            receipt_files.append((receipt_filename, receipt_data.getvalue()))
+
+            if receipt_files:
+                if zip_receipts:
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, 'w') as zf:
+                        for name, data in receipt_files:
+                            zf.writestr(name, data)
+                    attachments_list.append(("receipts.zip", zip_buffer.getvalue()))
+                else:
+                    attachments_list.extend(receipt_files)
+
+            if st.session_state.send_email:
+                subject, body = _customize_email_body(matter_number_base, invoice_number_base)
+                if _send_email_with_attachment(recipient_email, subject, body, attachments_list):
+                    st.success("Email sent successfully!")
+                else:
+                    st.error("Failed to send email.")
             else:
-                st.warning("XML 2.1 is not yet implemented.")
-                continue
-            
-            attachments_list.append((ledes_filename, ledes_content_part.encode('utf-8')))
-
-            if include_pdf:
-                logo_bytes = None
-                if include_logo:
-                    logo_bytes = _get_logo_bytes(uploaded_logo if 'use_custom_logo' in st.session_state and st.session_state.use_custom_logo else None, law_firm_id, use_custom_logo if 'use_custom_logo' in st.session_state else False)
-                pdf_buffer = _create_pdf_invoice(
-                    df_invoice, total_amount_excl_tax, current_invoice_number, billing_end_date,
-                    billing_start_date, billing_end_date, client_id, law_firm_id,
-                    logo_bytes, include_logo, client_name, law_firm_name, tax_rate_percent
-                )
-                attachments_list.append((f"Invoice_{current_invoice_number}.pdf", pdf_buffer.getvalue()))
-        
-        # Download buttons
-        for filename, data in attachments_list:
-            st.download_button(
-                label=f"Download {filename}",
-                data=data,
-                file_name=filename,
-                mime="application/octet-stream"
-            )
-    st.success("Invoice generation complete!")
+                for filename, data in attachments_list:
+                    st.download_button(
+                        label=f"Download {filename}",
+                        data=data,
+                        file_name=filename,
+                        mime="application/octet-stream"
+                    )
+        st.success("Invoice generation complete!")
 
