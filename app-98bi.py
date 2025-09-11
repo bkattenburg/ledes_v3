@@ -952,7 +952,7 @@ if generate_button:
                 )
                 
                 skipped_items = []
-                if spend_agent:
+                if 'spend_agent' in locals() and spend_agent:
                     rows, skipped_items = _ensure_mandatory_lines(
                         rows, timekeeper_data, invoice_desc, client_id, law_firm_id,
                         billing_start_date, billing_end_date, selected_items, tax_rate_decimal
@@ -976,7 +976,7 @@ if generate_button:
                 
                 attachments_list.append((ledes_filename, ledes_content_part.encode('utf-8')))
 
-                if include_pdf:
+                if 'include_pdf' in locals() and include_pdf:
                     logo_bytes = None
                     if 'include_logo' in locals() and include_logo:
                         current_use_custom = use_custom_logo if 'use_custom_logo' in locals() else False
