@@ -1,7 +1,8 @@
 
-# app-merged-biv2-fix2.py
-# Streamlit app to generate LEDES 1998B and LEDES 1998BI V2 invoices
-# Implements conditional GUI, corrects LEDES export content paths, and fixes PDF table layout/wrapping.
+# app-merged-biv2-tabs.py
+# Streamlit app merging LEDES 1998B and LEDES 1998BI V2 functionality
+# Tabs-based GUI (polished labels), expanders with help/info (expanded by default),
+# required field indicators, conditional BIv2 inputs, PDF/LEDES logic, mandatory items, and block billing.
 
 import streamlit as st
 import pandas as pd
@@ -12,15 +13,15 @@ import logging
 import re
 from typing import Optional, List, Dict, Any, Tuple
 from faker import Faker
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, KeepInFrame
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 
+# --- App Setup ---
 st.set_page_config(page_title="LEDES 1998B / 1998BI V2 Invoice Generator", layout="wide")
-
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 faker = Faker()
 
@@ -33,7 +34,6 @@ PRESETS = {
 }
 
 # --- Billing Profiles ---
-# Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
 BILLING_PROFILES = [
     ("Onit ELM",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
     ("SimpleLegal", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
@@ -47,7 +47,7 @@ def get_profile(env: str):
     p = BILLING_PROFILES[0]
     return (p[1], p[2], p[3], p[4])
 
-# --- Constants & Defaults ---
+# --- Constants ---
 CONFIG = {
     'EXPENSE_CODES': {
         "Copying": "E101", "Outside printing": "E102", "Word processing": "E103",
@@ -593,7 +593,7 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
     return rows, total_excl_tax, total_tax, total_incl_tax, skipped
 
 # ----------------------
-# PDF generation (fixed layout/wrapping)
+# PDF generation
 # ----------------------
 
 def _create_pdf_invoice(
@@ -649,9 +649,8 @@ def _create_pdf_invoice(
         tax = float(r.get("TAX_AMOUNT", 0.0))
         total_in = total_ex + tax
         desc = str(r.get("DESCRIPTION", ""))
-        # Trim extremely long descriptions to keep table neat
-        if len(desc) > 1000:
-            desc = desc[:1000] + "…"
+        if len(desc) > 2000:
+            desc = desc[:2000] + "…"
         data.append([
             Paragraph(str(r.get("LINE_ITEM_DATE", "")), td),
             Paragraph(typ, td),
@@ -697,73 +696,84 @@ def _create_pdf_invoice(
     return buffer
 
 # ----------------------
-# UI (Conditional fields for 1998BIv2 only)
+# UI Tabs (polished names)
 # ----------------------
 
 def main():
-    st.title("LEDES 1998B & 1998BI V2 Invoice Generator (Merged)")
-    st.caption("Generate LEDES text files and a readable PDF invoice with optional taxes and presets.")
+    st.title("LEDES 1998B & 1998BI V2 Invoice Generator (Tabbed)")
 
-    with st.sidebar:
-        st.header("Profile & Basics")
-        env = st.selectbox("Environment", [p[0] for p in BILLING_PROFILES], index=0)
-        client_name, client_id, law_firm_name, law_firm_id = get_profile(env)
-        format_choice = st.radio("LEDES Export Format", ["1998B", "1998BI V2"], index=0)
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Invoice & Billing", "Data Sources & Timekeepers", "Required Items", "Preview & Export"
+    ])
 
-        invoice_number = st.text_input("Invoice Number", "INV-1001")
-        matter_number = st.text_input("Law Firm Matter ID", "MAT-2001")
+    # ---------------- Invoice & Billing ----------------
+    with tab1:
+        with st.expander("Billing Party Details", expanded=True):
+            st.info("Select billing environment and enter identifiers for invoice and matter.")
+            env = st.selectbox("Environment *", [p[0] for p in BILLING_PROFILES], index=0)
+            client_name, client_id, law_firm_name, law_firm_id = get_profile(env)
+            format_choice = st.radio("LEDES Export Format *", ["1998B", "1998BI V2"], index=0)
+            invoice_number = st.text_input("Invoice Number *", "INV-1001")
+            matter_number = st.text_input("Law Firm Matter ID *", "MAT-2001")
 
-        # 1998BI V2-only fields in a conditional block
-        matter_name = ""
-        po_number = ""
-        client_matter_id = ""
-        invoice_currency = ""
-        if format_choice == "1998BI V2":
-            st.subheader("1998BI V2 Fields")
-            matter_name = st.text_input("Matter Name", "General Litigation")
-            po_number = st.text_input("PO Number (optional)", "")
-            client_matter_id = st.text_input("Client Matter ID (optional)", "")
-            invoice_currency = st.text_input("Invoice Currency (ISO 4217)", "USD")
+            # BIv2-only
+            matter_name = po_number = client_matter_id = invoice_currency = ""
+            if format_choice == "1998BI V2":
+                st.markdown("**BIv2 Fields**")
+                matter_name = st.text_input("Matter Name *", "General Litigation")
+                po_number = st.text_input("PO Number (optional)", "")
+                client_matter_id = st.text_input("Client Matter ID (optional)", "")
+                invoice_currency = st.text_input("Invoice Currency (ISO 4217) *", "USD")
 
-        st.header("Period & Counts")
-        today = datetime.date.today()
-        start_date = st.date_input("Billing Start Date", today.replace(day=1))
-        end_date = st.date_input("Billing End Date", today)
-        preset = st.selectbox("Preset", list(PRESETS.keys()), index=1)
-        fees_default = PRESETS[preset]["fees"]
-        expenses_default = PRESETS[preset]["expenses"]
-        fee_count = st.slider("# Fee Lines", 0, 200, fees_default)
-        expense_count = st.slider("# Expense Lines", 0, 200, expenses_default)
+        with st.expander("Invoice Period & Description", expanded=True):
+            st.info("Set the billing period included on this invoice and a brief description.")
+            today = datetime.date.today()
+            start_date = st.date_input("Billing Start Date *", today.replace(day=1))
+            end_date = st.date_input("Billing End Date *", today)
+            invoice_desc = st.text_input("Invoice Description *", CONFIG['DEFAULT_INVOICE_DESCRIPTION'])
 
-        st.header("Rates & Options")
-        max_daily_hours = st.slider("Max Hours per TK per Day", 1, 12, 8)
+        with st.expander("Line Items & Options", expanded=True):
+            st.info("Choose the number of fee and expense lines, hours per timekeeper per day, and optional block billing.")
+            preset = st.selectbox("Preset", list(PRESETS.keys()), index=1)
+            fee_count = st.slider("# Fee Lines", 0, 200, PRESETS[preset]["fees"])
+            expense_count = st.slider("# Expense Lines", 0, 200, PRESETS[preset]["expenses"])
+            max_daily_hours = st.slider("Max Hours per TK per Day", 1, 12, 8)
+            include_block_billed = st.checkbox("Enable Block-Billed Consolidation", value=False)
+            # Tax only relevant to BIv2
+            tax_rate = 0.0
+            if format_choice == "1998BI V2":
+                tax_rate = st.number_input("Tax Rate (decimal)", min_value=0.0, max_value=1.0, value=0.0, step=0.01, format="%0.4f")
 
-        # Tax entry only matters for BIv2 export; we still keep it for data generation
-        tax_rate = 0.0
-        if format_choice == "1998BI V2":
-            tax_rate = st.number_input("Tax Rate (decimal)", min_value=0.0, max_value=1.0, value=0.0, step=0.01, format="%0.4f")
-        include_block_billed = st.checkbox("Enable Block-Billed Consolidation (random 1/day per TK)", value=False)
+    # ---------------- Data Sources & Timekeepers ----------------
+    with tab2:
+        with st.expander("Upload Data Sources", expanded=True):
+            st.info("Upload Timekeepers and/or custom Task/Activity CSVs to override defaults.")
+            tk_file = st.file_uploader("Upload Timekeepers CSV", type=["csv"])
+            task_file = st.file_uploader("Upload Custom Task/Activity CSV (optional)", type=["csv"])
+            # Save for later steps
+            st.session_state["__tk_file"] = tk_file
+            st.session_state["__task_file"] = task_file
 
-        st.header("Expense Tunables")
-        st.session_state["copying_rate_e101"] = st.number_input("Copying Rate (E101) per page", 0.01, 5.0, 0.24, 0.01)
-        st.session_state["mileage_rate_e109"] = st.number_input("Mileage Rate (E109) per mile", 0.01, 5.0, 0.65, 0.01)
-        travel_min = st.number_input("Travel (E110) Min", 10.0, 5000.0, 100.0, 10.0)
-        travel_max = st.number_input("Travel (E110) Max", 10.0, 5000.0, 800.0, 10.0)
-        st.session_state["travel_range_e110"] = (travel_min, travel_max)
-        tel_min = st.number_input("Telephone (E105) Min", 1.0, 100.0, 5.0, 1.0)
-        tel_max = st.number_input("Telephone (E105) Max", 1.0, 100.0, 15.0, 1.0)
-        st.session_state["telephone_range_e105"] = (tel_min, tel_max)
+        with st.expander("Expense Tunables", expanded=True):
+            st.info("Fine-tune expense generation parameters for E101, E105, E109, and E110.")
+            st.session_state["copying_rate_e101"] = st.number_input("Copying Rate (E101) per page", 0.01, 5.0, 0.24, 0.01)
+            st.session_state["mileage_rate_e109"] = st.number_input("Mileage Rate (E109) per mile", 0.01, 5.0, 0.65, 0.01)
+            travel_min = st.number_input("Travel (E110) Min", 10.0, 5000.0, 100.0, 10.0)
+            travel_max = st.number_input("Travel (E110) Max", 10.0, 5000.0, 800.0, 10.0)
+            st.session_state["travel_range_e110"] = (travel_min, travel_max)
+            tel_min = st.number_input("Telephone (E105) Min", 1.0, 100.0, 5.0, 1.0)
+            tel_max = st.number_input("Telephone (E105) Max", 1.0, 100.0, 15.0, 1.0)
+            st.session_state["telephone_range_e105"] = (tel_min, tel_max)
 
-        st.header("Data Uploads")
-        tk_file = st.file_uploader("Upload Timekeepers CSV", type=["csv"])  # requires TIMEKEEPER_NAME, TIMEKEEPER_CLASSIFICATION, TIMEKEEPER_ID, RATE
-        task_file = st.file_uploader("Upload Custom Task/Activity CSV (optional)", type=["csv"])  # TASK_CODE, ACTIVITY_CODE, DESCRIPTION
-
-        st.header("Mandatory Items")
-        mand_options = list(CONFIG['MANDATORY_ITEMS'].keys())
-        selected_mandatory = st.multiselect("Include mandatory items", mand_options, default=[])
+    # ---------------- Required Items ----------------
+    with tab3:
+        with st.expander("Select Mandatory Items", expanded=True):
+            st.info("Add specific fee/expense items that must appear on this invoice.")
+            mand_options = list(CONFIG['MANDATORY_ITEMS'].keys())
+            selected_mandatory = st.multiselect("Include mandatory items", mand_options, default=[])
 
         if 'Airfare E110' in selected_mandatory:
-            with st.expander("Airfare Details"):
+            with st.expander("Airfare Details", expanded=True):
                 st.session_state['airfare_airline'] = st.text_input("Airline", "Delta")
                 st.session_state['airfare_flight_number'] = st.text_input("Flight #", "DL123")
                 st.session_state['airfare_departure_city'] = st.text_input("Departure City", "SFO")
@@ -771,79 +781,97 @@ def main():
                 st.session_state['airfare_fare_class'] = st.selectbox("Fare Class", ["Economy/Coach", "Premium Economy", "Business", "First"], index=0)
                 st.session_state['airfare_roundtrip'] = st.checkbox("Roundtrip", value=True)
                 st.session_state['airfare_amount'] = st.number_input("Airfare Amount", 0.0, 20000.0, 650.00, 1.0)
+
         if 'Uber E110' in selected_mandatory:
-            with st.expander("Uber Details"):
+            with st.expander("Uber Details", expanded=True):
                 st.session_state['uber_amount'] = st.number_input("Uber Amount", 0.0, 2000.0, 35.00, 0.5)
 
-    # Main area
-    col1, col2 = st.columns([3,2])
-    with col1:
-        st.subheader("Generate Invoice Data")
-        invoice_desc = st.text_input("Invoice Description", CONFIG['DEFAULT_INVOICE_DESCRIPTION'])
+        # Save for use later
+        st.session_state["__mandatory"] = selected_mandatory
 
-        timekeepers = _load_timekeepers(tk_file) or [
-            {"TIMEKEEPER_NAME": "Smith, John", "TIMEKEEPER_CLASSIFICATION": "PT", "TIMEKEEPER_ID": "TK001", "RATE": 200.0},
-            {"TIMEKEEPER_NAME": "Doe, Jane", "TIMEKEEPER_CLASSIFICATION": "AS", "TIMEKEEPER_ID": "TK002", "RATE": 150.0},
-            {"TIMEKEEPER_NAME": "Lee, Chris", "TIMEKEEPER_CLASSIFICATION": "PL", "TIMEKEEPER_ID": "TK003", "RATE": 95.0},
-        ]
-        custom_tasks = _load_custom_task_activity_data(task_file)
-        task_pool = custom_tasks if custom_tasks is not None and len(custom_tasks) > 0 else CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
+    # ---------------- Preview & Export ----------------
+    with tab4:
+        with st.expander("Generate, Preview & Export", expanded=True):
+            st.info("Generate the invoice line items, review a preview table, and export to LEDES text or PDF files.")
+            # Collapsible on-screen summary
+            with st.expander("Invoice Summary", expanded=True):
+                fmt = "1998BI V2" if format_choice == "1998BI V2" else "1998B"
+                rows = []
+                rows.append(("Invoice Number", invoice_number))
+                rows.append(("Law Firm Matter ID", matter_number))
+                if fmt == "1998BI V2":
+                    rows.append(("Client Matter ID", client_matter_id or "—"))
+                    rows.append(("Matter Name", matter_name or "—"))
+                    rows.append(("Currency", (invoice_currency or "USD")))
+                rows.append(("LEDES Format", fmt))
+                rows.append(("Billing Period", f"{start_date} → {end_date}"))
+                summary_df = pd.DataFrame(rows, columns=["Field", "Value"])
+                st.table(summary_df)
 
-        if st.button("Generate Lines"):
-            # For 1998B output, force tax_rate=0 in generated data to ensure no hidden tax affects totals
-            effective_tax_rate = tax_rate if format_choice == "1998BI V2" else 0.0
-            rows, total_excl, total_tax, total_incl, skipped = _generate_invoice_data(
-                fee_count, expense_count, timekeepers, client_id, law_firm_id, invoice_desc,
-                start_date, end_date, task_pool, CONFIG['MAJOR_TASK_CODES'], max_daily_hours,
-                include_block_billed, faker, effective_tax_rate, selected_mandatory
-            )
-            if skipped:
-                st.warning("Mandatory items skipped (timekeeper not found): " + ", ".join(skipped))
+            # Load uploads or defaults
+            tk_file = st.session_state.get("__tk_file")
+            task_file = st.session_state.get("__task_file")
+            timekeepers = _load_timekeepers(tk_file) or [
+                {"TIMEKEEPER_NAME": "Smith, John", "TIMEKEEPER_CLASSIFICATION": "PT", "TIMEKEEPER_ID": "TK001", "RATE": 200.0},
+                {"TIMEKEEPER_NAME": "Doe, Jane", "TIMEKEEPER_CLASSIFICATION": "AS", "TIMEKEEPER_ID": "TK002", "RATE": 150.0},
+                {"TIMEKEEPER_NAME": "Lee, Chris", "TIMEKEEPER_CLASSIFICATION": "PL", "TIMEKEEPER_ID": "TK003", "RATE": 95.0},
+            ]
+            custom_tasks = _load_custom_task_activity_data(task_file)
+            task_pool = custom_tasks if custom_tasks is not None and len(custom_tasks) > 0 else CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
+            mandatory_items = st.session_state.get("__mandatory", [])
 
-            if not rows:
-                st.error("No rows were generated. Check inputs and try again.")
-            else:
-                df = pd.DataFrame(rows)
-                st.session_state['invoice_df'] = df
-                st.session_state['totals'] = (total_excl, total_tax, total_incl)
-                st.session_state['format_choice'] = format_choice
-                st.success(f"Generated {len(df)} lines. Subtotal: {total_excl:.2f} | Tax: {total_tax:.2f} | Total: {total_incl:.2f}")
-                st.dataframe(df)
-
-    with col2:
-        st.subheader("Export")
-        df = st.session_state.get('invoice_df')
-        totals = st.session_state.get('totals')
-        current_format = st.session_state.get('format_choice', format_choice)
-        if df is not None and totals is not None:
-            total_excl, total_tax, total_incl = totals
-            if current_format == "1998BI V2":
-                content = _create_ledes_1998biv2_content(
-                    df.to_dict(orient='records'),
-                    start_date, end_date, invoice_number, matter_number, invoice_currency or "USD",
-                    matter_name or "Matter", po_number or "", client_matter_id or "", tax_type="VAT"
+            if st.button("Generate Lines"):
+                effective_tax_rate = tax_rate if format_choice == "1998BI V2" else 0.0
+                rows, total_excl, total_tax, total_incl, skipped = _generate_invoice_data(
+                    fee_count, expense_count, timekeepers, client_id, law_firm_id, invoice_desc,
+                    start_date, end_date, task_pool, CONFIG['MAJOR_TASK_CODES'], max_daily_hours,
+                    include_block_billed, faker, effective_tax_rate, mandatory_items
                 )
-                fname = f"{invoice_number}_LEDES_1998BIV2.txt"
-            else:
-                # 1998B must never include tax details; we pass total_excl only
-                content = _create_ledes_1998b_content(
-                    df.to_dict(orient='records'), total_excl, start_date, end_date, invoice_number, matter_number, is_first_invoice=True
+                if skipped:
+                    st.warning("Mandatory items skipped (timekeeper not found): " + ", ".join(skipped))
+
+                if not rows:
+                    st.error("No rows were generated. Check inputs and try again.")
+                else:
+                    df = pd.DataFrame(rows)
+                    st.session_state['invoice_df'] = df
+                    st.session_state['totals'] = (total_excl, total_tax, total_incl)
+                    st.session_state['format_choice'] = format_choice
+                    st.success(f"Generated {len(df)} lines. Subtotal: {total_excl:.2f} | Tax: {total_tax:.2f} | Total: {total_incl:.2f}")
+                    st.dataframe(df, use_container_width=True, height=400)
+
+            # Export buttons
+            df = st.session_state.get('invoice_df')
+            totals = st.session_state.get('totals')
+            current_format = st.session_state.get('format_choice', format_choice)
+            if df is not None and totals is not None:
+                total_excl, total_tax, total_incl = totals
+                if current_format == "1998BI V2":
+                    content = _create_ledes_1998biv2_content(
+                        df.to_dict(orient='records'),
+                        start_date, end_date, invoice_number, matter_number, (invoice_currency or "USD"),
+                        (matter_name or "Matter"), (po_number or ""), (client_matter_id or ""), tax_type="VAT"
+                    )
+                    fname = f"{invoice_number}_LEDES_1998BIV2.txt"
+                else:
+                    content = _create_ledes_1998b_content(
+                        df.to_dict(orient='records'), total_excl, start_date, end_date, invoice_number, matter_number, is_first_invoice=True
+                    )
+                    fname = f"{invoice_number}_LEDES_1998B.txt"
+
+                if not content or content.strip() == "":
+                    st.error("The LEDES content appears empty. Please regenerate lines and try again.")
+                else:
+                    st.download_button("Download LEDES File", data=content, file_name=fname, mime="text/plain")
+
+                pdf_buf = _create_pdf_invoice(
+                    df, total_excl, total_tax, total_incl,
+                    invoice_number, end_date, start_date, end_date,
+                    client_id, law_firm_id, client_name=client_name, law_firm_name=law_firm_name
                 )
-                fname = f"{invoice_number}_LEDES_1998B.txt"
-
-            if not content or content.strip() == "":
-                st.error("The LEDES content appears empty. Please regenerate lines and try again.")
+                st.download_button("Download PDF Invoice", data=pdf_buf.getvalue(), file_name=f"{invoice_number}.pdf", mime="application/pdf")
             else:
-                st.download_button("Download LEDES File", data=content, file_name=fname, mime="text/plain")
-
-            pdf_buf = _create_pdf_invoice(
-                df, total_excl, total_tax, total_incl,
-                invoice_number, end_date, start_date, end_date,
-                client_id, law_firm_id, client_name=client_name, law_firm_name=law_firm_name
-            )
-            st.download_button("Download PDF Invoice", data=pdf_buf.getvalue(), file_name=f"{invoice_number}.pdf", mime="application/pdf")
-        else:
-            st.info("Generate lines to enable exports.")
+                st.info("Generate lines to enable exports.")
 
 if __name__ == "__main__":
     main()
