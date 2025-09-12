@@ -790,24 +790,27 @@ def main():
         st.session_state["__mandatory"] = selected_mandatory
 
     # ---------------- Preview & Export ----------------
+    
+    # ---------------- Preview & Export ----------------
     with tab4:
+        # Collapsible on-screen summary (standalone)
+        with st.expander("Invoice Summary", expanded=True):
+            fmt = "1998BI V2" if format_choice == "1998BI V2" else "1998B"
+            rows = []
+            rows.append(("Invoice Number", invoice_number))
+            rows.append(("Law Firm Matter ID", matter_number))
+            if fmt == "1998BI V2":
+                rows.append(("Client Matter ID", client_matter_id or "—"))
+                rows.append(("Matter Name", matter_name or "—"))
+                rows.append(("Currency", (invoice_currency or "USD")))
+            rows.append(("LEDES Format", fmt))
+            rows.append(("Billing Period", f"{start_date} → {end_date}"))
+            summary_df = pd.DataFrame(rows, columns=["Field", "Value"])
+            st.table(summary_df)
+
+        # Main generation/export expander
         with st.expander("Generate, Preview & Export", expanded=True):
             st.info("Generate the invoice line items, review a preview table, and export to LEDES text or PDF files.")
-            # Collapsible on-screen summary
-            with st.expander("Invoice Summary", expanded=True):
-                fmt = "1998BI V2" if format_choice == "1998BI V2" else "1998B"
-                rows = []
-                rows.append(("Invoice Number", invoice_number))
-                rows.append(("Law Firm Matter ID", matter_number))
-                if fmt == "1998BI V2":
-                    rows.append(("Client Matter ID", client_matter_id or "—"))
-                    rows.append(("Matter Name", matter_name or "—"))
-                    rows.append(("Currency", (invoice_currency or "USD")))
-                rows.append(("LEDES Format", fmt))
-                rows.append(("Billing Period", f"{start_date} → {end_date}"))
-                summary_df = pd.DataFrame(rows, columns=["Field", "Value"])
-                st.table(summary_df)
-
             # Load uploads or defaults
             tk_file = st.session_state.get("__tk_file")
             task_file = st.session_state.get("__task_file")
@@ -841,6 +844,39 @@ def main():
                     st.dataframe(df, use_container_width=True, height=400)
 
             # Export buttons
+            df = st.session_state.get('invoice_df')
+            totals = st.session_state.get('totals')
+            current_format = st.session_state.get('format_choice', format_choice)
+            if df is not None and totals is not None:
+                total_excl, total_tax, total_incl = totals
+                if current_format == "1998BI V2":
+                    content = _create_ledes_1998biv2_content(
+                        df.to_dict(orient='records'),
+                        start_date, end_date, invoice_number, matter_number, (invoice_currency or "USD"),
+                        (matter_name or "Matter"), (po_number or ""), (client_matter_id or ""), tax_type="VAT"
+                    )
+                    fname = f"{invoice_number}_LEDES_1998BIV2.txt"
+                else:
+                    content = _create_ledes_1998b_content(
+                        df.to_dict(orient='records'), total_excl, start_date, end_date, invoice_number, matter_number, is_first_invoice=True
+                    )
+                    fname = f"{invoice_number}_LEDES_1998B.txt"
+
+                if not content or content.strip() == "":
+                    st.error("The LEDES content appears empty. Please regenerate lines and try again.")
+                else:
+                    st.download_button("Download LEDES File", data=content, file_name=fname, mime="text/plain")
+
+                pdf_buf = _create_pdf_invoice(
+                    df, total_excl, total_tax, total_incl,
+                    invoice_number, end_date, start_date, end_date,
+                    client_id, law_firm_id, client_name=client_name, law_firm_name=law_firm_name
+                )
+                st.download_button("Download PDF Invoice", data=pdf_buf.getvalue(), file_name=f"{invoice_number}.pdf", mime="application/pdf")
+            else:
+                st.info("Generate lines to enable exports.")
+
+# Export buttons
             df = st.session_state.get('invoice_df')
             totals = st.session_state.get('totals')
             current_format = st.session_state.get('format_choice', format_choice)
