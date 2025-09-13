@@ -1,8 +1,9 @@
 
 # app-merged-biv2-tabs.py
 # Streamlit app merging LEDES 1998B and LEDES 1998BI V2 functionality
-# Tabs-based GUI (polished labels), expanders with help/info (expanded by default),
-# required field indicators, conditional BIv2 inputs, PDF/LEDES logic, mandatory items, and block billing.
+# Tabs-based GUI (original tab names), expanders with help/info (expanded by default),
+# required field indicators, conditional BIv2 inputs, PDF/LEDES logic, mandatory items,
+# receipts (polished), and email sending with selectable attachments.
 
 import streamlit as st
 import pandas as pd
@@ -19,6 +20,13 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
+
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email import encoders
+import zipfile
 
 # --- App Setup ---
 st.set_page_config(page_title="LEDES 1998B / 1998BI V2 Invoice Generator", layout="wide")
@@ -417,12 +425,12 @@ def _generate_expenses(expense_count: int, billing_start_date: datetime.date, bi
     travel_min, travel_max = float(travel_rng[0]), float(travel_rng[1])
     tel_min, tel_max = float(tel_rng[0]), float(tel_rng[1])
 
-    # Always include some Copying (E101) if any expenses
+    # Copying (E101)
     e101_actual_count = random.randint(1, min(3, expense_count)) if expense_count > 0 else 0
     for _ in range(e101_actual_count):
         description = "Copying"
         expense_code = "E101"
-        hours = random.randint(50, 300)  # number of pages
+        hours = random.randint(50, 300)  # pages
         rate = round(copying_rate, 2)    # per-page
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
@@ -696,26 +704,111 @@ def _create_pdf_invoice(
     return buffer
 
 # ----------------------
-# UI Tabs (polished names)
+# Receipt Generators (polished)
+# ----------------------
+
+def generate_airfare_receipt(airline, flight_no, dep_city, arr_city, fare_class, amount, roundtrip):
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    styles = getSampleStyleSheet()
+    elems = []
+    elems.append(Paragraph("<b>Airfare Receipt</b>", styles['Heading2']))
+    elems.append(Spacer(1, 6))
+    details = [
+        ["Airline", airline],
+        ["Flight #", flight_no],
+        ["From", dep_city],
+        ["To", arr_city],
+        ["Fare Class", fare_class],
+        ["Roundtrip", "Yes" if roundtrip else "No"],
+        ["Amount", f"${amount:.2f}"]
+    ]
+    data = [[Paragraph(k, styles['Normal']), Paragraph(str(v), styles['Normal'])] for k,v in details]
+    table = Table(data, colWidths=[1.5*inch, 3.8*inch])
+    table.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.25,colors.grey), ('VALIGN',(0,0),(-1,-1),'TOP')]))
+    elems.append(table)
+    elems.append(Spacer(1,12))
+    elems.append(Paragraph("Generated for demonstration purposes only.", styles['Italic']))
+    doc.build(elems)
+    buf.seek(0)
+    return buf.getvalue()
+
+def generate_uber_receipt(amount):
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    styles = getSampleStyleSheet()
+    elems = []
+    elems.append(Paragraph("<b>Uber Ride Receipt</b>", styles['Heading2']))
+    elems.append(Spacer(1,6))
+    details = [
+        ["Driver", faker.name()],
+        ["Date", datetime.date.today().strftime("%Y-%m-%d")],
+        ["Pickup", faker.city()],
+        ["Dropoff", faker.city()],
+        ["Amount", f"${amount:.2f}"]
+    ]
+    data = [[Paragraph(k, styles['Normal']), Paragraph(str(v), styles['Normal'])] for k,v in details]
+    table = Table(data, colWidths=[1.5*inch, 3.8*inch])
+    table.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.25,colors.grey), ('VALIGN',(0,0),(-1,-1),'TOP')]))
+    elems.append(table)
+    elems.append(Spacer(1,12))
+    elems.append(Paragraph("Generated for demonstration purposes only.", styles['Italic']))
+    doc.build(elems)
+    buf.seek(0)
+    return buf.getvalue()
+
+def zip_receipts(receipts: Dict[str, bytes]) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as zf:
+        for name, data in receipts.items():
+            zf.writestr(name, data)
+    buf.seek(0)
+    return buf.getvalue()
+
+# ----------------------
+# Email Sender
+# ----------------------
+
+def send_email(sender, recipient, subject, body, password, smtp_server, smtp_port, attachments: Dict[str, bytes]) -> Tuple[bool, Optional[str]]:
+    msg = MIMEMultipart()
+    msg['From'] = sender
+    msg['To'] = recipient
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+    for fname, data in attachments.items():
+        part = MIMEBase('application','octet-stream')
+        part.set_payload(data)
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', f'attachment; filename={fname}')
+        msg.attach(part)
+    try:
+        with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+            server.login(sender, password)
+            server.sendmail(sender, recipient, msg.as_string())
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+# ----------------------
+# UI Tabs (original names)
 # ----------------------
 
 def main():
-    st.title("LEDES 1998B & 1998BI V2 Invoice Generator (Tabbed)")
+    st.title("LEDES 1998B & 1998BI V2 Invoice Generator")
 
     tab1, tab2, tab3, tab4 = st.tabs([
-        "Invoice & Billing", "Data Sources & Timekeepers", "Required Items", "Preview & Export"
+        "Invoice Details", "Data Sources", "Mandatory Items", "Export"
     ])
 
-    # ---------------- Invoice & Billing ----------------
+    # -------- Invoice Details --------
     with tab1:
-        with st.expander("Billing Party Details", expanded=True):
+        with st.expander("Billing Details", expanded=True):
             st.info("Select billing environment and enter identifiers for invoice and matter.")
             env = st.selectbox("Environment *", [p[0] for p in BILLING_PROFILES], index=0)
             client_name, client_id, law_firm_name, law_firm_id = get_profile(env)
             format_choice = st.radio("LEDES Export Format *", ["1998B", "1998BI V2"], index=0)
             invoice_number = st.text_input("Invoice Number *", "INV-1001")
             matter_number = st.text_input("Law Firm Matter ID *", "MAT-2001")
-
             # BIv2-only
             matter_name = po_number = client_matter_id = invoice_currency = ""
             if format_choice == "1998BI V2":
@@ -725,32 +818,31 @@ def main():
                 client_matter_id = st.text_input("Client Matter ID (optional)", "")
                 invoice_currency = st.text_input("Invoice Currency (ISO 4217) *", "USD")
 
-        with st.expander("Invoice Period & Description", expanded=True):
+        with st.expander("Invoice Dates and Descriptions", expanded=True):
             st.info("Set the billing period included on this invoice and a brief description.")
             today = datetime.date.today()
             start_date = st.date_input("Billing Start Date *", today.replace(day=1))
             end_date = st.date_input("Billing End Date *", today)
             invoice_desc = st.text_input("Invoice Description *", CONFIG['DEFAULT_INVOICE_DESCRIPTION'])
 
-        with st.expander("Line Items & Options", expanded=True):
+        with st.expander("Line Counts and Options", expanded=True):
             st.info("Choose the number of fee and expense lines, hours per timekeeper per day, and optional block billing.")
             preset = st.selectbox("Preset", list(PRESETS.keys()), index=1)
             fee_count = st.slider("# Fee Lines", 0, 200, PRESETS[preset]["fees"])
             expense_count = st.slider("# Expense Lines", 0, 200, PRESETS[preset]["expenses"])
             max_daily_hours = st.slider("Max Hours per TK per Day", 1, 12, 8)
             include_block_billed = st.checkbox("Enable Block-Billed Consolidation", value=False)
-            # Tax only relevant to BIv2
+            # Tax only for BIv2
             tax_rate = 0.0
             if format_choice == "1998BI V2":
                 tax_rate = st.number_input("Tax Rate (decimal)", min_value=0.0, max_value=1.0, value=0.0, step=0.01, format="%0.4f")
 
-    # ---------------- Data Sources & Timekeepers ----------------
+    # -------- Data Sources --------
     with tab2:
-        with st.expander("Upload Data Sources", expanded=True):
+        with st.expander("Data Sources", expanded=True):
             st.info("Upload Timekeepers and/or custom Task/Activity CSVs to override defaults.")
             tk_file = st.file_uploader("Upload Timekeepers CSV", type=["csv"])
             task_file = st.file_uploader("Upload Custom Task/Activity CSV (optional)", type=["csv"])
-            # Save for later steps
             st.session_state["__tk_file"] = tk_file
             st.session_state["__task_file"] = task_file
 
@@ -765,9 +857,9 @@ def main():
             tel_max = st.number_input("Telephone (E105) Max", 1.0, 100.0, 15.0, 1.0)
             st.session_state["telephone_range_e105"] = (tel_min, tel_max)
 
-    # ---------------- Required Items ----------------
+    # -------- Mandatory Items --------
     with tab3:
-        with st.expander("Select Mandatory Items", expanded=True):
+        with st.expander("Mandatory Items", expanded=True):
             st.info("Add specific fee/expense items that must appear on this invoice.")
             mand_options = list(CONFIG['MANDATORY_ITEMS'].keys())
             selected_mandatory = st.multiselect("Include mandatory items", mand_options, default=[])
@@ -786,14 +878,18 @@ def main():
             with st.expander("Uber Details", expanded=True):
                 st.session_state['uber_amount'] = st.number_input("Uber Amount", 0.0, 2000.0, 35.00, 0.5)
 
-        # Save for use later
+        # Receipts section (polished), only controls — generation happens on "Generate Lines"
+        with st.expander("Receipts", expanded=True):
+            st.info("Optionally generate polished PDF receipts for included travel items; they’ll be available as a zipped email attachment.")
+            if 'Airfare E110' in selected_mandatory:
+                st.session_state['gen_airfare_receipt'] = st.checkbox("Generate Airfare Receipt", value=False)
+            if 'Uber E110' in selected_mandatory:
+                st.session_state['gen_uber_receipt'] = st.checkbox("Generate Uber Receipt", value=False)
         st.session_state["__mandatory"] = selected_mandatory
 
-    # ---------------- Preview & Export ----------------
-    
-    # ---------------- Preview & Export ----------------
+    # -------- Export --------
     with tab4:
-        # Collapsible on-screen summary (standalone)
+        # Standalone Invoice Summary expander
         with st.expander("Invoice Summary", expanded=True):
             fmt = "1998BI V2" if format_choice == "1998BI V2" else "1998B"
             rows = []
@@ -808,9 +904,9 @@ def main():
             summary_df = pd.DataFrame(rows, columns=["Field", "Value"])
             st.table(summary_df)
 
-        # Main generation/export expander
-        with st.expander("Generate, Preview & Export", expanded=True):
-            st.info("Generate the invoice line items, review a preview table, and export to LEDES text or PDF files.")
+        # Generation & preview expander
+        with st.expander("Generate and Preview", expanded=True):
+            st.info("Generate the invoice line items and preview a table before exporting.")
             # Load uploads or defaults
             tk_file = st.session_state.get("__tk_file")
             task_file = st.session_state.get("__task_file")
@@ -843,7 +939,25 @@ def main():
                     st.success(f"Generated {len(df)} lines. Subtotal: {total_excl:.2f} | Tax: {total_tax:.2f} | Total: {total_incl:.2f}")
                     st.dataframe(df, use_container_width=True, height=400)
 
-            # Export buttons
+                    # Generate receipts only when requested
+                    receipts: Dict[str, bytes] = {}
+                    if st.session_state.get('gen_airfare_receipt'):
+                        receipts["airfare_receipt.pdf"] = generate_airfare_receipt(
+                            st.session_state.get('airfare_airline', 'Airline'),
+                            st.session_state.get('airfare_flight_number', 'XX000'),
+                            st.session_state.get('airfare_departure_city', 'Origin'),
+                            st.session_state.get('airfare_arrival_city', 'Destination'),
+                            st.session_state.get('airfare_fare_class', 'Economy'),
+                            float(st.session_state.get('airfare_amount', 0.0)),
+                            bool(st.session_state.get('airfare_roundtrip', False))
+                        )
+                    if st.session_state.get('gen_uber_receipt'):
+                        receipts["uber_receipt.pdf"] = generate_uber_receipt(float(st.session_state.get('uber_amount', 0.0)))
+                    st.session_state['__receipts_zip'] = zip_receipts(receipts) if receipts else None
+
+        # Export expander
+        with st.expander("Export Files", expanded=True):
+            st.info("Download LEDES text and PDF invoice. For 1998B, tax is not applied and not shown in the file.")
             df = st.session_state.get('invoice_df')
             totals = st.session_state.get('totals')
             current_format = st.session_state.get('format_choice', format_choice)
@@ -865,49 +979,54 @@ def main():
                 if not content or content.strip() == "":
                     st.error("The LEDES content appears empty. Please regenerate lines and try again.")
                 else:
-                    st.download_button("Download LEDES File", data=content, file_name=fname, mime="text/plain")
+                    st.download_button("Download LEDES File", data=content, file_name=fname, mime="text/plain", key="download_ledes")
 
                 pdf_buf = _create_pdf_invoice(
                     df, total_excl, total_tax, total_incl,
                     invoice_number, end_date, start_date, end_date,
                     client_id, law_firm_id, client_name=client_name, law_firm_name=law_firm_name
                 )
-                st.download_button("Download PDF Invoice", data=pdf_buf.getvalue(), file_name=f"{invoice_number}.pdf", mime="application/pdf")
+                st.download_button("Download PDF Invoice", data=pdf_buf.getvalue(), file_name=f"{invoice_number}.pdf", mime="application/pdf", key="download_pdf")
+                st.session_state['__export_ledes_bytes'] = content.encode('utf-8')
+                st.session_state['__export_pdf_bytes'] = pdf_buf.getvalue()
             else:
                 st.info("Generate lines to enable exports.")
 
-# Export buttons
-            df = st.session_state.get('invoice_df')
-            totals = st.session_state.get('totals')
-            current_format = st.session_state.get('format_choice', format_choice)
-            if df is not None and totals is not None:
-                total_excl, total_tax, total_incl = totals
-                if current_format == "1998BI V2":
-                    content = _create_ledes_1998biv2_content(
-                        df.to_dict(orient='records'),
-                        start_date, end_date, invoice_number, matter_number, (invoice_currency or "USD"),
-                        (matter_name or "Matter"), (po_number or ""), (client_matter_id or ""), tax_type="VAT"
-                    )
-                    fname = f"{invoice_number}_LEDES_1998BIV2.txt"
-                else:
-                    content = _create_ledes_1998b_content(
-                        df.to_dict(orient='records'), total_excl, start_date, end_date, invoice_number, matter_number, is_first_invoice=True
-                    )
-                    fname = f"{invoice_number}_LEDES_1998B.txt"
+        # Send via Email expander
+        with st.expander("Send via Email", expanded=True):
+            st.info("Email the generated invoice files and optional zipped receipts. Make sure SMTP credentials are valid.")
+            sender_default = st.secrets.get("email_user", "") if hasattr(st, "secrets") else ""
+            sender = st.text_input("From Email", value=sender_default)
+            recipient = st.text_input("To Email")
+            subject = st.text_input("Subject", f"Invoice {invoice_number}")
+            body = st.text_area("Body", "Please find attached the invoice files.")
+            smtp_server = st.text_input("SMTP Server", "smtp.gmail.com")
+            smtp_port = st.number_input("SMTP Port", min_value=1, max_value=65535, value=465)
+            password = st.text_input("Email Password", type="password")
+            attach_ledes = st.checkbox("Attach LEDES File", value=True)
+            attach_pdf = st.checkbox("Attach PDF Invoice", value=True)
+            attach_receipts = st.checkbox("Attach Receipts (zipped)", value=False)
 
-                if not content or content.strip() == "":
-                    st.error("The LEDES content appears empty. Please regenerate lines and try again.")
-                else:
-                    st.download_button("Download LEDES File", data=content, file_name=fname, mime="text/plain")
+            if st.button("Send Email Now"):
+                attachments: Dict[str, bytes] = {}
+                if attach_ledes and st.session_state.get('__export_ledes_bytes'):
+                    file_name = f"{invoice_number}_LEDES_1998BIV2.txt" if st.session_state.get('format_choice') == "1998BI V2" else f"{invoice_number}_LEDES_1998B.txt"
+                    attachments[file_name] = st.session_state['__export_ledes_bytes']
+                if attach_pdf and st.session_state.get('__export_pdf_bytes'):
+                    attachments[f"{invoice_number}.pdf"] = st.session_state['__export_pdf_bytes']
+                if attach_receipts and st.session_state.get('__receipts_zip'):
+                    attachments["receipts.zip"] = st.session_state['__receipts_zip']
 
-                pdf_buf = _create_pdf_invoice(
-                    df, total_excl, total_tax, total_incl,
-                    invoice_number, end_date, start_date, end_date,
-                    client_id, law_firm_id, client_name=client_name, law_firm_name=law_firm_name
-                )
-                st.download_button("Download PDF Invoice", data=pdf_buf.getvalue(), file_name=f"{invoice_number}.pdf", mime="application/pdf")
-            else:
-                st.info("Generate lines to enable exports.")
+                if not attachments:
+                    st.error("No attachments selected or available. Generate and export the invoice first.")
+                elif not sender or not recipient or not password:
+                    st.error("Please fill From, To, and Email Password.")
+                else:
+                    ok, err = send_email(sender, recipient, subject, body, password, smtp_server, int(smtp_port), attachments)
+                    if ok:
+                        st.success("Email sent successfully!")
+                    else:
+                        st.error(f"Email failed: {err}")
 
 if __name__ == "__main__":
     main()
