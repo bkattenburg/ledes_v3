@@ -788,7 +788,7 @@ def _create_pdf_invoice(
     client_matter_id: str = "",
     invoice_currency: str = "USD",
     tax_rate: float = 0.19
-, ledes_version=ledes_version, matter_name=st.session_state.get('tax_matter_name',''), po_number=st.session_state.get('tax_po_number',''), client_matter_id=st.session_state.get('tax_client_matter_id',''), invoice_currency=st.session_state.get('tax_invoice_currency','USD'), tax_rate=st.session_state.get('tax_rate', 0.19)) -> io.BytesIO:
+) -> io.BytesIO:
     """Generate a PDF invoice matching the provided format."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
@@ -944,8 +944,8 @@ def _create_pdf_invoice(
         subtotal_for_tax = df['LINE_ITEM_TOTAL'].sum()
         tax_amount_calc = round(subtotal_for_tax * float(tax_rate), 2)
         grand_total_calc = subtotal_for_tax + tax_amount_calc
-        totals_data_extra = [[Paragraph('Tax:', styles['Normal']), Paragraph(f"${{tax_amount_calc:,.2f}}", styles['Normal'])],
-                             [Paragraph('Invoice Total:', styles['Normal']), Paragraph(f"${{grand_total_calc:,.2f}}", styles['Normal'])]]
+        totals_data_extra = [[Paragraph('Tax:', styles['Normal']), Paragraph(f"${tax_amount_calc:,.2f}", styles['Normal'])],
+                             [Paragraph('Invoice Total:', styles['Normal']), Paragraph(f"${grand_total_calc:,.2f}", styles['Normal'])]]
         totals_table_extra = Table(totals_data_extra, colWidths=[1.5*inch, 1.5*inch], hAlign='RIGHT')
         elements.append(totals_table_extra)
 
