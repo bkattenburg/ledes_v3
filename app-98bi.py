@@ -1818,6 +1818,18 @@ if generate_button:
                         st.session_state.get('tax_rate', 0.19),
                         is_first_invoice=not combine_ledes or is_first
                     )
+                elif ledes_version == "1998BI":
+                    ledes_content_part = _create_ledes_1998bi_content(
+                        rows,
+                        current_start_date, current_end_date,
+                        current_invoice_number, current_matter_number,
+                        st.session_state.get('tax_matter_name',''),
+                        st.session_state.get('tax_po_number',''),
+                        st.session_state.get('tax_client_matter_id',''),
+                        st.session_state.get('tax_invoice_currency','USD'),
+                        st.session_state.get('tax_rate', 0.19),
+                        is_first_invoice=not combine_ledes or is_first
+                    )
                 else:
                     ledes_content_part = _create_ledes_1998b_content(
                         rows,
