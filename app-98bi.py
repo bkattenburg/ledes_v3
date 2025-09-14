@@ -1510,7 +1510,8 @@ with tab_objects[2]:
         selected_items = []
 
 
-with tab_objects[3]:
+output_tab_index = tabs.index("Output")
+with tab_objects[output_tab_index]:
     st.markdown("<h2 style='color: #1E1E1E;'>Output</h2>", unsafe_allow_html=True)
     include_block_billed = st.checkbox("Include Block Billed Line Items", value=True)
     include_pdf = st.checkbox("Include PDF Invoice", value=False)
