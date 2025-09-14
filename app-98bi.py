@@ -1679,8 +1679,26 @@ if generate_button:
                 current_matter_number = matter_number_base
                 
                 is_first = (i == 0) and combine_ledes
-                ledes_content_part = _create_ledes_1998b_content(df_invoice.to_dict(orient='records') if ledes_version != '1998BIv2' else _create_ledes_1998biv2_content(rows, current_start_date, current_end_date, current_invoice_number, current_matter_number, st.session_state.get('tax_matter_name',''), st.session_state.get('tax_po_number',''), st.session_state.get('tax_client_matter_id',''), st.session_state.get('tax_invoice_currency','USD'), st.session_state.get('tax_rate', 0.19), is_first_invoice=not combine_ledes or is_first), total_amount, current_start_date, current_end_date, current_invoice_number, current_matter_number, is_first_invoice=not combine_ledes or is_first)
-                
+                if ledes_version == "1998BIv2":
+                    ledes_content_part = _create_ledes_1998biv2_content(
+                        rows,
+                        current_start_date, current_end_date,
+                        current_invoice_number, current_matter_number,
+                        st.session_state.get('tax_matter_name',''),
+                        st.session_state.get('tax_po_number',''),
+                        st.session_state.get('tax_client_matter_id',''),
+                        st.session_state.get('tax_invoice_currency','USD'),
+                        st.session_state.get('tax_rate', 0.19),
+                        is_first_invoice=not combine_ledes or is_first
+                    )
+                else:
+                    ledes_content_part = _create_ledes_1998b_content(
+                        rows,
+                        total_amount,
+                        current_start_date, current_end_date,
+                        current_invoice_number, current_matter_number,
+                        is_first_invoice=not combine_ledes or is_first
+                    )
                 if combine_ledes:
                     combined_ledes_content += ledes_content_part + "\n"
                 else:
@@ -1693,8 +1711,27 @@ if generate_button:
                         use_custom_logo = st.session_state.get('use_custom_logo_checkbox', False)
                         logo_bytes = _get_logo_bytes(uploaded_logo, law_firm_id, use_custom_logo)
                     
-                    pdf_buffer = _create_pdf_invoice(df=df_invoice, total_amount=total_amount, invoice_number=current_invoice_number, invoice_date=current_end_date, billing_start_date=current_start_date, billing_end_date=current_end_date, client_id=client_id, law_firm_id=law_firm_id, logo_bytes=logo_bytes, include_logo=include_logo, client_name=client_name, law_firm_name=law_firm_name, ledes_version=ledes_version, matter_name=st.session_state.get('tax_matter_name',''), po_number=st.session_state.get('tax_po_number',''), client_matter_id=st.session_state.get('tax_client_matter_id',''), invoice_currency=st.session_state.get('tax_invoice_currency','USD'), tax_rate=st.session_state.get('tax_rate', 0.19))
                     pdf_filename = f"Invoice_{current_invoice_number}.pdf"
+                    pdf_buffer = _create_pdf_invoice(
+                        df_invoice,
+                        total_amount,
+                        current_invoice_number,
+                        current_end_date,
+                        current_start_date,
+                        current_end_date,
+                        client_id,
+                        law_firm_id,
+                        logo_bytes=logo_bytes,
+                        include_logo=include_logo,
+                        client_name=client_name,
+                        law_firm_name=law_firm_name,
+                        ledes_version=ledes_version,
+                        matter_name=st.session_state.get('tax_matter_name',''),
+                        po_number=st.session_state.get('tax_po_number',''),
+                        client_matter_id=st.session_state.get('tax_client_matter_id',''),
+                        invoice_currency=st.session_state.get('tax_invoice_currency','USD'),
+                        tax_rate=st.session_state.get('tax_rate', 0.19)
+                    )
                     attachments_list.append((pdf_filename, pdf_buffer.getvalue()))
                 
                 if generate_receipts:
