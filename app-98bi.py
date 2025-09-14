@@ -363,7 +363,7 @@ def _create_ledes_line_1998biv2(row: Dict, line_no: int, inv_total: float,
                                 invoice_number: str, matter_number: str,
                                 matter_name: str, po_number: str,
                                 client_matter_id: str, invoice_currency: str,
-                                tax_rate: float) -> List[str]:
+                                tax_rate: float, tax_type: str) -> List[str]:
     """Create a single LEDES 1998BIv2 line."""
     try:
         date_obj = datetime.datetime.strptime(row["LINE_ITEM_DATE"], "%Y-%m-%d").date()
@@ -408,7 +408,7 @@ def _create_ledes_line_1998biv2(row: Dict, line_no: int, inv_total: float,
             str(po_number),
             str(invoice_currency),
             f"{float(tax_rate):.2f}"
-        ]
+        , str(tax_type)]
     except Exception as e:
         logging.error(f"Error creating LEDES 1998BIv2 line: {e}")
         return []
@@ -418,7 +418,7 @@ def _create_ledes_1998biv2_content(rows: List[Dict],
                                    invoice_number: str, matter_number: str,
                                    matter_name: str, po_number: str,
                                    client_matter_id: str, invoice_currency: str,
-                                   tax_rate: float, is_first_invoice: bool = True) -> str:
+                                   tax_rate: float, tax_type: str, is_first_invoice: bool = True) -> str:
     lines: List[str] = []
     if is_first_invoice:
         header = "LEDES1998BIv2[]"
@@ -428,7 +428,7 @@ def _create_ledes_1998biv2_content(rows: List[Dict],
                   "LINE_ITEM_TOTAL|LINE_ITEM_DATE|LINE_ITEM_TASK_CODE|LINE_ITEM_EXPENSE_CODE|"
                   "LINE_ITEM_ACTIVITY_CODE|TIMEKEEPER_ID|LINE_ITEM_DESCRIPTION|LAW_FIRM_ID|"
                   "LINE_ITEM_UNIT_COST|TIMEKEEPER_NAME|TIMEKEEPER_CLASSIFICATION|CLIENT_MATTER_ID|"
-                  "MATTER_NAME|PO_NUMBER|INVOICE_CURRENCY|TAX_RATE[]")
+                  "MATTER_NAME|PO_NUMBER|INVOICE_CURRENCY|TAX_RATE|LINE_ITEM_TAX_TYPE[]")
         lines = [header, fields]
     else:
         lines = []
@@ -441,7 +441,7 @@ def _create_ledes_1998biv2_content(rows: List[Dict],
         line = _create_ledes_line_1998biv2(row, i, grand_total, bill_start, bill_end,
                                            invoice_number, matter_number,
                                            matter_name, po_number, client_matter_id,
-                                           invoice_currency, tax_rate)
+                                           invoice_currency, tax_rate, tax_type)
         if line:
             lines.append("|".join(map(str, line)) + "[]")
     return "\n".join(lines)
@@ -452,7 +452,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
                                  invoice_number: str, matter_number: str,
                                  matter_name: str, po_number: str,
                                  client_matter_id: str, invoice_currency: str,
-                                 tax_rate: float, is_first_invoice: bool = True) -> str:
+                                 tax_rate: float, tax_type: str, is_first_invoice: bool = True) -> str:
     header = "LEDES1998BI[]"
     fields = ("INVOICE_DATE|INVOICE_NUMBER|CLIENT_ID|LAW_FIRM_MATTER_ID|INVOICE_TOTAL|"
               "BILLING_START_DATE|BILLING_END_DATE|INVOICE_DESCRIPTION|LINE_ITEM_NUMBER|"
@@ -565,8 +565,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
             "", "", "", "", "", "", "",
             "", "", "", "", "", "",
             f"{line_tax_rate:.6f}",
-            f"{line_tax_total:.2f}",
-            "",
+            f"{line_tax_total:.2f}", str(tax_type),
         ]
         lines.append("|".join(map(str, line)) + "[]")
 
@@ -1706,12 +1705,14 @@ if "Tax Fields" in tabs:
         st.session_state.setdefault("tax_client_matter_id", "")
         st.session_state.setdefault("tax_invoice_currency", "USD")
         st.session_state.setdefault("tax_rate", 0.19)
+        st.session_state.setdefault("tax_type", "VAT")
 
         st.text_input("Matter Name *", key="tax_matter_name")
         st.text_input("PO Number (optional)", key="tax_po_number")
         st.text_input("Client Matter ID (optional)", key="tax_client_matter_id")
         st.selectbox("Invoice Currency", ["USD", "AUD", "CAD", "GBP", "EUR"], index=["USD", "AUD", "CAD", "GBP", "EUR"].index(st.session_state.get("tax_invoice_currency", "USD")), key="tax_invoice_currency")
         st.number_input("Tax Rate", min_value=0.0, max_value=1.0, step=0.01, value=st.session_state.get("tax_rate", 0.19), key="tax_rate")
+        st.selectbox("Tax Type", ["VAT", "PST", "QST", "GST"], index=["VAT","PST","QST","GST"].index(st.session_state.get("tax_type", "VAT")), key="tax_type")
 is_valid_input = True
 if timekeeper_data is None:
     st.error("Please upload a valid timekeeper CSV file.")
@@ -1814,6 +1815,7 @@ if generate_button:
                         st.session_state.get('tax_client_matter_id',''),
                         st.session_state.get('tax_invoice_currency','USD'),
                         st.session_state.get('tax_rate', 0.19),
+                        st.session_state.get('tax_type','VAT'),
                         is_first_invoice=not combine_ledes or is_first
                     )
                 elif ledes_version == "1998BI":
@@ -1826,6 +1828,7 @@ if generate_button:
                         st.session_state.get('tax_client_matter_id',''),
                         st.session_state.get('tax_invoice_currency','USD'),
                         st.session_state.get('tax_rate', 0.19),
+                        st.session_state.get('tax_type','VAT'),
                         is_first_invoice=not combine_ledes or is_first
                     )
                 else:
