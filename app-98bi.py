@@ -83,11 +83,43 @@ def apply_preset():
 # Billing Profiles Configuration
 # ===============================
 # Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
-BILLING_PROFILES = [
+BILLING_PROFILES = [("VAT", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
     ("Onit ELM",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
     ("SimpleLegal", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
     ("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
+
+
+# Extended profile details (addresses, tax ids, defaults)
+BILLING_PROFILE_DETAILS = {
+    "VAT": {
+        "ledes_default": "1998BI",
+        "invoice_currency": "EUR",
+        # Law Firm details (Belgium)
+        "law_firm": {
+            "name": "Nelson and Murdock - Belgium",
+            "id": "3233384400",
+            "address1": "Hanzestedenplaats 1",
+            "address2": "",
+            "city": "Antwerpen",
+            "state": "",
+            "postcode": "2000",
+            "country": "Belgium"
+        },
+        # Client details (Belgium)
+        "client": {
+            "name": "Onit LLC - Belgium",
+            "id": "",
+            "tax_id": "00-4100871",
+            "address1": "P.O. Box 636",
+            "address2": "4368 Feugiat. Avenue",
+            "city": "Grand-Hallet",
+            "state": "Luxemburg",
+            "postcode": "3230",
+            "country": "Belgium"
+        }
+    }
+}
 
 def get_profile(env: str):
     """Return (client_name, client_id, law_firm_name, law_firm_id) for the environment."""
@@ -363,7 +395,7 @@ def _create_ledes_line_1998biv2(row: Dict, line_no: int, inv_total: float,
                                 invoice_number: str, matter_number: str,
                                 matter_name: str, po_number: str,
                                 client_matter_id: str, invoice_currency: str,
-                                tax_rate: float, tax_type: str) -> List[str]:
+                                tax_rate: float) -> List[str]:
     """Create a single LEDES 1998BIv2 line."""
     try:
         date_obj = datetime.datetime.strptime(row["LINE_ITEM_DATE"], "%Y-%m-%d").date()
@@ -408,7 +440,7 @@ def _create_ledes_line_1998biv2(row: Dict, line_no: int, inv_total: float,
             str(po_number),
             str(invoice_currency),
             f"{float(tax_rate):.2f}"
-        , str(tax_type)]
+        ]
     except Exception as e:
         logging.error(f"Error creating LEDES 1998BIv2 line: {e}")
         return []
@@ -418,7 +450,7 @@ def _create_ledes_1998biv2_content(rows: List[Dict],
                                    invoice_number: str, matter_number: str,
                                    matter_name: str, po_number: str,
                                    client_matter_id: str, invoice_currency: str,
-                                   tax_rate: float, tax_type: str, is_first_invoice: bool = True) -> str:
+                                   tax_rate: float, is_first_invoice: bool = True) -> str:
     lines: List[str] = []
     if is_first_invoice:
         header = "LEDES1998BIv2[]"
@@ -428,7 +460,7 @@ def _create_ledes_1998biv2_content(rows: List[Dict],
                   "LINE_ITEM_TOTAL|LINE_ITEM_DATE|LINE_ITEM_TASK_CODE|LINE_ITEM_EXPENSE_CODE|"
                   "LINE_ITEM_ACTIVITY_CODE|TIMEKEEPER_ID|LINE_ITEM_DESCRIPTION|LAW_FIRM_ID|"
                   "LINE_ITEM_UNIT_COST|TIMEKEEPER_NAME|TIMEKEEPER_CLASSIFICATION|CLIENT_MATTER_ID|"
-                  "MATTER_NAME|PO_NUMBER|INVOICE_CURRENCY|TAX_RATE|LINE_ITEM_TAX_TYPE[]")
+                  "MATTER_NAME|PO_NUMBER|INVOICE_CURRENCY|TAX_RATE[]")
         lines = [header, fields]
     else:
         lines = []
@@ -441,7 +473,7 @@ def _create_ledes_1998biv2_content(rows: List[Dict],
         line = _create_ledes_line_1998biv2(row, i, grand_total, bill_start, bill_end,
                                            invoice_number, matter_number,
                                            matter_name, po_number, client_matter_id,
-                                           invoice_currency, tax_rate, tax_type)
+                                           invoice_currency, tax_rate)
         if line:
             lines.append("|".join(map(str, line)) + "[]")
     return "\n".join(lines)
@@ -452,7 +484,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
                                  invoice_number: str, matter_number: str,
                                  matter_name: str, po_number: str,
                                  client_matter_id: str, invoice_currency: str,
-                                 tax_rate: float, tax_type: str, is_first_invoice: bool = True) -> str:
+                                 tax_rate: float, is_first_invoice: bool = True) -> str:
     header = "LEDES1998BI[]"
     fields = ("INVOICE_DATE|INVOICE_NUMBER|CLIENT_ID|LAW_FIRM_MATTER_ID|INVOICE_TOTAL|"
               "BILLING_START_DATE|BILLING_END_DATE|INVOICE_DESCRIPTION|LINE_ITEM_NUMBER|"
@@ -468,6 +500,24 @@ def _create_ledes_1998bi_content(rows: List[Dict],
               "CLIENT_POSTCODE|CLIENT_COUNTRY|LINE_ITEM_TAX_RATE|LINE_ITEM_TAX_TOTAL|"
               "LINE_ITEM_TAX_TYPE[]")
     lines: List[str] = [header, fields] if is_first_invoice else []
+    # Pull Law Firm / Client details from the UI session
+    lf_name = st.session_state.get("law_firm_name","")
+    lf_id = st.session_state.get("law_firm_id","")
+    lf_address1 = st.session_state.get("lf_address1","")
+    lf_address2 = st.session_state.get("lf_address2","")
+    lf_city = st.session_state.get("lf_city","")
+    lf_state = st.session_state.get("lf_state","")
+    lf_postcode = st.session_state.get("lf_postcode","")
+    lf_country = st.session_state.get("lf_country","")
+    cl_name = st.session_state.get("client_name","")
+    cl_id = st.session_state.get("client_id","")
+    cl_tax_id = st.session_state.get("client_tax_id","")
+    cl_address1 = st.session_state.get("client_address1","")
+    cl_address2 = st.session_state.get("client_address2","")
+    cl_city = st.session_state.get("client_city","")
+    cl_state = st.session_state.get("client_state","")
+    cl_postcode = st.session_state.get("client_postcode","")
+    cl_country = st.session_state.get("client_country","")
 
     def _f(x):
         try:
@@ -531,7 +581,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
         line = [
             bill_end.strftime("%Y%m%d"),
             str(invoice_number),
-            client_id,
+             (cl_id or client_id),
             str(matter_number),
             f"{invoice_total:.2f}",
             bill_start.strftime("%Y%m%d"),
@@ -548,13 +598,13 @@ def _create_ledes_1998bi_content(rows: List[Dict],
             activity_code,
             timekeeper_id,
             description,
-            law_firm_id,
+             (lf_id or law_firm_id),
             f"{unit_cost:.2f}",
             timekeeper_name,
             timekeeper_class,
             str(client_matter_id),
             str(po_number),
-            client_tax_id,
+             (cl_tax_id or client_tax_id),
             str(matter_name),
             f"{tax_total:.2f}",
             f"{net_total:.2f}",
@@ -562,10 +612,11 @@ def _create_ledes_1998bi_content(rows: List[Dict],
             tk_last,
             tk_first,
             "O",
-            "", "", "", "", "", "", "",
-            "", "", "", "", "", "",
+            lf_name, lf_address1, lf_address2, lf_city, lf_state, lf_postcode, lf_country,
+            cl_name, cl_address1, cl_address2, cl_city, cl_state, cl_postcode, cl_country,
             f"{line_tax_rate:.6f}",
-            f"{line_tax_total:.2f}", str(tax_type),
+            f"{line_tax_total:.2f}",
+            "",
         ]
         lines.append("|".join(map(str, line)) + "[]")
 
@@ -1463,7 +1514,37 @@ with tab_objects[1]:
     if default_env not in env_names:
         default_env = env_names[0]
     selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
-    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.")
+    # Pre-populate from profile details when not overriding
+    if "allow_override" not in st.session_state:
+        st.session_state["allow_override"] = False
+    if selected_env in BILLING_PROFILE_DETAILS and not st.session_state["allow_override"]:
+        prof = BILLING_PROFILE_DETAILS[selected_env]
+        # Default LEDES version for profile
+        st.session_state["ledes_version"] = prof.get("ledes_default", st.session_state.get("ledes_version", "1998B"))
+        # Default invoice currency
+        st.session_state["tax_invoice_currency"] = prof.get("invoice_currency", st.session_state.get("tax_invoice_currency", "USD"))
+        # Law firm fields
+        lf = prof.get("law_firm", {})
+        st.session_state["law_firm_name"] = lf.get("name", st.session_state.get("law_firm_name", ""))
+        st.session_state["law_firm_id"] = lf.get("id", st.session_state.get("law_firm_id", ""))
+        st.session_state["lf_address1"] = lf.get("address1", st.session_state.get("lf_address1", ""))
+        st.session_state["lf_address2"] = lf.get("address2", st.session_state.get("lf_address2", ""))
+        st.session_state["lf_city"] = lf.get("city", st.session_state.get("lf_city", ""))
+        st.session_state["lf_state"] = lf.get("state", st.session_state.get("lf_state", ""))
+        st.session_state["lf_postcode"] = lf.get("postcode", st.session_state.get("lf_postcode", ""))
+        st.session_state["lf_country"] = lf.get("country", st.session_state.get("lf_country", ""))
+        # Client fields
+        cl = prof.get("client", {})
+        st.session_state["client_name"] = cl.get("name", st.session_state.get("client_name", ""))
+        st.session_state["client_id"] = cl.get("id", st.session_state.get("client_id", ""))
+        st.session_state["client_tax_id"] = cl.get("tax_id", st.session_state.get("client_tax_id", ""))
+        st.session_state["client_address1"] = cl.get("address1", st.session_state.get("client_address1", ""))
+        st.session_state["client_address2"] = cl.get("address2", st.session_state.get("client_address2", ""))
+        st.session_state["client_city"] = cl.get("city", st.session_state.get("client_city", ""))
+        st.session_state["client_state"] = cl.get("state", st.session_state.get("client_state", ""))
+        st.session_state["client_postcode"] = cl.get("postcode", st.session_state.get("client_postcode", ""))
+        st.session_state["client_country"] = cl.get("country", st.session_state.get("client_country", ""))
+    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")
 
     prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
 
@@ -1705,14 +1786,32 @@ if "Tax Fields" in tabs:
         st.session_state.setdefault("tax_client_matter_id", "")
         st.session_state.setdefault("tax_invoice_currency", "USD")
         st.session_state.setdefault("tax_rate", 0.19)
-        st.session_state.setdefault("tax_type", "VAT")
 
         st.text_input("Matter Name *", key="tax_matter_name")
         st.text_input("PO Number (optional)", key="tax_po_number")
         st.text_input("Client Matter ID (optional)", key="tax_client_matter_id")
         st.selectbox("Invoice Currency", ["USD", "AUD", "CAD", "GBP", "EUR"], index=["USD", "AUD", "CAD", "GBP", "EUR"].index(st.session_state.get("tax_invoice_currency", "USD")), key="tax_invoice_currency")
         st.number_input("Tax Rate", min_value=0.0, max_value=1.0, step=0.01, value=st.session_state.get("tax_rate", 0.19), key="tax_rate")
-        st.selectbox("Tax Type", ["VAT", "PST", "QST", "GST"], index=["VAT","PST","QST","GST"].index(st.session_state.get("tax_type", "VAT")), key="tax_type")
+
+        with st.expander("Law Firm Details"):
+            st.text_input("Law Firm Address 1", key="lf_address1", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Address 2", key="lf_address2", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm City", key="lf_city", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm State/Region", key="lf_state", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Postcode", key="lf_postcode", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Country", key="lf_country", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Tax ID", key="law_firm_id", disabled=not st.session_state.get("allow_override", False))
+
+        with st.expander("Client Details"):
+            st.text_input("Client Address 1", key="client_address1", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Address 2", key="client_address2", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client City", key="client_city", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client State/Region", key="client_state", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Postcode", key="client_postcode", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Country", key="client_country", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Tax ID", key="client_tax_id", disabled=not st.session_state.get("allow_override", False))
+
+
 is_valid_input = True
 if timekeeper_data is None:
     st.error("Please upload a valid timekeeper CSV file.")
@@ -1815,7 +1914,6 @@ if generate_button:
                         st.session_state.get('tax_client_matter_id',''),
                         st.session_state.get('tax_invoice_currency','USD'),
                         st.session_state.get('tax_rate', 0.19),
-                        st.session_state.get('tax_type','VAT'),
                         is_first_invoice=not combine_ledes or is_first
                     )
                 elif ledes_version == "1998BI":
@@ -1828,7 +1926,6 @@ if generate_button:
                         st.session_state.get('tax_client_matter_id',''),
                         st.session_state.get('tax_invoice_currency','USD'),
                         st.session_state.get('tax_rate', 0.19),
-                        st.session_state.get('tax_type','VAT'),
                         is_first_invoice=not combine_ledes or is_first
                     )
                 else:
