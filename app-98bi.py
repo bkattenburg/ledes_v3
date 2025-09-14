@@ -109,7 +109,7 @@ BILLING_PROFILE_DETAILS = {
         # Client details (Belgium)
         "client": {
             "name": "Onit LLC - Belgium",
-            "id": "",
+            "id": "00-4100871",
             "tax_id": "00-4100871",
             "address1": "P.O. Box 636",
             "address2": "4368 Feugiat. Avenue",
@@ -120,7 +120,6 @@ BILLING_PROFILE_DETAILS = {
         }
     }
 }
-
 def get_profile(env: str):
     """Return (client_name, client_id, law_firm_name, law_firm_id) for the environment."""
     for p in BILLING_PROFILES:
@@ -502,22 +501,22 @@ def _create_ledes_1998bi_content(rows: List[Dict],
     lines: List[str] = [header, fields] if is_first_invoice else []
     # Pull Law Firm / Client details from the UI session
     lf_name = st.session_state.get("law_firm_name","")
-    lf_id = st.session_state.get("law_firm_id","")
-    lf_address1 = st.session_state.get("lf_address1","")
-    lf_address2 = st.session_state.get("lf_address2","")
-    lf_city = st.session_state.get("lf_city","")
-    lf_state = st.session_state.get("lf_state","")
-    lf_postcode = st.session_state.get("lf_postcode","")
-    lf_country = st.session_state.get("lf_country","")
+    lf_id = (st.session_state.get("pf_law_firm_id") or st.session_state.get("law_firm_id",""))
+    lf_address1 = (st.session_state.get("pf_lf_address1") or st.session_state.get("lf_address1",""))
+    lf_address2 = (st.session_state.get("pf_lf_address2") or st.session_state.get("lf_address2",""))
+    lf_city = (st.session_state.get("pf_lf_city") or st.session_state.get("lf_city",""))
+    lf_state = (st.session_state.get("pf_lf_state") or st.session_state.get("lf_state",""))
+    lf_postcode = (st.session_state.get("pf_lf_postcode") or st.session_state.get("lf_postcode",""))
+    lf_country = (st.session_state.get("pf_lf_country") or st.session_state.get("lf_country",""))
     cl_name = st.session_state.get("client_name","")
     cl_id = st.session_state.get("client_id","")
-    cl_tax_id = st.session_state.get("client_tax_id","")
-    cl_address1 = st.session_state.get("client_address1","")
-    cl_address2 = st.session_state.get("client_address2","")
-    cl_city = st.session_state.get("client_city","")
-    cl_state = st.session_state.get("client_state","")
-    cl_postcode = st.session_state.get("client_postcode","")
-    cl_country = st.session_state.get("client_country","")
+    cl_tax_id = (st.session_state.get("pf_client_tax_id") or st.session_state.get("client_tax_id",""))
+    cl_address1 = (st.session_state.get("pf_client_address1") or st.session_state.get("client_address1",""))
+    cl_address2 = (st.session_state.get("pf_client_address2") or st.session_state.get("client_address2",""))
+    cl_city = (st.session_state.get("pf_client_city") or st.session_state.get("client_city",""))
+    cl_state = (st.session_state.get("pf_client_state") or st.session_state.get("client_state",""))
+    cl_postcode = (st.session_state.get("pf_client_postcode") or st.session_state.get("client_postcode",""))
+    cl_country = (st.session_state.get("pf_client_country") or st.session_state.get("client_country",""))
 
     def _f(x):
         try:
@@ -1544,6 +1543,26 @@ with tab_objects[1]:
         st.session_state["client_state"] = cl.get("state", st.session_state.get("client_state", ""))
         st.session_state["client_postcode"] = cl.get("postcode", st.session_state.get("client_postcode", ""))
         st.session_state["client_country"] = cl.get("country", st.session_state.get("client_country", ""))
+        # Mirror values into the 'pf_*' UI keys so the expanders display them
+        st.session_state["pf_law_firm_id"] = st.session_state.get("law_firm_id", "")
+        st.session_state["pf_lf_address1"] = st.session_state.get("lf_address1", "")
+        st.session_state["pf_lf_address2"] = st.session_state.get("lf_address2", "")
+        st.session_state["pf_lf_city"] = st.session_state.get("lf_city", "")
+        st.session_state["pf_lf_state"] = st.session_state.get("lf_state", "")
+        st.session_state["pf_lf_postcode"] = st.session_state.get("lf_postcode", "")
+        st.session_state["pf_lf_country"] = st.session_state.get("lf_country", "")
+        st.session_state["pf_client_tax_id"] = st.session_state.get("client_tax_id", "")
+        st.session_state["pf_client_address1"] = st.session_state.get("client_address1", "")
+        st.session_state["pf_client_address2"] = st.session_state.get("client_address2", "")
+        st.session_state["pf_client_city"] = st.session_state.get("client_city", "")
+        st.session_state["pf_client_state"] = st.session_state.get("client_state", "")
+        st.session_state["pf_client_postcode"] = st.session_state.get("client_postcode", "")
+        st.session_state["pf_client_country"] = st.session_state.get("client_country", "")
+
+# Ensure base keys also reflect identical Client ID and Client Tax ID
+if st.session_state.get("client_tax_id"):
+    st.session_state["client_id"] = st.session_state["client_tax_id"]
+
     allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")
 
     prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
@@ -1560,7 +1579,7 @@ with tab_objects[1]:
     with c3:
         client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
     with c4:
-        law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
+        law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="pf_law_firm_id")
 
     # Status footer
     status_html = f"""
@@ -1794,22 +1813,31 @@ if "Tax Fields" in tabs:
         st.number_input("Tax Rate", min_value=0.0, max_value=1.0, step=0.01, value=st.session_state.get("tax_rate", 0.19), key="tax_rate")
 
         with st.expander("Law Firm Details"):
-            st.text_input("Law Firm Address 1", key="lf_address1", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Law Firm Address 2", key="lf_address2", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Law Firm City", key="lf_city", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Law Firm State/Region", key="lf_state", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Law Firm Postcode", key="lf_postcode", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Law Firm Country", key="lf_country", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Law Firm Tax ID", key="law_firm_id", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Address 2", key="pf_lf_address2", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm City", key="pf_lf_city", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm State/Region", key="pf_lf_state", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Postcode", key="pf_lf_postcode", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Country", key="pf_lf_country", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Tax ID", key="pf_law_firm_id", disabled=not st.session_state.get("allow_override", False))
 
         with st.expander("Client Details"):
-            st.text_input("Client Address 1", key="client_address1", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Client Address 2", key="client_address2", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Client City", key="client_city", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Client State/Region", key="client_state", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Client Postcode", key="client_postcode", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Client Country", key="client_country", disabled=not st.session_state.get("allow_override", False))
-            st.text_input("Client Tax ID", key="client_tax_id", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Address 1", key="pf_client_address1", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Address 2", key="pf_client_address2", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client City", key="pf_client_city", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client State/Region", key="pf_client_state", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Postcode", key="pf_client_postcode", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Country", key="pf_client_country", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Tax ID", key="pf_client_tax_id", disabled=not st.session_state.get("allow_override", False))
+
+# Keep Client ID and Client Tax ID in sync
+# Prefer the Tax Fields value (pf_client_tax_id) when present
+if st.session_state.get("pf_client_tax_id"):
+    st.session_state["client_tax_id"] = st.session_state["pf_client_tax_id"]
+    st.session_state["client_id"] = st.session_state["pf_client_tax_id"]
+elif st.session_state.get("client_tax_id"):
+    st.session_state["client_id"] = st.session_state["client_tax_id"]
+
 
 
 is_valid_input = True
