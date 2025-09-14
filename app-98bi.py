@@ -466,7 +466,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
               "LAW_FIRM_STATEorREGION|LAW_FIRM_POSTCODE|LAW_FIRM_COUNTRY|CLIENT_NAME|"
               "CLIENT_ADDRESS_1|CLIENT_ADDRESS_2|CLIENT_CITY|CLIENT_STATEorREGION|"
               "CLIENT_POSTCODE|CLIENT_COUNTRY|LINE_ITEM_TAX_RATE|LINE_ITEM_TAX_TOTAL|"
-              "LINE_ITEM_TAX_TYPE|INVOICE_REPORTED_TAX_TOTAL|INVOICE_TAX_CURRENCY[]")
+              "LINE_ITEM_TAX_TYPE[]")
     lines: List[str] = [header, fields] if is_first_invoice else []
 
     def _f(x):
@@ -567,8 +567,6 @@ def _create_ledes_1998bi_content(rows: List[Dict],
             f"{line_tax_rate:.6f}",
             f"{line_tax_total:.2f}",
             "",
-            "",
-            str(invoice_currency or "USD"),
         ]
         lines.append("|".join(map(str, line)) + "[]")
 
