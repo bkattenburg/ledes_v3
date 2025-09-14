@@ -453,7 +453,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
                                  matter_name: str, po_number: str,
                                  client_matter_id: str, invoice_currency: str,
                                  tax_rate: float, is_first_invoice: bool = True) -> str:
-    header = "LEDES98BI V2[]"
+    header = "LEDES1998BI[]"
     fields = ("INVOICE_DATE|INVOICE_NUMBER|CLIENT_ID|LAW_FIRM_MATTER_ID|INVOICE_TOTAL|"
               "BILLING_START_DATE|BILLING_END_DATE|INVOICE_DESCRIPTION|LINE_ITEM_NUMBER|"
               "EXP/FEE/INV_ADJ_TYPE|LINE_ITEM_NUMBER_OF_UNITS|LINE_ITEM_ADJUSTMENT_AMOUNT|"
