@@ -511,6 +511,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
     cl_name = st.session_state.get("client_name","")
     cl_id = st.session_state.get("client_id","")
     cl_tax_id = (st.session_state.get("pf_client_tax_id") or st.session_state.get("client_tax_id",""))
+    client_id_eff = cl_tax_id or cl_id
     cl_address1 = (st.session_state.get("pf_client_address1") or st.session_state.get("client_address1",""))
     cl_address2 = (st.session_state.get("pf_client_address2") or st.session_state.get("client_address2",""))
     cl_city = (st.session_state.get("pf_client_city") or st.session_state.get("client_city",""))
@@ -1559,6 +1560,11 @@ with tab_objects[1]:
         st.session_state["pf_client_postcode"] = st.session_state.get("client_postcode", "")
         st.session_state["pf_client_country"] = st.session_state.get("client_country", "")
 
+# Ensure base keys reflect identical Client ID and Client Tax ID (safe before widgets instantiate)
+if st.session_state.get("client_tax_id"):
+    st.session_state["client_id"] = st.session_state["client_tax_id"]
+
+
 # Ensure base keys also reflect identical Client ID and Client Tax ID
 if st.session_state.get("client_tax_id"):
     st.session_state["client_id"] = st.session_state["client_tax_id"]
@@ -1830,13 +1836,7 @@ if "Tax Fields" in tabs:
             st.text_input("Client Country", key="pf_client_country", disabled=not st.session_state.get("allow_override", False))
             st.text_input("Client Tax ID", key="pf_client_tax_id", disabled=not st.session_state.get("allow_override", False))
 
-# Keep Client ID and Client Tax ID in sync
-# Prefer the Tax Fields value (pf_client_tax_id) when present
-if st.session_state.get("pf_client_tax_id"):
-    st.session_state["client_tax_id"] = st.session_state["pf_client_tax_id"]
-    st.session_state["client_id"] = st.session_state["pf_client_tax_id"]
-elif st.session_state.get("client_tax_id"):
-    st.session_state["client_id"] = st.session_state["client_tax_id"]
+
 
 
 
