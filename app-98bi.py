@@ -446,6 +446,133 @@ def _create_ledes_1998biv2_content(rows: List[Dict],
             lines.append("|".join(map(str, line)) + "[]")
     return "\n".join(lines)
 
+
+def _create_ledes_1998bi_content(rows: List[Dict],
+                                 bill_start: datetime.date, bill_end: datetime.date,
+                                 invoice_number: str, matter_number: str,
+                                 matter_name: str, po_number: str,
+                                 client_matter_id: str, invoice_currency: str,
+                                 tax_rate: float, is_first_invoice: bool = True) -> str:
+    header = "LEDES98BI V2[]"
+    fields = ("INVOICE_DATE|INVOICE_NUMBER|CLIENT_ID|LAW_FIRM_MATTER_ID|INVOICE_TOTAL|"
+              "BILLING_START_DATE|BILLING_END_DATE|INVOICE_DESCRIPTION|LINE_ITEM_NUMBER|"
+              "EXP/FEE/INV_ADJ_TYPE|LINE_ITEM_NUMBER_OF_UNITS|LINE_ITEM_ADJUSTMENT_AMOUNT|"
+              "LINE_ITEM_TOTAL|LINE_ITEM_DATE|LINE_ITEM_TASK_CODE|LINE_ITEM_EXPENSE_CODE|"
+              "LINE_ITEM_ACTIVITY_CODE|TIMEKEEPER_ID|LINE_ITEM_DESCRIPTION|LAW_FIRM_ID|"
+              "LINE_ITEM_UNIT_COST|TIMEKEEPER_NAME|TIMEKEEPER_CLASSIFICATION|CLIENT_MATTER_ID|"
+              "PO_NUMBER|CLIENT_TAX_ID|MATTER_NAME|INVOICE_TAX_TOTAL|INVOICE_NET_TOTAL|"
+              "INVOICE_CURRENCY|TIMEKEEPER_LAST_NAME|TIMEKEEPER_FIRST_NAME|ACCOUNT_TYPE|"
+              "LAW_FIRM_NAME|LAW_FIRM_ADDRESS_1|LAW_FIRM_ADDRESS_2|LAW_FIRM_CITY|"
+              "LAW_FIRM_STATEorREGION|LAW_FIRM_POSTCODE|LAW_FIRM_COUNTRY|CLIENT_NAME|"
+              "CLIENT_ADDRESS_1|CLIENT_ADDRESS_2|CLIENT_CITY|CLIENT_STATEorREGION|"
+              "CLIENT_POSTCODE|CLIENT_COUNTRY|LINE_ITEM_TAX_RATE|LINE_ITEM_TAX_TOTAL|"
+              "LINE_ITEM_TAX_TYPE|INVOICE_REPORTED_TAX_TOTAL|INVOICE_TAX_CURRENCY[]")
+    lines: List[str] = [header, fields] if is_first_invoice else []
+
+    def _f(x):
+        try:
+            return float(x)
+        except Exception:
+            return 0.0
+
+    # First pass: totals
+    net_total = 0.0
+    tax_total = 0.0
+    prepped = []
+    for row in rows:
+        is_expense = bool(row.get("EXPENSE_CODE", ""))
+        units = _f(row.get("HOURS", 0)) if not is_expense else _f(row.get("LINE_ITEM_NUMBER_OF_UNITS", 1) or 1)
+        unit_cost = _f(row.get("RATE", 0)) if not is_expense else _f(row.get("LINE_ITEM_UNIT_COST", 0))
+        adj_amount = _f(row.get("LINE_ITEM_ADJUSTMENT_AMOUNT", 0))
+        base_amount = _f(row.get("LINE_ITEM_TOTAL", units * unit_cost))
+        if base_amount == 0 and units * unit_cost != 0:
+            base_amount = units * unit_cost + adj_amount
+        line_tax_rate = float(tax_rate or 0)
+        line_tax_total = round((units * unit_cost + adj_amount) * line_tax_rate, 2) if not is_expense else 0.0
+        net_total += base_amount
+        tax_total += line_tax_total
+        prepped.append((is_expense, units, unit_cost, adj_amount, base_amount, line_tax_rate, line_tax_total))
+
+    invoice_total = round(net_total + tax_total, 2)
+
+    # Second pass: write lines
+    for i, row in enumerate(rows, start=1):
+        is_expense, units, unit_cost, adj_amount, base_amount, line_tax_rate, line_tax_total = prepped[i-1]
+        try:
+            date_obj = datetime.datetime.strptime(str(row.get("LINE_ITEM_DATE","")), "%Y-%m-%d").date()
+        except Exception:
+            date_obj = bill_end
+
+        adj_type = "E" if is_expense else "F"
+
+        timekeeper_name = str(row.get("TIMEKEEPER_NAME",""))
+        tk_first, tk_last = "", ""
+        if timekeeper_name:
+            parts = timekeeper_name.split()
+            if len(parts) >= 2:
+                tk_first = parts[0]
+                tk_last = " ".join(parts[1:])
+            else:
+                tk_first = timekeeper_name
+                tk_last = ""
+
+        description = str(row.get("DESCRIPTION","")).replace("|", " - ")
+        task_code = "" if is_expense else str(row.get("TASK_CODE",""))
+        activity_code = "" if is_expense else str(row.get("ACTIVITY_CODE",""))
+        expense_code = str(row.get("EXPENSE_CODE","")) if is_expense else ""
+        timekeeper_id = "" if is_expense else str(row.get("TIMEKEEPER_ID",""))
+        timekeeper_class = "" if is_expense else str(row.get("TIMEKEEPER_CLASSIFICATION",""))
+
+        client_id = str(row.get("CLIENT_ID",""))
+        law_firm_id = str(row.get("LAW_FIRM_ID",""))
+        client_tax_id = str(row.get("CLIENT_TAX_ID",""))
+        invoice_desc = str(row.get("INVOICE_DESCRIPTION",""))
+
+        line = [
+            bill_end.strftime("%Y%m%d"),
+            str(invoice_number),
+            client_id,
+            str(matter_number),
+            f"{invoice_total:.2f}",
+            bill_start.strftime("%Y%m%d"),
+            bill_end.strftime("%Y%m%d"),
+            invoice_desc,
+            str(i),
+            adj_type,
+            f"{units:.1f}" if adj_type == "F" else f"{int(units)}",
+            f"{adj_amount:.2f}",
+            f"{base_amount:.2f}",
+            date_obj.strftime("%Y%m%d"),
+            task_code,
+            expense_code,
+            activity_code,
+            timekeeper_id,
+            description,
+            law_firm_id,
+            f"{unit_cost:.2f}",
+            timekeeper_name,
+            timekeeper_class,
+            str(client_matter_id),
+            str(po_number),
+            client_tax_id,
+            str(matter_name),
+            f"{tax_total:.2f}",
+            f"{net_total:.2f}",
+            str(invoice_currency or "USD"),
+            tk_last,
+            tk_first,
+            "O",
+            "", "", "", "", "", "", "",
+            "", "", "", "", "", "",
+            f"{line_tax_rate:.6f}",
+            f"{line_tax_total:.2f}",
+            "",
+            "",
+            str(invoice_currency or "USD"),
+        ]
+        lines.append("|".join(map(str, line)) + "[]")
+
+    return "\n".join(lines)
 def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, faker_instance: Faker, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
     """Generate fee line items for an invoice."""
     rows = []
@@ -1294,7 +1421,7 @@ st.sidebar.download_button("Download Sample Custom Tasks CSV", csv_custom, "samp
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
 # Insert Tax Fields tab before Output when LEDES 1998BIv2 is selected
-if st.session_state.get("ledes_version") == "1998BIv2":
+if st.session_state.get("ledes_version") in ("1998BI", "1998BIv2"):
     tabs = tabs[:-1] + ["Tax Fields"] + tabs[-1:]
 # Email settings will live under the Output tab.
 tab_objects = st.tabs(tabs)
@@ -1371,7 +1498,7 @@ with tab_objects[1]:
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
     invoice_number_base = st.text_input("Invoice Number (Base):", "2025MMM-XXXXXX")
 
-    LEDES_OPTIONS = ["1998B", "1998BIv2", "XML 2.1"]
+    LEDES_OPTIONS = ["1998B", "1998BI", "1998BIv2", "XML 2.1"]
     ledes_version = st.selectbox(
         "LEDES Version:",
         LEDES_OPTIONS,
@@ -1702,7 +1829,7 @@ if generate_button:
                 if combine_ledes:
                     combined_ledes_content += ledes_content_part + "\n"
                 else:
-                    ledes_filename = f"LEDES_1998BIv2_{current_invoice_number}.txt" if ledes_version == "1998BIv2" else f"LEDES_1998B_{current_invoice_number}.txt"
+                    ledes_filename = (f"LEDES_1998BI_{current_invoice_number}.txt" if ledes_version == "1998BI" else (f"LEDES_1998BIv2_{current_invoice_number}.txt" if ledes_version == "1998BIv2" else f"LEDES_1998B_{current_invoice_number}.txt"))
                     attachments_list.append((ledes_filename, ledes_content_part.encode('utf-8')))
                 
                 if include_pdf:
