@@ -1569,14 +1569,14 @@ with tab_objects[1]:
         st.session_state["pf_client_postcode"] = st.session_state.get("client_postcode", "")
         st.session_state["pf_client_country"] = st.session_state.get("client_country", "")
 
-# Ensure base keys reflect identical Client ID and Client Tax ID (safe before widgets instantiate)
-if st.session_state.get("client_tax_id"):
-    st.session_state["client_id"] = st.session_state["client_tax_id"]
+    # Ensure base keys reflect identical Client ID and Client Tax ID (safe before widgets instantiate)
+    if st.session_state.get("client_tax_id"):
+        st.session_state["client_id"] = st.session_state["client_tax_id"]
 
 
-# Ensure base keys also reflect identical Client ID and Client Tax ID
-if st.session_state.get("client_tax_id"):
-    st.session_state["client_id"] = st.session_state["client_tax_id"]
+    # Ensure base keys also reflect identical Client ID and Client Tax ID
+    if st.session_state.get("client_tax_id"):
+        st.session_state["client_id"] = st.session_state["client_tax_id"]
 
     allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")
 
@@ -2099,3 +2099,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+}
