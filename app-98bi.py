@@ -139,7 +139,7 @@ logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %
 # --- Constants ---
 CONFIG = {
     'EXPENSE_CODES': {
-        "Copying": "E101", "Outside printing": "E102", "Word processing": "E103",
+        "Photocopies": "E101", "Outside printing": "E102", "Word processing": "E103",
         "Facsimile": "E104", "Telephone": "E105", "Online research": "E106",
         "Delivery services/messengers": "E107", "Postage": "E108", "Local travel": "E109",
         "Out-of-town travel": "E110", "Meals": "E111", "Court fees": "E112",
@@ -320,9 +320,14 @@ def _load_custom_task_activity_data(uploaded_file: Optional[Any]) -> Optional[Li
         if df.empty:
             st.warning("Custom Task/Activity CSV file is empty.")
             return []
-        custom_tasks = []
-        for _, row in df.iterrows():
-            custom_tasks.append((str(row["TASK_CODE"]), str(row["ACTIVITY_CODE"]), str(row["DESCRIPTION"])))
+   
+        # NEW: remove exact duplicate task/activity/description triples
+        df = df.drop_duplicates(subset=["TASK_CODE", "ACTIVITY_CODE", "DESCRIPTION"]).reset_index(drop=True)
+    
+        # (Optional but helpful) shuffle once so selection spreads across the file
+        df = df.sample(frac=1, random_state=None).reset_index(drop=True)
+    
+        custom_tasks = [(str(r["TASK_CODE"]), str(r["ACTIVITY_CODE"]), str(r["DESCRIPTION"])) for _, r in df.iterrows()]
         return custom_tasks
     except Exception as e:
         st.error(f"Error loading custom tasks file: {e}")
@@ -640,17 +645,35 @@ def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_da
     daily_hours_tracker = {}
     MAX_DAILY_HOURS = max_hours_per_tk_per_day
 
+    used_triples = set()  # NEW
+    
     for _ in range(fee_count):
         if not task_activity_desc:
             break
         tk_row = random.choice(timekeeper_data)
         timekeeper_id = tk_row["TIMEKEEPER_ID"]
-        if major_items and random.random() < 0.7:
-            task_code, activity_code, description = random.choice(major_items)
-        elif other_items:
-            task_code, activity_code, description = random.choice(other_items)
-        else:
+        # NEW: try up to 7 times to get a new triple not already used
+        attempts = 0
+        while True:
+            if major_items and random.random() < 0.7:
+                task_code, activity_code, description = random.choice(major_items)
+            elif other_items:
+                task_code, activity_code, description = random.choice(other_items)
+            else:
+                # no candidates
+                task_code = activity_code = description = None
+
+            if task_code is None:
+                break
+
+            triple = (task_code, activity_code, description)
+            if triple not in used_triples or attempts >= 7:
+                used_triples.add(triple)
+                break
+            attempts += 1
+        if task_code is None:
             continue
+
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
         line_item_date_str = line_item_date.strftime("%Y-%m-%d")
@@ -658,24 +681,24 @@ def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_da
         remaining_hours_capacity = MAX_DAILY_HOURS - current_billed_hours
         if remaining_hours_capacity <= 0:
             continue
+
         hours_to_bill = round(random.uniform(0.5, min(8.0, remaining_hours_capacity)), 1)
         if hours_to_bill == 0:
             continue
+
         hourly_rate = tk_row["RATE"]
         line_item_total = round(hours_to_bill * hourly_rate, 2)
         daily_hours_tracker[(line_item_date_str, timekeeper_id)] = current_billed_hours + hours_to_bill
         description = _process_description(description, faker_instance)
-        row = {
+
+        rows.append({
             "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
             "LINE_ITEM_DATE": line_item_date_str, "TIMEKEEPER_NAME": tk_row["TIMEKEEPER_NAME"],
-            "TIMEKEEPER_CLASSIFICATION": tk_row["TIMEKEEPER_CLASSIFICATION"],
-            "TIMEKEEPER_ID": timekeeper_id, "TASK_CODE": task_code,
-            "ACTIVITY_CODE": activity_code, "EXPENSE_CODE": "", "DESCRIPTION": description,
-            "HOURS": hours_to_bill, "RATE": hourly_rate, "LINE_ITEM_TOTAL": line_item_total
-        }
-        rows.append(row)
+            "TIMEKEEPER_CLASSIFICATION": tk_row["TIMEKEEPER_CLASSIFICATION"], "TIMEKEEPER_ID": timekeeper_id,
+            "TASK_CODE": task_code, "ACTIVITY_CODE": activity_code, "EXPENSE_CODE": "",
+            "DESCRIPTION": description, "HOURS": hours_to_bill, "RATE": hourly_rate, "LINE_ITEM_TOTAL": line_item_total
+        })
     return rows
-
 
 
 def _generate_expenses(expense_count: int, billing_start_date: datetime.date, billing_end_date: datetime.date, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
@@ -705,7 +728,7 @@ def _generate_expenses(expense_count: int, billing_start_date: datetime.date, bi
     # Always include some Copying (E101)
     e101_actual_count = random.randint(1, min(3, expense_count))
     for _ in range(e101_actual_count):
-        description = "Copying"
+        description = "Photocopies"
         expense_code = "E101"
         hours = random.randint(50, 300)  # number of pages
         rate = round(copying_rate, 2)  # per-page
@@ -1681,10 +1704,10 @@ with tab_objects[2]:
                 help="Random amount for each E105 line will be drawn from this range."
             )
             st.slider(
-                "Copying (E101) per-page rate ($)",
+                "Photocopies (E101) per-page rate ($)",
                 min_value=0.05, max_value=1.50, value=0.24, step=0.01,
                 key="copying_rate_e101",
-                help="Per-page rate used for E101 Copying expenses."
+                help="Per-page rate used for E101 Photocopy expenses."
             )
         st.caption("Number of expense line items to generate")
         expenses = st.slider(
@@ -2099,3 +2122,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
