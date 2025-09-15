@@ -1433,7 +1433,7 @@ if "send_email" not in st.session_state:
 
 # Callback for updating send_email state
 def update_send_email():
-    st.session_state.send_email = st.session_state.send_email_checkbox
+    st.session_state.send_email = st.session_state.send_email_checkbox_output
     logging.debug(f"Updated st.session_state.send_email to {st.session_state.send_email}")
 
 with st.expander("Help & FAQs"):
@@ -2099,4 +2099,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
-
+}
