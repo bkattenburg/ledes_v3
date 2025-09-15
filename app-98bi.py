@@ -443,7 +443,12 @@ def _create_ledes_line_1998biv2(row: Dict, line_no: int, inv_total: float,
             str(po_number),
             str(invoice_currency),
             f"{float(tax_rate):.2f}"
-        ]
+        ,
+            matter_name,
+            po_number,
+            invoice_currency,
+            f"{float(tax_rate):.2f}",
+            str(st.session_state.get("tax_type","VAT"))]
     except Exception as e:
         logging.error(f"Error creating LEDES 1998BIv2 line: {e}")
         return []
@@ -463,7 +468,7 @@ def _create_ledes_1998biv2_content(rows: List[Dict],
                   "LINE_ITEM_TOTAL|LINE_ITEM_DATE|LINE_ITEM_TASK_CODE|LINE_ITEM_EXPENSE_CODE|"
                   "LINE_ITEM_ACTIVITY_CODE|TIMEKEEPER_ID|LINE_ITEM_DESCRIPTION|LAW_FIRM_ID|"
                   "LINE_ITEM_UNIT_COST|TIMEKEEPER_NAME|TIMEKEEPER_CLASSIFICATION|CLIENT_MATTER_ID|"
-                  "MATTER_NAME|PO_NUMBER|INVOICE_CURRENCY|TAX_RATE[]")
+                  "MATTER_NAME|PO_NUMBER|INVOICE_CURRENCY|TAX_RATE|LINE_ITEM_TAX_TYPE[]")
         lines = [header, fields]
     else:
         lines = []
@@ -620,7 +625,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
             cl_name, cl_address1, cl_address2, cl_city, cl_state, cl_postcode, cl_country,
             f"{line_tax_rate:.6f}",
             f"{line_tax_total:.2f}",
-            "",
+            str(st.session_state.get("tax_type","VAT")),
         ]
         lines.append("|".join(map(str, line)) + "[]")
 
@@ -1821,6 +1826,7 @@ if "Tax Fields" in tabs:
         st.text_input("Client Matter ID (optional)", key="tax_client_matter_id")
         st.selectbox("Invoice Currency", ["USD", "AUD", "CAD", "GBP", "EUR"], index=["USD", "AUD", "CAD", "GBP", "EUR"].index(st.session_state.get("tax_invoice_currency", "USD")), key="tax_invoice_currency")
         st.number_input("Tax Rate", min_value=0.0, max_value=1.0, step=0.01, value=st.session_state.get("tax_rate", 0.19), key="tax_rate")
+        st.selectbox("Tax Type", ["VAT","PST","QST","GST"], index=0, key="tax_type", help="Type of tax to apply to line items.")
 
         with st.expander("Law Firm Details"):
             st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=not st.session_state.get("allow_override", False))
