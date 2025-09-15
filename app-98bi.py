@@ -1519,7 +1519,7 @@ with tab_objects[1]:
     # ===== Billing Profiles =====
     st.markdown("<h3 style='color: #1E1E1E;'>Billing Profiles</h3>", unsafe_allow_html=True)
     env_names = [p[0] for p in BILLING_PROFILES]
-    default_env = st.session_state.get("selected_env", env_names[0])
+    default_env = st.session_state.get("selected_env", "Onit ELM")
     if default_env not in env_names:
         default_env = env_names[0]
     selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
@@ -2099,5 +2099,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
-
-
+}
