@@ -1077,11 +1077,11 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
             break
 
     pdf_buffer = io.BytesIO()
-img.save(pdf_buffer, format="PDF", resolution=300.0)
-pdf_buffer.seek(0)
-
-filename = f"Receipt_{exp_code}_{line_item_date.strftime('%Y%m%d')}.pdf"
-return filename, pdf_buffer
+    img.save(pdf_buffer, format="PDF", resolution=300.0)
+    pdf_buffer.seek(0)
+    
+    filename = f"Receipt_{exp_code}_{line_item_date.strftime('%Y%m%d')}.pdf"
+    return filename, pdf_buffer
 def _customize_email_body(matter_number: str, invoice_number: str) -> Tuple[str, str]:
     """Customize email subject and body with matter and invoice number."""
     subject = st.session_state.get("email_subject", f"LEDES Invoice for {matter_number} (Invoice #{invoice_number})")
