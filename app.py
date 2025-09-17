@@ -61,9 +61,23 @@ RECEIPT_DPI = 300         # print-quality DPI
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
-        
-        html, body, [class*="css"]  {
+
+        /* Apply Inter broadly, but don't clobber icon fonts */
+        html, body, .block-container {
             font-family: 'Inter', sans-serif;
+        }
+
+        /* Keep Streamlit/Material icons working */
+        .material-icons, .material-symbols-outlined, [class*="material-icons"] {
+            font-family: 'Material Icons' !important;
+            font-weight: normal !important;
+            font-style: normal !important;
+            letter-spacing: normal !important;
+            text-transform: none !important;
+            display: inline-block !important;
+            white-space: nowrap !important;
+            word-wrap: normal !important;
+            direction: ltr !important;
         }
     </style>
 """, unsafe_allow_html=True)
