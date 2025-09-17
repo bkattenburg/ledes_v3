@@ -22,6 +22,10 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont
 import zipfile
 
+# --- Receipt size configuration (for receipt PDFs) ---
+RECEIPT_SIZE_IN = (4, 6)  # width, height in inches; change to (3,5) for 3x5
+RECEIPT_DPI = 300         # print-quality DPI
+# -----------------------------------------------------
 #st.markdown("""
 #    <style>
 #        /* --- ERROR (Red) --- */
@@ -228,7 +232,7 @@ def _force_timekeeper_on_row(row: Dict, forced_name: str, timekeepers: List[Dict
 
 def _process_description(description: str, faker_instance: Faker) -> str:
     """Process description by replacing placeholders and dates."""
-    pattern = r"\b(\d{2}/\d{2}/\d{4})\b"
+    pattern = r"\\b(\\d{2}/\\d{2}/\\d{4})\\b"
     if re.search(pattern, description):
         days_ago = random.randint(15, 90)
         new_date = (datetime.date.today() - datetime.timedelta(days=days_ago)).strftime("%m/%d/%Y")
@@ -238,12 +242,12 @@ def _process_description(description: str, faker_instance: Faker) -> str:
 
 def _is_valid_client_id(client_id: str) -> bool:
     """Validate Client ID format (XX-XXXXXXX)."""
-    pattern = r"^\d{2}-\d{7}$"
+    pattern = r"^\\d{2}-\\d{7}$"
     return bool(re.match(pattern, client_id))
 
 def _is_valid_law_firm_id(law_firm_id: str) -> bool:
     """Validate Law Firm ID format (XX-XXXXXXX)."""
-    pattern = r"^\d{2}-\d{7}$"
+    pattern = r"^\\d{2}-\\d{7}$"
     return bool(re.match(pattern, law_firm_id))
 
 def _calculate_max_fees(timekeeper_data: Optional[List[Dict]], billing_start_date: datetime.date, billing_end_date: datetime.date, max_daily_hours: int) -> int:
@@ -356,7 +360,7 @@ def _create_ledes_1998b_content(rows: List[Dict], inv_total: float, bill_start: 
         line = _create_ledes_line_1998b(row, i, inv_total, bill_start, bill_end, invoice_number, matter_number)
         if line:
             lines.append("|".join(map(str, line)) + "[]")
-    return "\n".join(lines)
+    return "\\n".join(lines)
 
 def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, faker_instance: Faker, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
     """Generate fee line items for an invoice."""
@@ -911,7 +915,7 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
             items.append((f"{desc[:20]} {n}", 1, remaining, remaining))
         return items
 
-    m_addr = faker_instance.address().replace("\n", ", ")
+    m_addr = faker_instance.address().replace("\\n", ", ")
     m_phone = faker_instance.phone_number()
     
     try:
@@ -1076,16 +1080,35 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
         if x > width - 40:
             break
 
+    # --- Ensure final receipt is a readable physical size ---
+    target_w_in, target_h_in = RECEIPT_SIZE_IN
+    if img.width > img.height:  # landscape
+        target_w_px = int(max(target_w_in, target_h_in) * RECEIPT_DPI)
+        target_h_px = int(min(target_w_in, target_h_in) * RECEIPT_DPI)
+    else:  # portrait
+        target_w_px = int(min(target_w_in, target_h_in) * RECEIPT_DPI)
+        target_h_px = int(max(target_w_in, target_h_in) * RECEIPT_DPI)
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    if (img.width, img.height) != (target_w_px, target_h_px):
+        try:
+            from PIL import Image as _PILImageMod
+            img = img.resize((target_w_px, target_h_px), resample=_PILImageMod.LANCZOS)
+        except Exception:
+            img = img.resize((target_w_px, target_h_px))
+    # ---------------------------------------------------------
+
     pdf_buffer = io.BytesIO()
-    img.save(pdf_buffer, format="PDF", resolution=300.0)
+    img.save(pdf_buffer, format="PDF", resolution=RECEIPT_DPI)
     pdf_buffer.seek(0)
     
     filename = f"Receipt_{exp_code}_{line_item_date.strftime('%Y%m%d')}.pdf"
     return filename, pdf_buffer
+
 def _customize_email_body(matter_number: str, invoice_number: str) -> Tuple[str, str]:
     """Customize email subject and body with matter and invoice number."""
     subject = st.session_state.get("email_subject", f"LEDES Invoice for {matter_number} (Invoice #{invoice_number})")
-    body = st.session_state.get("email_body", f"Please find the attached invoice files for matter {matter_number}.\n\nBest regards,\nYour Law Firm")
+    body = st.session_state.get("email_body", f"Please find the attached invoice files for matter {matter_number}.\\n\\nBest regards,\\nYour Law Firm")
     subject = subject.format(matter_number=matter_number, invoice_number=invoice_number)
     body = body.format(matter_number=matter_number, invoice_number=invoice_number)
     return subject, body
@@ -1128,6 +1151,12 @@ st.markdown("Generate and optionally email LEDES and PDF invoices.", unsafe_allo
 # Initialize send_email in session state
 if "send_email" not in st.session_state:
     st.session_state.send_email = False
+
+# Initialize sliders in session_state to avoid double-set warning
+if "fee_slider" not in st.session_state:
+    st.session_state.fee_slider = PRESETS["Custom"]["fees"]
+if "expense_slider" not in st.session_state:
+    st.session_state.expense_slider = PRESETS["Custom"]["expenses"]
 
 # Callback for updating send_email state
 def update_send_email():
@@ -1292,37 +1321,38 @@ with tab_objects[2]:
         expenses = 0
     else:
         max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
+        # Clamp the state value in case preset set it higher than max
+        st.session_state.fee_slider = min(int(st.session_state.fee_slider), int(max_fees))
         st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
         fees = st.slider(
             "Number of Fee Line Items",
-            min_value=1,
-            max_value=max_fees,
-            key="fee_slider",  # Add key
-            value=st.session_state.get("fee_slider", min(20, max_fees)) # Change value
+            min_value=0,
+            max_value=int(max_fees),
+            key="fee_slider",
         )
         st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
         with st.expander("Adjust Expense Amounts", expanded=False):
             st.number_input(
                 "Local Travel (E109) mileage rate ($/mile)",
-                min_value=0.20, max_value=2.00, value=0.65, step=0.01,
+                min_value=0.0, max_value=5.0, value=0.65, step=0.01,
                 key="mileage_rate_e109",
                 help="Used to calculate E109 totals as miles × rate. Miles are stored in the HOURS column."
             )
             st.slider(
                 "Out-of-town Travel (E110) amount range ($)",
-                min_value=10.0, max_value=7500.0, value=(100.0, 800.0), step=10.0,
+                min_value=0.0, max_value=2000.0, value=(100.0, 800.0), step=10.0,
                 key="travel_range_e110",
                 help="Random amount for each E110 line will be drawn from this range."
             )
             st.slider(
                 "Telephone (E105) amount range ($)",
-                min_value=1.0, max_value=50.0, value=(5.0, 15.0), step=1.0,
+                min_value=0.0, max_value=100.0, value=(5.0, 15.0), step=1.0,
                 key="telephone_range_e105",
                 help="Random amount for each E105 line will be drawn from this range."
             )
-            st.slider(
+            st.number_input(
                 "Copying (E101) per-page rate ($)",
-                min_value=0.05, max_value=1.50, value=0.24, step=0.01,
+                min_value=0.0, max_value=10.0, value=0.24, step=0.01,
                 key="copying_rate_e101",
                 help="Per-page rate used for E101 Copying expenses."
             )
@@ -1330,9 +1360,8 @@ with tab_objects[2]:
         expenses = st.slider(
             "Number of Expense Line Items",
             min_value=0,
-            max_value=50,
-            key="expense_slider",  # Add key
-            value=st.session_state.get("expense_slider", 5) # Change value
+            max_value=100,
+            key="expense_slider",
         )
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
     
@@ -1419,7 +1448,7 @@ with tab_objects[3]:
         combine_ledes = st.checkbox("Combine LEDES into single file", help="If checked, all generated LEDES invoices will be combined into a single file with one header.")
         multiple_periods = st.checkbox("Multiple Billing Periods", help="Backfills one invoice per prior month from the given end date, newest to oldest.")
         if multiple_periods:
-            num_periods = st.number_input("How Many Billing Periods:", min_value=2, max_value=6, value=2, step=1, help="Number of month-long periods to create (overrides Number of Invoices).")
+            num_periods = st.number_input("How Many Billing Periods:", min_value=2, max_value=6, value=2, step=1, help="Number of month-long periods to create (overrides Number of Invoices)." )
             num_invoices = num_periods
         else:
             num_invoices = st.number_input("Number of Invoices to Create:", min_value=1, value=1, step=1, help="Creates N invoices. When 'Multiple Billing Periods' is enabled, one invoice per period.")
@@ -1443,7 +1472,7 @@ if st.session_state.send_email:
         except AttributeError:
             st.caption("Sender Email: Not configured (check secrets.toml)")
         st.text_input("Email Subject Template:", value=f"LEDES Invoice for {matter_number_base} (Invoice #{{invoice_number}})", key="email_subject")
-        st.text_area("Email Body Template:", value=f"Please find the attached invoice files for matter {{matter_number}}.\n\nBest regards,\nYour Law Firm", height=150, key="email_body")
+        st.text_area("Email Body Template:", value=f"Please find the attached invoice files for matter {{matter_number}}.\\n\\nBest regards,\\nYour Law Firm", height=150, key="email_body")
 else:
     recipient_email = ""
 
@@ -1474,7 +1503,7 @@ if generate_button:
         st.stop()
     
     faker = Faker()
-    descriptions = [d.strip() for d in invoice_desc.split('\n') if d.strip()]
+    descriptions = [d.strip() for d in invoice_desc.split('\\n') if d.strip()]
     num_invoices = int(num_invoices)
     
     if multiple_periods and len(descriptions) != num_invoices:
@@ -1530,7 +1559,7 @@ if generate_button:
                 ledes_content_part = _create_ledes_1998b_content(df_invoice.to_dict(orient='records'), total_amount, current_start_date, current_end_date, current_invoice_number, current_matter_number, is_first_invoice=not combine_ledes or is_first)
                 
                 if combine_ledes:
-                    combined_ledes_content += ledes_content_part + "\n"
+                    combined_ledes_content += ledes_content_part + "\\n"
                 else:
                     ledes_filename = f"LEDES_1998B_{current_invoice_number}.txt"
                     attachments_list.append((ledes_filename, ledes_content_part.encode('utf-8')))
