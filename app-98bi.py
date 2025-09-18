@@ -10,6 +10,7 @@ def _norm_tk_class(val: str) -> str:
         return "Paralegal"
     return ""
 
+
 def _normalize_task_records(task_activity_desc):
     out = []
     if not task_activity_desc:
@@ -58,6 +59,7 @@ def _pick_record_for_tk(all_records, major_task_codes: set, tk_row: dict, used: 
     cand = random.choice(pool)
     used.add((cand["TASK_CODE"], cand["ACTIVITY_CODE"], cand["DESCRIPTION"], cand.get("TK_CLASSIFICATION","")))
     return cand
+
 
 def _generate_fees(
     fee_count: int,
@@ -128,6 +130,17 @@ def _generate_fees(
 
     return rows
 
+# Compatibility wrapper for mixed environments
+def _generate_fees_compat(*args, **kwargs):
+    try:
+        return _generate_fees(*args, **kwargs)
+    except TypeError as e:
+        if "tk_bias" in str(e):
+            kwargs.pop("tk_bias", None)
+            return _generate_fees(*args, **kwargs)
+        raise
+
+
 # Baseline so static analyzers see it as defined before any use
 selected_items = []  # baseline for pylance
 
@@ -139,33 +152,6 @@ import inspect, hashlib as _hashlib
 
 if not hasattr(st, "_orig_checkbox"):
     st._orig_checkbox = st.checkbox  # preserve original
-
-
-# --- Compatibility shim for environments with older call signatures ---
-# If some callers (or older copies of this app) pass no 'tk_bias' or pass it to an
-# older _generate_fees without that parameter, keep things working gracefully.
-try:
-    import inspect as _inspect  # local alias to avoid polluting namespace
-    if 'tk_bias' not in _inspect.signature(_generate_fees).parameters:
-        _orig_generate_fees = _generate_fees
-        def _generate_fees(*args, **kwargs):
-            kwargs.pop('tk_bias', None)
-            return _orig_generate_fees(*args, **kwargs)
-except Exception as _e:
-    # Non-fatal: if inspection fails, leave behavior unchanged.
-    pass
-
-
-def _generate_fees_compat(*args, **kwargs):
-    """Wrapper that tolerates older _generate_fees signatures without tk_bias."""
-    try:
-        return _generate_fees(*args, **kwargs)
-    except TypeError as e:
-        # If caller passed tk_bias but the target definition doesn't accept it, drop it and retry.
-        if "tk_bias" in str(e):
-            kwargs.pop("tk_bias", None)
-            return _generate_fees(*args, **kwargs)
-        raise
 
 def _safe_checkbox(label, **kwargs):
     if "key" not in kwargs or kwargs["key"] is None:
@@ -1070,37 +1056,30 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
         if consolidated_row_ids:
             rows = [row for row in rows if id(row) not in consolidated_row_ids]
             rows.extend(new_blocks)
-        
-        # --- Enforce TOTAL block-billed cap across consolidated + catalog "block-like" lines ---
+
+    
+        # --- Enforce TOTAL cap on extended (semicolon) lines across consolidated + catalog ---
         TOTAL_BLOCK_LIMIT = int(num_block_billed)
-        
         def _is_blocky(desc: str) -> bool:
             return ";" in str(desc or "")
-        
-        # Count consolidated blocks first (these are the "true" block-bills we prefer to keep)
-        kept_consolidated = [r for r in rows if _is_blocky(r.get("DESCRIPTION")) and id(r) in consolidated_row_ids]
-        num_kept = len(kept_consolidated)
-        
-        # If consolidation somehow produced more than the limit (should be rare), de-block the overflow.
-        if num_kept > TOTAL_BLOCK_LIMIT:
-            overflow = num_kept - TOTAL_BLOCK_LIMIT
-            for r in rows:
-                if overflow and _is_blocky(r.get("DESCRIPTION")) and id(r) in consolidated_row_ids:
-                    r["DESCRIPTION"] = r["DESCRIPTION"].replace(";", ", ")
-                    overflow -= 1
-            num_kept = TOTAL_BLOCK_LIMIT
-        
-        # Allow remaining headroom for catalog lines that already look block-billed (contain ';')
-        remaining = max(0, TOTAL_BLOCK_LIMIT - num_kept)
+
+        # Determine which rows were consolidated (kept in consolidated_row_ids)
+        true_blocks = [r for r in rows if _is_blocky(r.get("DESCRIPTION")) and id(r) in consolidated_row_ids]
+        kept_true = min(len(true_blocks), TOTAL_BLOCK_LIMIT)
+        remaining_headroom = max(0, TOTAL_BLOCK_LIMIT - kept_true)
+
+        # For catalog 'block-like' rows, keep only remaining_headroom; trim the rest to a single task
         for r in rows:
             if _is_blocky(r.get("DESCRIPTION")) and id(r) not in consolidated_row_ids:
-                if remaining > 0:
-                    remaining -= 1  # keep this one blocky
+                if remaining_headroom > 0:
+                    remaining_headroom -= 1
                 else:
-                    # Make it non-block-looking without changing hours/amounts
-                    r["DESCRIPTION"] = r["DESCRIPTION"].replace(";", ", ")
-    
-    # Final total calculation
+                    parts = [p.strip() for p in str(r.get("DESCRIPTION","")).split(";") if p.strip()]
+                    if parts:
+                        r["DESCRIPTION"] = parts[0]
+
+
+# Final total calculation
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
 
@@ -1748,6 +1727,7 @@ tk_bias_pct = st.slider(
     min_value=0, max_value=100, value=80, step=5,
     help="Higher picks more descriptions aligned to each timekeeper's classification."
 )
+
 
 
 
@@ -2452,41 +2432,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
-
-
-
-def _load_custom_task_activity_data(uploaded_file):
-    """Load custom task/activity data from CSV (optionally with TK_CLASSIFICATION)."""
-    if uploaded_file is None:
-        return None
-    try:
-        df = pd.read_csv(uploaded_file)
-        required_cols = ["TASK_CODE", "ACTIVITY_CODE", "DESCRIPTION"]
-        for col in required_cols:
-            if col not in df.columns:
-                st.error("Custom Task/Activity CSV must contain: TASK_CODE, ACTIVITY_CODE, DESCRIPTION (optional: TK_CLASSIFICATION)")
-                return None
-        if df.empty:
-            st.warning("Custom Task/Activity CSV file is empty.")
-            return []
-
-        has_tk = "TK_CLASSIFICATION" in df.columns
-        dedupe_cols = ["TASK_CODE", "ACTIVITY_CODE", "DESCRIPTION"] + (["TK_CLASSIFICATION"] if has_tk else [])
-        df = df.drop_duplicates(subset=dedupe_cols).sample(frac=1, random_state=None).reset_index(drop=True)
-
-        records = []
-        for _, r in df.iterrows():
-            records.append({
-                "TASK_CODE": str(r["TASK_CODE"]),
-                "ACTIVITY_CODE": str(r["ACTIVITY_CODE"]),
-                "DESCRIPTION": str(r["DESCRIPTION"]),
-                "TK_CLASSIFICATION": _norm_tk_class(r["TK_CLASSIFICATION"]) if has_tk else ""
-            })
-        st.session_state['custom_task_catalog'] = records
-        return records
-    except Exception as e:
-        st.error(f"Error loading custom tasks file: {e}")
-        logging.error(f"Custom tasks load error: {e}")
-        return None
-
 
