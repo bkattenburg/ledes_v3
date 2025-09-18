@@ -358,8 +358,8 @@ def _create_ledes_line_1998b(row: Dict, line_no: int, inv_total: float, bill_sta
         logging.error(f"Error creating LEDES line: {e}")
         return []
 
-def _create_ledes_1998b_content(rows: List[Dict], inv_total: float, bill_start: datetime.date, bill_end: datetime.date, invoice_number: str, matter_number: str, is_first_invoice: bool = True) -> str:
-    """Generate LEDES 1998B content from invoice rows."""
+def _create_ledes_1998b_content(rows, inv_total, bill_start, bill_end,
+                                invoice_number, matter_number, is_first_invoice=True) -> str:
     lines = []
     if is_first_invoice:
         header = "LEDES1998B[]"
@@ -370,11 +370,14 @@ def _create_ledes_1998b_content(rows: List[Dict], inv_total: float, bill_start: 
                   "LINE_ITEM_DESCRIPTION|LAW_FIRM_ID|LINE_ITEM_UNIT_COST|TIMEKEEPER_NAME|"
                   "TIMEKEEPER_CLASSIFICATION|CLIENT_MATTER_ID[]")
         lines = [header, fields]
+
     for i, row in enumerate(rows, start=1):
         line = _create_ledes_line_1998b(row, i, inv_total, bill_start, bill_end, invoice_number, matter_number)
         if line:
             lines.append("|".join(map(str, line)) + "[]")
-    return "\\n".join(lines)
+
+    # LEDES 1998B: CRLF line endings + trailing CRLF at EOF
+    return "\r\n".join(lines) + "\r\n"
 
 def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, faker_instance: Faker, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
     """Generate fee line items for an invoice."""
@@ -1573,10 +1576,10 @@ if generate_button:
                 ledes_content_part = _create_ledes_1998b_content(df_invoice.to_dict(orient='records'), total_amount, current_start_date, current_end_date, current_invoice_number, current_matter_number, is_first_invoice=not combine_ledes or is_first)
                 
                 if combine_ledes:
-                    combined_ledes_content += ledes_content_part + "\\n"
+                    combined_ledes_content += ledes_content_part   # <- no extra "\n" here
                 else:
-                    ledes_filename = f"LEDES_1998B_{current_invoice_number}.txt"
-                    attachments_list.append((ledes_filename, ledes_content_part.encode('utf-8')))
+                    attachments_list.append((ledes_filename, ledes_content_part.encode("utf-8")))
+
                 
                 if include_pdf:
                     logo_bytes = None
