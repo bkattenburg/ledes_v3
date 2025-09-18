@@ -1684,30 +1684,30 @@ with tab_objects[1]:
     #st.write("Timekeeper classifications found:", sorted({str(tk.get("TIMEKEEPER_CLASSIFICATION","")) for tk in _get_timekeepers()}))
 
     with st.expander("Diagnostics: Timekeeper CSV", expanded=False):
-    tks = _get_timekeepers()  # returns [] if nothing loaded
-    if tks:
-        import pandas as pd
-        # Build a clean series of classifications
-        classifications = (
-            pd.Series([str(t.get("TIMEKEEPER_CLASSIFICATION", "")).strip() for t in tks])
-              .replace({"": "(blank)"})
-        )
-        vc = (
-            classifications.str.title()
-            .value_counts()
-            .rename_axis("Classification")
-            .reset_index(name="Count")
-            .sort_values("Classification", kind="stable")
-            .reset_index(drop=True)
-        )
-        st.dataframe(vc, use_container_width=True)
-
-        # Clear partner count (case-insensitive, matches exactly "Partner")
-        partner_count = int(vc.loc[vc["Classification"].str.lower() == "partner", "Count"].sum())
-        st.write(f"Partners detected: {partner_count}")
-
-    else:
-        st.info("No timekeepers loaded yet.")
+        tks = _get_timekeepers()  # returns [] if nothing loaded
+        if tks:
+            import pandas as pd
+            # Build a clean series of classifications
+            classifications = (
+                pd.Series([str(t.get("TIMEKEEPER_CLASSIFICATION", "")).strip() for t in tks])
+                  .replace({"": "(blank)"})
+            )
+            vc = (
+                classifications.str.title()
+                .value_counts()
+                .rename_axis("Classification")
+                .reset_index(name="Count")
+                .sort_values("Classification", kind="stable")
+                .reset_index(drop=True)
+            )
+            st.dataframe(vc, use_container_width=True)
+    
+            # Clear partner count (case-insensitive, matches exactly "Partner")
+            partner_count = int(vc.loc[vc["Classification"].str.lower() == "partner", "Count"].sum())
+            st.write(f"Partners detected: {partner_count}")
+    
+        else:
+            st.info("No timekeepers loaded yet.")
     
     # Other invoice details
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
@@ -2206,4 +2206,5 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
