@@ -140,6 +140,21 @@ import inspect, hashlib as _hashlib
 if not hasattr(st, "_orig_checkbox"):
     st._orig_checkbox = st.checkbox  # preserve original
 
+
+# --- Compatibility shim for environments with older call signatures ---
+# If some callers (or older copies of this app) pass no 'tk_bias' or pass it to an
+# older _generate_fees without that parameter, keep things working gracefully.
+try:
+    import inspect as _inspect  # local alias to avoid polluting namespace
+    if 'tk_bias' not in _inspect.signature(_generate_fees).parameters:
+        _orig_generate_fees = _generate_fees
+        def _generate_fees(*args, **kwargs):
+            kwargs.pop('tk_bias', None)
+            return _orig_generate_fees(*args, **kwargs)
+except Exception as _e:
+    # Non-fatal: if inspection fails, leave behavior unchanged.
+    pass
+
 def _safe_checkbox(label, **kwargs):
     if "key" not in kwargs or kwargs["key"] is None:
         # Hash label + call line number for a stable, unique key
