@@ -241,6 +241,11 @@ def _find_timekeeper_by_classification(timekeepers, classification: str):
         return None
     target = str(classification).strip().lower()
 
+def _get_timekeepers():
+    """Return timekeepers list from session or empty list if none loaded."""
+    return st.session_state.get("timekeeper_data") or []
+
+
     def norm(s: str) -> str:
         return re.sub(r"\s+", " ", str(s).strip().lower())
 
@@ -934,7 +939,7 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
             
             # If Unity + Partner: Paralegal Tasks, prefer a Partner from tk_csv
             if item_name == 'Partner: Paralegal Tasks' and st.session_state.get("selected_env", "") == "Unity":
-                tk_match = _find_timekeeper_by_classification(timekeeper_data, "Partner")
+                tk_match = _find_timekeeper_by_classification(_get_timekeepers(), "Partner")
                 if tk_match:
                     forced_name = tk_match.get("TIMEKEEPER_NAME", forced_name)
             
@@ -946,7 +951,7 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 "HOURS": round(random.uniform(0.5, 8.0), 1), "RATE": 0.0
             }
             
-            processed_row = _force_timekeeper_on_row(row_template, forced_name, timekeeper_data)
+            processed_row = _force_timekeeper_on_row(row_template, forced_name, _get_timekeepers())
   
             # Only add the row if the timekeeper was found
             if processed_row:
@@ -1676,7 +1681,7 @@ with tab_objects[1]:
     """
     st.markdown(status_html, unsafe_allow_html=True)
 
-    st.write("Timekeeper classifications found:", sorted({str(tk.get("TIMEKEEPER_CLASSIFICATION","")) for tk in timekeeper_data}))
+    st.write("Timekeeper classifications found:", sorted({str(tk.get("TIMEKEEPER_CLASSIFICATION","")) for tk in _get_timekeepers()}))
     
     # Other invoice details
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
