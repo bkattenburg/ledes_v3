@@ -155,6 +155,18 @@ except Exception as _e:
     # Non-fatal: if inspection fails, leave behavior unchanged.
     pass
 
+
+def _generate_fees_compat(*args, **kwargs):
+    """Wrapper that tolerates older _generate_fees signatures without tk_bias."""
+    try:
+        return _generate_fees(*args, **kwargs)
+    except TypeError as e:
+        # If caller passed tk_bias but the target definition doesn't accept it, drop it and retry.
+        if "tk_bias" in str(e):
+            kwargs.pop("tk_bias", None)
+            return _generate_fees(*args, **kwargs)
+        raise
+
 def _safe_checkbox(label, **kwargs):
     if "key" not in kwargs or kwargs["key"] is None:
         # Hash label + call line number for a stable, unique key
@@ -992,7 +1004,7 @@ def _generate_expenses(expense_count: int, billing_start_date: datetime.date, bi
 def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: List[Dict], client_id: str, law_firm_id: str, invoice_desc: str, billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, num_block_billed: int, faker_instance: Faker) -> Tuple[List[Dict], float]:
     """Generate invoice data with fees and expenses."""
     rows = []
-    rows.extend(_generate_fees(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc, tk_bias=tk_bias_pct/100.0))
+    rows.extend(_generate_fees_compat(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc, tk_bias=tk_bias_pct/100.0))
     rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
     
     # Filter for fees only before creating block billed items
