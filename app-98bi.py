@@ -1825,21 +1825,19 @@ with tab_objects[2]:
         else:
             available_items = all_mandatory_items
             default_selection = all_mandatory_items
+# Unity: ensure Partner: Paralegal Task(s) is preselected by adjusting the default list
+if st.session_state.get("selected_env") == "Unity":
+    keys = list(CONFIG["MANDATORY_ITEMS"].keys())
+    pp_key = next((k for k in keys if _is_partner_paralegal_item(k)), None)
+    if pp_key and pp_key not in default_selection:
+        default_selection = list(default_selection) + [pp_key]
 
-        selected_items = st.multiselect(
-            "Select Mandatory Items to Include",
-            options=available_items,
-            default=default_selection
-        )
+
+        selected_items = st.multiselect("Select Mandatory Items to Include", options=available_items, default=default_selection, key="mandatory_items_multiselect")
 
         # After selected_items is created
         
-if selected_env == 'Unity':
-    # find the actual key in CONFIG regardless of singular/plural spelling
-    keys = list(CONFIG["MANDATORY_ITEMS"].keys())
-    pp_key = next((k for k in keys if _is_partner_paralegal_item(k)), None)
-    if pp_key and pp_key not in selected_items:
-        selected_items.append(pp_key)
+# (removed) post-multiselect Unity append
 
         
         # Conditional UI for Airfare Details
