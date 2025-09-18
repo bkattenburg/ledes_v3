@@ -1833,6 +1833,32 @@ if st.session_state.get("selected_env") == "Unity":
         default_selection = list(default_selection) + [pp_key]
 
 
+
+        # ---- Mandatory Items UI defaults (robust) ----
+        # Build options from config
+        available_items = list(CONFIG["MANDATORY_ITEMS"].keys())
+
+        # Default selection: use saved selection if present; else items with default=True; else empty
+        saved = st.session_state.get("mandatory_items_default")
+        if saved:
+            default_selection = list(saved)
+        else:
+            try:
+                default_selection = [k for k, v in CONFIG["MANDATORY_ITEMS"].items() if v.get("default", False)]
+            except Exception:
+                default_selection = []
+
+        # Unity: preselect Partner: Paralegal Task/Tasks via helper
+        if st.session_state.get("selected_env") == "Unity":
+            pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
+            if pp_key and pp_key not in default_selection:
+                default_selection = list(default_selection) + [pp_key]
+        # -----------------------------------------------
+
+
+        # Persist user's selection across reruns
+        st.session_state["mandatory_items_default"] = list(selected_items)
+
         selected_items = st.multiselect("Select Mandatory Items to Include", options=available_items, default=default_selection, key="mandatory_items_multiselect")
 
         # After selected_items is created
@@ -2218,6 +2244,5 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
-
 
 
