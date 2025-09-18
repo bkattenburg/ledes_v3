@@ -235,16 +235,21 @@ def _find_timekeeper_by_name(timekeepers: List[Dict], name: str) -> Optional[Dic
             return tk
     return None
 
-def _find_timekeeper_by_classification(timekeepers: List[Dict], classification: str) -> Optional[Dict]:
-    """Find the first timekeeper with the given classification (case-insensitive)."""
+def _find_timekeeper_by_classification(timekeepers, classification: str):
+    """Return the first timekeeper whose classification contains the target (case-insensitive)."""
     if not timekeepers:
         return None
-    cls = str(classification).strip().lower()
-    candidates = [tk for tk in timekeepers
-                  if str(tk.get("TIMEKEEPER_CLASSIFICATION", "")).strip().lower() == cls]
+    target = str(classification).strip().lower()
+
+    def norm(s: str) -> str:
+        return re.sub(r"\s+", " ", str(s).strip().lower())
+
+    # Accept any classification that contains "partner" (handles "Partner", "Equity Partner", "Partner/Shareholder", etc.)
+    candidates = [tk for tk in timekeepers if "partner" in norm(tk.get("TIMEKEEPER_CLASSIFICATION", ""))]
     if not candidates:
         return None
-    # deterministic pick: first alphabetically by name
+
+    # deterministic pick
     candidates.sort(key=lambda tk: str(tk.get("TIMEKEEPER_NAME", "")).lower())
     return candidates[0]
 
@@ -942,8 +947,7 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
             }
             
             processed_row = _force_timekeeper_on_row(row_template, forced_name, timekeeper_data)
-
-            
+  
             # Only add the row if the timekeeper was found
             if processed_row:
                 rows.append(processed_row)
@@ -1652,6 +1656,8 @@ with tab_objects[1]:
     """
     st.markdown(status_html, unsafe_allow_html=True)
 
+    st.write("Timekeeper classifications found:", sorted({str(tk.get("TIMEKEEPER_CLASSIFICATION","")) for tk in timekeeper_data}))
+    
     # Other invoice details
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
     invoice_number_base = st.text_input("Invoice Number (Base):", "2025MMM-XXXXXX")
@@ -2149,5 +2155,6 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
