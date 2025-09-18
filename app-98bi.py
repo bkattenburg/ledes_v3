@@ -1,5 +1,8 @@
 import streamlit as st
 
+# Baseline so static analyzers see it as defined before any use
+selected_items = []  # baseline for pylance
+
 # --- Streamlit DuplicateWidgetID guard ---------------------------------------
 # If a checkbox is rendered more than once with the same label and no explicit key,
 # Streamlit raises DuplicateWidgetID. This wrapper injects a stable, unique key
@@ -1859,14 +1862,48 @@ if st.session_state.get("selected_env") == "Unity":
         # Persist user's selection across reruns
         st.session_state["mandatory_items_default"] = list(selected_items)
 
-        selected_items = st.multiselect("Select Mandatory Items to Include", options=available_items, default=default_selection, key="mandatory_items_multiselect")
 
-        # After selected_items is created
+        # ---- Mandatory Items UI (robust) --------------------------------------------
+        # Build the options from your config
+        available_items = list(CONFIG["MANDATORY_ITEMS"].keys())
+
+        # Default selection:
+        # 1) reuse last choice if present
+        # 2) otherwise use any items flagged default=True in your config
+        # 3) otherwise start empty
+        saved = st.session_state.get("mandatory_items_default")
+        if saved:
+            default_selection = list(saved)
+        else:
+            try:
+                default_selection = [k for k, v in CONFIG["MANDATORY_ITEMS"].items() if v.get("default", False)]
+            except Exception:
+                default_selection = []
+
+        # Unity: preselect Partner: Paralegal Task/Tasks by adjusting the default list
+        if st.session_state.get("selected_env") == "Unity":
+            pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
+            if pp_key and pp_key not in default_selection:
+                default_selection = list(default_selection) + [pp_key]
+
+        # Render the multiselect with a stable key
+        selected_items = st.multiselect(
+            "Select Mandatory Items to Include",
+            options=available_items,
+            default=default_selection,
+            key="mandatory_items_multiselect",
+        )
+
+        # Persist the user’s selection so defaults survive reruns
+        st.session_state["mandatory_items_default"] = list(selected_items)
+        # -----------------------------------------------------------------------------
+# After selected_items is created
         
 # (removed) post-multiselect Unity append
 
         
         # Conditional UI for Airfare Details
+        selected_items = st.session_state.get("mandatory_items_multiselect", st.session_state.get("mandatory_items_default", []))
         if 'Airfare E110' in selected_items:
             st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
             ac1, ac2 = st.columns(2)
@@ -1886,6 +1923,7 @@ if st.session_state.get("selected_env") == "Unity":
             )
         
         # Conditional UI for Uber Details
+        selected_items = st.session_state.get("mandatory_items_multiselect", st.session_state.get("mandatory_items_default", []))
         if 'Uber E110' in selected_items:
             st.markdown("<h4 style='color: #1E1E1E;'>Uber E110 Details</h4>", unsafe_allow_html=True)
             st.number_input("Ride Amount", min_value=0.0, value=25.50, step=0.01, key="uber_amount", help="This amount will be used for the Uber ride line item total.")
@@ -2244,5 +2282,3 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
-
-
