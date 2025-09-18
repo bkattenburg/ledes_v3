@@ -1070,7 +1070,36 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
         if consolidated_row_ids:
             rows = [row for row in rows if id(row) not in consolidated_row_ids]
             rows.extend(new_blocks)
-
+        
+        # --- Enforce TOTAL block-billed cap across consolidated + catalog "block-like" lines ---
+        TOTAL_BLOCK_LIMIT = int(num_block_billed)
+        
+        def _is_blocky(desc: str) -> bool:
+            return ";" in str(desc or "")
+        
+        # Count consolidated blocks first (these are the "true" block-bills we prefer to keep)
+        kept_consolidated = [r for r in rows if _is_blocky(r.get("DESCRIPTION")) and id(r) in consolidated_row_ids]
+        num_kept = len(kept_consolidated)
+        
+        # If consolidation somehow produced more than the limit (should be rare), de-block the overflow.
+        if num_kept > TOTAL_BLOCK_LIMIT:
+            overflow = num_kept - TOTAL_BLOCK_LIMIT
+            for r in rows:
+                if overflow and _is_blocky(r.get("DESCRIPTION")) and id(r) in consolidated_row_ids:
+                    r["DESCRIPTION"] = r["DESCRIPTION"].replace(";", ", ")
+                    overflow -= 1
+            num_kept = TOTAL_BLOCK_LIMIT
+        
+        # Allow remaining headroom for catalog lines that already look block-billed (contain ';')
+        remaining = max(0, TOTAL_BLOCK_LIMIT - num_kept)
+        for r in rows:
+            if _is_blocky(r.get("DESCRIPTION")) and id(r) not in consolidated_row_ids:
+                if remaining > 0:
+                    remaining -= 1  # keep this one blocky
+                else:
+                    # Make it non-block-looking without changing hours/amounts
+                    r["DESCRIPTION"] = r["DESCRIPTION"].replace(";", ", ")
+    
     # Final total calculation
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
@@ -2459,4 +2488,5 @@ def _load_custom_task_activity_data(uploaded_file):
         st.error(f"Error loading custom tasks file: {e}")
         logging.error(f"Custom tasks load error: {e}")
         return None
+
 
