@@ -1533,11 +1533,19 @@ if st.session_state.get("ledes_version") in ("1998BI", "1998BIv2"):
 # Email settings will live under the Output tab.
 tab_objects = st.tabs(tabs)
 
+# Ensure timekeeper_data is available from session throughout the app
+timekeeper_data = st.session_state.get("timekeeper_data")
+
 with tab_objects[0]:
 
     st.markdown("<h3 style='color: #1E1E1E;'>Data Sources</h3>", unsafe_allow_html=True)
     uploaded_timekeeper_file = st.file_uploader("Upload Timekeeper CSV (tk_info.csv)", type="csv")
     timekeeper_data = _load_timekeepers(uploaded_timekeeper_file)
+    # Persist across reruns/tabs
+    if timekeeper_data is not None:
+        st.session_state["timekeeper_data"] = timekeeper_data
+    # Always reference the session copy from here on
+    timekeeper_data = st.session_state.get("timekeeper_data")
 
     # Timekeeper summary + preview
     if timekeeper_data is not None:
@@ -1549,11 +1557,22 @@ with tab_objects[0]:
         st.markdown(f"**{preview_count}-Row Preview**")
         st.dataframe(tk_df_preview, use_container_width=True)
 
+    # Diagnostics (optional)
+    with st.expander("Diagnostics: Timekeeper CSV", expanded=False):
+        if timekeeper_data:
+            classifications = [str(t.get("TIMEKEEPER_CLASSIFICATION","")).strip() for t in timekeeper_data]
+            unique_classes = sorted(set(classifications))
+            partner_count = sum(1 for c in classifications if "partner" in c.lower())
+            st.write(f"Timekeepers loaded: {len(timekeeper_data)}")
+            st.write(f"Unique classifications: {unique_classes}")
+            st.write(f"Partners detected: {partner_count}")
+        else:
+            st.info("No timekeepers loaded yet.")
     use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
     uploaded_custom_tasks_file = None
     if use_custom_tasks:
         uploaded_custom_tasks_file = st.file_uploader("Upload Custom Line Items CSV (custom_details.csv)", type="csv")
-
+    
     task_activity_desc = CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
     if use_custom_tasks and uploaded_custom_tasks_file:
         custom_tasks_data = _load_custom_task_activity_data(uploaded_custom_tasks_file)
@@ -1562,7 +1581,7 @@ with tab_objects[0]:
             st.success(f"Loaded {li_count} custom line items.")
             if custom_tasks_data:
                 task_activity_desc = custom_tasks_data
-
+    
 with tab_objects[1]:
     st.markdown("<h2 style='color: #1E1E1E;'>Invoice Details</h2>", unsafe_allow_html=True)
 
@@ -1573,6 +1592,7 @@ with tab_objects[1]:
     if default_env not in env_names:
         default_env = env_names[0]
     selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
+
     # Pre-populate from profile details when not overriding
     if "allow_override" not in st.session_state:
         st.session_state["allow_override"] = False
@@ -2155,6 +2175,3 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
-
-
-
