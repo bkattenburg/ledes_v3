@@ -267,6 +267,18 @@ def _find_timekeeper_by_classification(timekeepers, classification: str):
         return None
     target = str(classification).strip().lower()
 
+    def norm(s: str) -> str:
+        return re.sub(r"\s+", " ", str(s).strip().lower())
+
+    # Find candidates where the normalized classification contains the target string
+    candidates = [tk for tk in timekeepers if target in norm(tk.get("TIMEKEEPER_CLASSIFICATION", ""))]
+    if not candidates:
+        return None
+
+    # For deterministic results, sort by name and pick the first one
+    candidates.sort(key=lambda tk: str(tk.get("TIMEKEEPER_NAME", "")).lower())
+    return candidates[0]
+
 
 
 def _get_timekeepers():
@@ -276,17 +288,6 @@ def _get_timekeepers():
 def _is_partner_paralegal_item(name: str) -> bool:
     """True for 'Partner: Paralegal Task' or '... Tasks' (case/space tolerant, prefix match)."""
     return str(name).strip().lower().startswith("partner: paralegal")
-    def norm(s: str) -> str:
-        return re.sub(r"\s+", " ", str(s).strip().lower())
-
-    # Accept any classification that contains "partner" (handles "Partner", "Equity Partner", "Partner/Shareholder", etc.)
-    candidates = [tk for tk in timekeepers if "partner" in norm(tk.get("TIMEKEEPER_CLASSIFICATION", ""))]
-    if not candidates:
-        return None
-
-    # deterministic pick
-    candidates.sort(key=lambda tk: str(tk.get("TIMEKEEPER_NAME", "")).lower())
-    return candidates[0]
 
 def _force_timekeeper_on_row(row: Dict, forced_name: str, timekeepers: List[Dict]) -> Optional[Dict]:
     """
@@ -2237,3 +2238,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
