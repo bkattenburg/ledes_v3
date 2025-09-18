@@ -846,7 +846,7 @@ def _generate_expenses(expense_count: int, billing_start_date: datetime.date, bi
 
     return rows
 
-def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: List[Dict], client_id: str, law_firm_id: str, invoice_desc: str, billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, include_block_billed: bool, faker_instance: Faker) -> Tuple[List[Dict], float]:
+def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: List[Dict], client_id: str, law_firm_id: str, invoice_desc: str, billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, num_block_billed: int, faker_instance: Faker) -> Tuple[List[Dict], float]:
     """Generate invoice data with fees and expenses."""
     rows = []
     rows.extend(_generate_fees(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc))
@@ -855,7 +855,7 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
     # Filter for fees only before creating block billed items
     fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
     
-    if include_block_billed and fee_rows:
+    if num_block_billed > 0 and fee_rows:
         # Group fee rows by timekeeper and date to find candidates for block billing
         from collections import defaultdict
         daily_tk_groups = defaultdict(list)
@@ -870,19 +870,29 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
                 total_hours = sum(float(r["HOURS"]) for r in group_rows)
                 if total_hours <= max_hours_per_tk_per_day:
                     eligible_groups.append(group_rows)
+        
+        random.shuffle(eligible_groups)
+        
+        consolidated_row_ids = set()
+        new_blocks = []
+        blocks_created = 0
 
-        # If we found an eligible group, randomly pick one to convert into a block
-        if eligible_groups:
-            selected_rows = random.choice(eligible_groups)
+        for group in eligible_groups:
+            if blocks_created >= num_block_billed:
+                break
             
+            # Ensure no rows in this group have already been used in another block
+            if any(id(row) in consolidated_row_ids for row in group):
+                continue
+
             # Sum the hours and totals from the selected group
-            total_hours = sum(float(row["HOURS"]) for row in selected_rows)
-            total_amount_block = sum(float(row["LINE_ITEM_TOTAL"]) for row in selected_rows)
-            descriptions = [row["DESCRIPTION"] for row in selected_rows]
+            total_hours = sum(float(row["HOURS"]) for row in group)
+            total_amount_block = sum(float(row["LINE_ITEM_TOTAL"]) for row in group)
+            descriptions = [row["DESCRIPTION"] for row in group]
             block_description = "; ".join(descriptions)
             
             # Since all rows in the group are for the same TK and date, we can safely take details from the first row
-            first_row = selected_rows[0]
+            first_row = group[0]
             
             block_row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
@@ -893,12 +903,18 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
                 "DESCRIPTION": block_description, "HOURS": round(total_hours, 2), "RATE": first_row["RATE"],
                 "LINE_ITEM_TOTAL": round(total_amount_block, 2)
             }
+            new_blocks.append(block_row)
             
-            # Remove the original individual rows and add the new consolidated block_row
-            rows_to_remove_ids = {id(row) for row in selected_rows}
-            new_rows = [row for row in rows if id(row) not in rows_to_remove_ids]
-            new_rows.append(block_row)
-            rows = new_rows
+            # Mark original rows as consolidated
+            for row in group:
+                consolidated_row_ids.add(id(row))
+            
+            blocks_created += 1
+
+        # Reconstruct the main 'rows' list by removing consolidated rows and adding new blocks
+        if consolidated_row_ids:
+            rows = [row for row in rows if id(row) not in consolidated_row_ids]
+            rows.extend(new_blocks)
 
     # Final total calculation
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
@@ -1892,6 +1908,10 @@ output_tab_index = tabs.index("Output")
 with tab_objects[output_tab_index]:
     st.markdown("<h2 style='color: #1E1E1E;'>Output</h2>", unsafe_allow_html=True)
     include_block_billed = st.checkbox("Include Block Billed Line Items", value=True)
+    num_block_billed = 0
+    if include_block_billed:
+        num_block_billed = st.number_input("Number of Block Billed Items:", min_value=1, max_value=10, value=2, step=1, help="The number of block billed items to create by consolidating multiple tasks from the same timekeeper on the same day.")
+    
     include_pdf = st.checkbox("Include PDF Invoice", value=False)
     
     uploaded_logo = None
@@ -2057,7 +2077,7 @@ if generate_button:
                 rows, total_amount = _generate_invoice_data(
                     fees_used, expenses_used, timekeeper_data, client_id, law_firm_id,
                     current_invoice_desc, current_start_date, current_end_date,
-                    task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, include_block_billed, faker
+                    task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, num_block_billed, faker
                 )
 
                 skipped_mandatory_items = []
