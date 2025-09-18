@@ -235,6 +235,19 @@ def _find_timekeeper_by_name(timekeepers: List[Dict], name: str) -> Optional[Dic
             return tk
     return None
 
+def _find_timekeeper_by_classification(timekeepers: List[Dict], classification: str) -> Optional[Dict]:
+    """Find the first timekeeper with the given classification (case-insensitive)."""
+    if not timekeepers:
+        return None
+    cls = str(classification).strip().lower()
+    candidates = [tk for tk in timekeepers
+                  if str(tk.get("TIMEKEEPER_CLASSIFICATION", "")).strip().lower() == cls]
+    if not candidates:
+        return None
+    # deterministic pick: first alphabetically by name
+    candidates.sort(key=lambda tk: str(tk.get("TIMEKEEPER_NAME", "")).lower())
+    return candidates[0]
+
 def _force_timekeeper_on_row(row: Dict, forced_name: str, timekeepers: List[Dict]) -> Optional[Dict]:
     """
     Assign timekeeper details to a row if a match is found.
@@ -911,15 +924,25 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
             row["LINE_ITEM_TOTAL"] = round(row["HOURS"] * row["RATE"], 2)
             rows.append(row)
         else: # Fee items
+            # Choose the timekeeper name to force
+            forced_name = item['tk_name']  # default from CONFIG
+            
+            # If Unity + Partner: Paralegal Tasks, prefer a Partner from tk_csv
+            if item_name == 'Partner: Paralegal Tasks' and st.session_state.get("selected_env", "") == "Unity":
+                tk_match = _find_timekeeper_by_classification(timekeeper_data, "Partner")
+                if tk_match:
+                    forced_name = tk_match.get("TIMEKEEPER_NAME", forced_name)
+            
             row_template = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": item['tk_name'],
+                "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": forced_name,
                 "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": item['task'],
                 "ACTIVITY_CODE": item['activity'], "EXPENSE_CODE": "", "DESCRIPTION": item['desc'],
                 "HOURS": round(random.uniform(0.5, 8.0), 1), "RATE": 0.0
             }
-            # Attempt to process the row
-            processed_row = _force_timekeeper_on_row(row_template, item['tk_name'], timekeeper_data)
+            
+            processed_row = _force_timekeeper_on_row(row_template, forced_name, timekeeper_data)
+
             
             # Only add the row if the timekeeper was found
             if processed_row:
@@ -1743,6 +1766,10 @@ with tab_objects[2]:
             options=available_items,
             default=default_selection
         )
+
+        # After selected_items is created
+        if selected_env == 'Unity' and 'Partner: Paralegal Tasks' not in selected_items:
+            selected_items.append('Partner: Paralegal Tasks')
         
         # Conditional UI for Airfare Details
         if 'Airfare E110' in selected_items:
@@ -2122,4 +2149,5 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
