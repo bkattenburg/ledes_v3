@@ -1813,80 +1813,42 @@ with tab_objects[2]:
     if spend_agent:
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
         
-        # Conditionally filter mandatory items based on the selected environment profile
-        selected_env = st.session_state.get("selected_env", "Onit ELM")
-        all_mandatory_items = list(CONFIG['MANDATORY_ITEMS'].keys())
+        # ---- CORRECTED AND CONSOLIDATED MANDATORY ITEMS LOGIC ----
+        
+        # Base list of all possible items
+        all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
 
-        if selected_env == 'SimpleLegal':
-            # Filter for items that are expenses with code E110
+        # Determine the items available for selection based on the environment
+        if st.session_state.get("selected_env") == 'SimpleLegal':
             available_items = [
                 name for name, details in CONFIG['MANDATORY_ITEMS'].items()
                 if details.get('is_expense') and details.get('expense_code') == 'E110'
             ]
-            default_selection = available_items
             st.info("For the 'SimpleLegal' profile, only E110 mandatory expenses are available.")
         else:
-            available_items = all_mandatory_items
-            default_selection = all_mandatory_items
-# Unity: ensure Partner: Paralegal Task(s) is preselected by adjusting the default list
-if st.session_state.get("selected_env") == "Unity":
-    keys = list(CONFIG["MANDATORY_ITEMS"].keys())
-    pp_key = next((k for k in keys if _is_partner_paralegal_item(k)), None)
-    if pp_key and pp_key not in default_selection:
-        default_selection = list(default_selection) + [pp_key]
+            available_items = all_items
 
-
-
-        # ---- Mandatory Items UI defaults (robust) ----
-        # Build options from config
-        available_items = list(CONFIG["MANDATORY_ITEMS"].keys())
-
-        # Default selection: use saved selection if present; else items with default=True; else empty
-        saved = st.session_state.get("mandatory_items_default")
-        if saved:
-            default_selection = list(saved)
+        # Determine the default selected items
+        saved_selection = st.session_state.get("mandatory_items_default")
+        if saved_selection is not None:
+            # Use last selection if saved, but only include items currently available
+            default_selection = [item for item in saved_selection if item in available_items]
         else:
-            try:
-                default_selection = [k for k, v in CONFIG["MANDATORY_ITEMS"].items() if v.get("default", False)]
-            except Exception:
-                default_selection = []
-
-        # Unity: preselect Partner: Paralegal Task/Tasks via helper
+            # Otherwise, determine initial defaults based on environment.
+            if st.session_state.get("selected_env") == 'SimpleLegal':
+                # For SimpleLegal, all available items are selected by default.
+                default_selection = list(available_items)
+            else:
+                # For other environments, default to all items
+                default_selection = list(available_items)
+        
+        # Special rule for 'Unity': ensure 'Partner: Paralegal Task' is pre-selected if available.
         if st.session_state.get("selected_env") == "Unity":
             pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
             if pp_key and pp_key not in default_selection:
-                default_selection = list(default_selection) + [pp_key]
-        # -----------------------------------------------
-
-
-        # Persist user's selection across reruns
-        st.session_state["mandatory_items_default"] = list(selected_items)
-
-
-        # ---- Mandatory Items UI (robust) --------------------------------------------
-        # Build the options from your config
-        available_items = list(CONFIG["MANDATORY_ITEMS"].keys())
-
-        # Default selection:
-        # 1) reuse last choice if present
-        # 2) otherwise use any items flagged default=True in your config
-        # 3) otherwise start empty
-        saved = st.session_state.get("mandatory_items_default")
-        if saved:
-            default_selection = list(saved)
-        else:
-            try:
-                default_selection = [k for k, v in CONFIG["MANDATORY_ITEMS"].items() if v.get("default", False)]
-            except Exception:
-                default_selection = []
-
-        # Unity: preselect Partner: Paralegal Task/Tasks by adjusting the default list
-        if st.session_state.get("selected_env") == "Unity":
-            pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
-            if pp_key and pp_key not in default_selection:
-                default_selection = list(default_selection) + [pp_key]
-
-        # Render the multiselect with a stable key
+                default_selection.append(pp_key)
+        
+        # Render the multiselect widget
         selected_items = st.multiselect(
             "Select Mandatory Items to Include",
             options=available_items,
@@ -1894,16 +1856,10 @@ if st.session_state.get("selected_env") == "Unity":
             key="mandatory_items_multiselect",
         )
 
-        # Persist the user’s selection so defaults survive reruns
+        # Persist the user's selection so it survives reruns.
         st.session_state["mandatory_items_default"] = list(selected_items)
-        # -----------------------------------------------------------------------------
-# After selected_items is created
-        
-# (removed) post-multiselect Unity append
-
         
         # Conditional UI for Airfare Details
-        selected_items = st.session_state.get("mandatory_items_multiselect", st.session_state.get("mandatory_items_default", []))
         if 'Airfare E110' in selected_items:
             st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
             ac1, ac2 = st.columns(2)
@@ -1923,7 +1879,6 @@ if st.session_state.get("selected_env") == "Unity":
             )
         
         # Conditional UI for Uber Details
-        selected_items = st.session_state.get("mandatory_items_multiselect", st.session_state.get("mandatory_items_default", []))
         if 'Uber E110' in selected_items:
             st.markdown("<h4 style='color: #1E1E1E;'>Uber E110 Details</h4>", unsafe_allow_html=True)
             st.number_input("Ride Amount", min_value=0.0, value=25.50, step=0.01, key="uber_amount", help="This amount will be used for the Uber ride line item total.")
