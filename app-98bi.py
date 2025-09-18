@@ -1,4 +1,93 @@
+
+# Control how strongly to match task descriptions to timekeeper roles
+tk_bias_pct = st.slider("Timekeeper match bias (%)", min_value=0, max_value=100, value=80, step=5,
+                        help="Higher picks more descriptions aligned to each timekeeper's classification.")
+
+
+def _generate_fees(
+    fee_count: int,
+    timekeeper_data,
+    billing_start_date,
+    billing_end_date,
+    task_activity_desc,
+    major_task_codes: set,
+    max_hours_per_tk_per_day: int,
+    faker_instance,
+    client_id: str,
+    law_firm_id: str,
+    invoice_desc: str,
+    tk_bias: float = 0.80
+):
+    """Generate fee line items (TK_CLASSIFICATION-aware)."""
+    rows = []
+    delta = billing_end_date - billing_start_date
+    num_days = max(1, delta.days + 1)
+    records = _normalize_task_records(task_activity_desc)
+    used_triples = set()
+    daily_hours_tracker = {}
+    MAX_DAILY_HOURS = max_hours_per_tk_per_day
+
+    for _ in range(fee_count):
+        if not records or not timekeeper_data:
+            break
+
+        tk_row = random.choice(timekeeper_data)
+        rec = _pick_record_for_tk(records, major_task_codes, tk_row, used_triples, bias=tk_bias)
+        if rec is None:
+            continue
+
+        random_day_offset = random.randint(0, num_days - 1)
+        line_item_date = (billing_start_date + datetime.timedelta(days=random_day_offset)).strftime("%Y-%m-%d")
+        tk_id = tk_row["TIMEKEEPER_ID"]
+
+        current = daily_hours_tracker.get((line_item_date, tk_id), 0.0)
+        remaining = MAX_DAILY_HOURS - current
+        if remaining <= 0:
+            continue
+
+        hours_to_bill = round(random.uniform(0.5, min(8.0, remaining)), 1)
+        if hours_to_bill == 0:
+            continue
+
+        rate = float(tk_row["RATE"])
+        total = round(hours_to_bill * rate, 2)
+
+        desc = _process_description(rec["DESCRIPTION"], faker_instance)
+
+        rows.append({
+            "INVOICE_DESCRIPTION": invoice_desc,
+            "CLIENT_ID": client_id,
+            "LAW_FIRM_ID": law_firm_id,
+            "LINE_ITEM_DATE": line_item_date,
+            "TIMEKEEPER_NAME": tk_row["TIMEKEEPER_NAME"],
+            "TIMEKEEPER_CLASSIFICATION": tk_row["TIMEKEEPER_CLASSIFICATION"],
+            "TIMEKEEPER_ID": tk_id,
+            "TASK_CODE": rec["TASK_CODE"],
+            "ACTIVITY_CODE": rec["ACTIVITY_CODE"],
+            "EXPENSE_CODE": "",
+            "DESCRIPTION": desc,
+            "HOURS": hours_to_bill,
+            "RATE": rate,
+            "LINE_ITEM_TOTAL": total
+        })
+        daily_hours_tracker[(line_item_date, tk_id)] = current + hours_to_bill
+
+    return rows
+
+
 import streamlit as st
+
+
+def _norm_tk_class(val: str) -> str:
+    s = str(val or "").strip().lower()
+    if "partner" in s:
+        return "Partner"
+    if "associate" in s:
+        return "Associate"
+    if "paralegal" in s or "legal assistant" in s:
+        return "Paralegal"
+    return ""
+
 
 # Baseline so static analyzers see it as defined before any use
 selected_items = []  # baseline for pylance
@@ -849,7 +938,7 @@ def _generate_expenses(expense_count: int, billing_start_date: datetime.date, bi
 def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: List[Dict], client_id: str, law_firm_id: str, invoice_desc: str, billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, num_block_billed: int, faker_instance: Faker) -> Tuple[List[Dict], float]:
     """Generate invoice data with fees and expenses."""
     rows = []
-    rows.extend(_generate_fees(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc))
+    rows.extend(_generate_fees(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc, tk_bias=tk_bias_pct/100.0))
     rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
     
     # Filter for fees only before creating block billed items
@@ -2258,4 +2347,96 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
+
+
+
+def _load_custom_task_activity_data(uploaded_file):
+    """Load custom task/activity data from CSV (optionally with TK_CLASSIFICATION)."""
+    if uploaded_file is None:
+        return None
+    try:
+        df = pd.read_csv(uploaded_file)
+        required_cols = ["TASK_CODE", "ACTIVITY_CODE", "DESCRIPTION"]
+        for col in required_cols:
+            if col not in df.columns:
+                st.error("Custom Task/Activity CSV must contain: TASK_CODE, ACTIVITY_CODE, DESCRIPTION (optional: TK_CLASSIFICATION)")
+                return None
+        if df.empty:
+            st.warning("Custom Task/Activity CSV file is empty.")
+            return []
+
+        has_tk = "TK_CLASSIFICATION" in df.columns
+        dedupe_cols = ["TASK_CODE", "ACTIVITY_CODE", "DESCRIPTION"] + (["TK_CLASSIFICATION"] if has_tk else [])
+        df = df.drop_duplicates(subset=dedupe_cols).sample(frac=1, random_state=None).reset_index(drop=True)
+
+        records = []
+        for _, r in df.iterrows():
+            records.append({
+                "TASK_CODE": str(r["TASK_CODE"]),
+                "ACTIVITY_CODE": str(r["ACTIVITY_CODE"]),
+                "DESCRIPTION": str(r["DESCRIPTION"]),
+                "TK_CLASSIFICATION": _norm_tk_class(r["TK_CLASSIFICATION"]) if has_tk else ""
+            })
+        # Keep for later (e.g., mandatory override)
+        st.session_state['custom_task_catalog'] = records
+        return records
+    except Exception as e:
+        st.error(f"Error loading custom tasks file: {e}")
+        logging.error(f"Custom tasks load error: {e}")
+        return None
+
+
+
+
+def _normalize_task_records(task_activity_desc):
+    """Accept legacy tuples or new dicts; return list of dicts with TK_CLASSIFICATION."""
+    out = []
+    if not task_activity_desc:
+        return out
+    sample = task_activity_desc[0]
+    if isinstance(sample, tuple) and len(sample) == 3:
+        for t, a, d in task_activity_desc:
+            out.append({"TASK_CODE": t, "ACTIVITY_CODE": a, "DESCRIPTION": d, "TK_CLASSIFICATION": ""})
+    else:
+        for r in task_activity_desc:
+            out.append({
+                "TASK_CODE": r.get("TASK_CODE",""),
+                "ACTIVITY_CODE": r.get("ACTIVITY_CODE",""),
+                "DESCRIPTION": r.get("DESCRIPTION",""),
+                "TK_CLASSIFICATION": _norm_tk_class(r.get("TK_CLASSIFICATION",""))
+            })
+    return out
+
+def _class_matches(tk_class: str, rec_class: str) -> bool:
+    return (rec_class == "") or (rec_class == _norm_tk_class(tk_class))
+
+def _pick_record_for_tk(all_records, major_task_codes: set, tk_row: dict, used: set, bias: float = 0.8, force_rec_class: str = None):
+    """Prefer records whose TK_CLASSIFICATION matches tk_row's classification; allow forcing record class."""
+    majors = [r for r in all_records if r.get("TASK_CODE") in (major_task_codes or set())]
+    pool = majors or list(all_records)
+
+    if force_rec_class:
+        specific = [r for r in pool if _norm_tk_class(r.get("TK_CLASSIFICATION","")) == _norm_tk_class(force_rec_class)]
+        if specific:
+            pool = specific
+        else:
+            any_pool = [r for r in pool if not r.get("TK_CLASSIFICATION")]
+            pool = any_pool or pool
+    else:
+        tk_class = tk_row.get("TIMEKEEPER_CLASSIFICATION", "")
+        if bias > 0 and (random.random() < bias):
+            matched = [r for r in pool if _class_matches(tk_class, r.get("TK_CLASSIFICATION",""))]
+            if matched:
+                pool = matched
+
+    for _ in range(8):
+        cand = random.choice(pool)
+        key = (cand["TASK_CODE"], cand["ACTIVITY_CODE"], cand["DESCRIPTION"], cand.get("TK_CLASSIFICATION",""))
+        if key not in used:
+            used.add(key)
+            return cand
+    cand = random.choice(pool)
+    used.add((cand["TASK_CODE"], cand["ACTIVITY_CODE"], cand["DESCRIPTION"], cand.get("TK_CLASSIFICATION","")))
+    return cand
 
