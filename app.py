@@ -1520,7 +1520,7 @@ if generate_button:
         st.stop()
     
     faker = Faker()
-    descriptions = [d.strip() for d in invoice_desc.split('\\n') if d.strip()]
+    descriptions = [d.strip() for d in invoice_desc.split('\n') if d.strip()]
     num_invoices = int(num_invoices)
     
     if multiple_periods and len(descriptions) != num_invoices:
@@ -1578,6 +1578,7 @@ if generate_button:
                 if combine_ledes:
                     combined_ledes_content += ledes_content_part   # <- no extra "\n" here
                 else:
+                    ledes_filename = f"LEDES_1998B_{current_invoice_number}.txt"
                     attachments_list.append((ledes_filename, ledes_content_part.encode("utf-8")))
 
                 
