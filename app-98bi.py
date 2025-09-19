@@ -953,7 +953,7 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
         expense_idx = [i for i, r in enumerate(rows) if r.get("EXPENSE_CODE")]
         if expense_idx and timekeeper_data:
             idx = expense_idx[0]
-            base = rows[idx]
+            base_row = rows[idx]
 
             partners   = [tk for tk in timekeeper_data if _norm_tk(tk.get("TIMEKEEPER_CLASSIFICATION")) == "partner"]
             associates = [tk for tk in timekeeper_data if _norm_tk(tk.get("TIMEKEEPER_CLASSIFICATION")) == "associate"]
@@ -964,12 +964,12 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
                 tk_a = _rand.choice(associates)
 
                 # Ensure duplicates are NOT block-billed: use a single-task description and remove any block marker
-                base_desc = str(base.get("DESCRIPTION", ""))
+                base_desc = str(base_row.get("DESCRIPTION", ""))
                 if ";" in base_desc:
                     base_desc = base_desc.split(";")[0].strip()
 
-                row_p = dict(base)
-                row_a = dict(base)
+                row_p = dict(base_row)
+                row_a = dict(base_row)
 
                 row_p["DESCRIPTION"] = base_desc
                 row_a["DESCRIPTION"] = base_desc
@@ -1837,13 +1837,12 @@ with tab_objects[1]:
 with tab_objects[2]:
     st.markdown("<h2 style='color: #1E1E1E;'>Fees & Expenses</h2>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
-    
     multiple_attendees_meeting = st.checkbox(
-    "Multiple Attendees at Same Meeting",
-    value=False,
-    help="If checked, create two identical EXPENSE line items for the same meeting: one Partner and one Associate."
+        "Multiple Attendees at Same Meeting",
+        value=False,
+        help="If checked, create two identical EXPENSE line items for the same meeting: one Partner and one Associate."
     )
-    st.caption(f"Multiple attendees flag = {multiple_attendees_meeting}")
+
 
     # In the "Fees & Expenses" tab, before the sliders
     st.selectbox(
@@ -2155,8 +2154,6 @@ if generate_button:
                     fees_used, expenses_used, timekeeper_data, client_id, law_firm_id,
                     current_invoice_desc, current_start_date, current_end_date,
                     task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, num_block_billed, faker
-                    multiple_attendees_meeting=multiple_attendees_meeting,
-                    multiple_attendees_meeting: bool = False,
                 )
 
                 skipped_mandatory_items = []
@@ -2337,5 +2334,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
-
 
