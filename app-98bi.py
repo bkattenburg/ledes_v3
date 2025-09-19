@@ -922,7 +922,25 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
     rows = []
     rows.extend(_generate_fees(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc))
     rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
+
+    # --- FIX: Add multiple attendee rows BEFORE block billing ---
+    # This ensures they can be included in the block billing consolidation.
+    try:
+        _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
+    except Exception:
+        _multi_flag = False
     
+    if _multi_flag:
+        rows = _append_two_attendee_meeting_rows(
+            rows,
+            timekeeper_data,
+            billing_start_date,
+            faker_instance,
+            client_id,
+            law_firm_id,
+            invoice_desc
+        )
+
     # Filter for fees only before creating block billed items
     fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
     
@@ -952,17 +970,14 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             if blocks_created >= num_block_billed:
                 break
             
-            # Ensure no rows in this group have already been used in another block
             if any(id(row) in consolidated_row_ids for row in group):
                 continue
 
-            # Sum the hours and totals from the selected group
             total_hours = sum(float(row["HOURS"]) for row in group)
             total_amount_block = sum(float(row["LINE_ITEM_TOTAL"]) for row in group)
             descriptions = [row["DESCRIPTION"] for row in group]
             block_description = "; ".join(descriptions)
             
-            # Since all rows in the group are for the same TK and date, we can safely take details from the first row
             first_row = group[0]
             
             block_row = {
@@ -976,33 +991,14 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             }
             new_blocks.append(block_row)
             
-            # Mark original rows as consolidated
             for row in group:
                 consolidated_row_ids.add(id(row))
             
             blocks_created += 1
 
-        # Reconstruct the main 'rows' list by removing consolidated rows and adding new blocks
         if consolidated_row_ids:
             rows = [row for row in rows if id(row) not in consolidated_row_ids]
             rows.extend(new_blocks)
-
-    # Append the two-attendee meeting rows if the checkbox is on
-    try:
-        _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
-    except Exception:
-        _multi_flag = False
-    
-    if _multi_flag:
-        rows = _append_two_attendee_meeting_rows(
-            rows,
-            timekeeper_data,
-            billing_start_date,
-            faker_instance,
-            client_id,          # Pass client_id
-            law_firm_id,        # Pass law_firm_id
-            invoice_desc        # Pass invoice_desc
-        )
     
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
@@ -2136,6 +2132,7 @@ st.markdown("---")
 generate_button = st.button("Generate Invoice(s)", disabled=not is_valid_input)
 
 # Main App Logic
+# Main App Logic
 if generate_button:
     if ledes_version == "XML 2.1":
         st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
@@ -2165,11 +2162,17 @@ if generate_button:
                 status.update(label=f"Generating Invoice {i+1}/{num_invoices} for period {current_start_date} to {current_end_date}")
                 
                 current_invoice_desc = descriptions[i] if multiple_periods and i < len(descriptions) else descriptions[0]
-                fees_used = max(0, fees - (2 if spend_agent and selected_items else 0))
-                expenses_used = max(0, expenses - (1 if spend_agent and 'Uber E110' in selected_items else 0))
                 
+                # --- FIX: Correctly calculate the number of fees/expenses to generate ---
+                # This ensures mandatory items don't add to the total count requested by the user.
+                num_mandatory_fees = sum(1 for item in selected_items if not CONFIG['MANDATORY_ITEMS'][item]['is_expense'])
+                num_mandatory_expenses = len(selected_items) - num_mandatory_fees
+                
+                fees_to_generate = max(0, fees - num_mandatory_fees)
+                expenses_to_generate = max(0, expenses - num_mandatory_expenses)
+
                 rows, total_amount = _generate_invoice_data(
-                    fees, expenses, timekeeper_data, client_id, law_firm_id,
+                    fees_to_generate, expenses_to_generate, timekeeper_data, client_id, law_firm_id,
                     current_invoice_desc, current_start_date, current_end_date,
                     task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, num_block_billed, faker
                 )
