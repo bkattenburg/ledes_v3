@@ -852,34 +852,7 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
     rows.extend(_generate_fees(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc))
     rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
     
-    
-
-    # If Multiple Attendees at Same Meeting is enabled, duplicate one expense row with Partner and Associate timekeepers
-    try:
-        _multi_flag = st.session_state.get('multiple_attendees_meeting', False)
-    except Exception:
-        _multi_flag = False
-    if _multi_flag:
-        # Choose a base expense row to duplicate (keep date, units, rate, amount, code, description identical)
-        expense_rows = [r for r in rows if r.get("EXPENSE_CODE")]
-        if expense_rows and timekeeper_data:
-            import random as _rand
-            base = _rand.choice(expense_rows)
-            # Find Partner and Associate timekeepers
-            def _norm(s): return str(s or "").strip().lower()
-            partners = [tk for tk in timekeeper_data if _norm(tk.get("TIMEKEEPER_CLASSIFICATION","")).startswith("partner")]
-            associates = [tk for tk in timekeeper_data if _norm(tk.get("TIMEKEEPER_CLASSIFICATION","")).startswith("associate")]
-            if partners and associates:
-                # Create two duplicates differing only by timekeeper fields
-                pair = [("Partner", _rand.choice(partners)), ("Associate", _rand.choice(associates))]
-                for _role, _tk in pair:
-                    new_row = dict(base)
-                    new_row["TIMEKEEPER_NAME"] = _tk.get("TIMEKEEPER_NAME","")
-                    new_row["TIMEKEEPER_CLASSIFICATION"] = _tk.get("TIMEKEEPER_CLASSIFICATION","")
-                    new_row["TIMEKEEPER_ID"] = _tk.get("TIMEKEEPER_ID","")
-                    rows.append(new_row)
-            # else: silently skip if we don't have both roles
-# Filter for fees only before creating block billed items
+    # Filter for fees only before creating block billed items
     fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
     
     if num_block_billed > 0 and fee_rows:
@@ -944,6 +917,76 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             rows.extend(new_blocks)
 
     # Final total calculation
+    # --- Enforce TOTAL cap on extended (multi-task) lines for FEES only ---
+    try:
+        TOTAL_BLOCK_LIMIT = int(num_block_billed)
+    except Exception:
+        TOTAL_BLOCK_LIMIT = 0
+
+    def _is_blocky(desc: str) -> bool:
+        return ";" in str(desc or "")
+
+    # Operate only on FEES (exclude EXPENSE rows)
+    fee_rows_idx = [i for i, r in enumerate(rows) if not r.get("EXPENSE_CODE")]
+    blocky_fee_idx = [i for i in fee_rows_idx if _is_blocky(rows[i].get("DESCRIPTION"))]
+
+    # Keep only the first N fee block-billed lines; trim the rest to single-task
+    for i in blocky_fee_idx[TOTAL_BLOCK_LIMIT:]:
+        parts = [p.strip() for p in str(rows[i].get("DESCRIPTION", "")).split(";") if p.strip()]
+        if parts:
+            rows[i]["DESCRIPTION"] = parts[0]
+
+    # --- Multiple attendees at same meeting (expenses; final step so it survives earlier processing) ---
+    try:
+        _multi_flag = bool(st.session_state.get('multiple_attendees_meeting', False))
+    except Exception:
+        _multi_flag = False
+
+    if _multi_flag:
+        def _norm_tk(s: str) -> str:
+            s = str(s or "").strip().lower()
+            if s.startswith("partner"): return "partner"
+            if s.startswith("associate"): return "associate"
+            return s
+
+        # Choose one expense row to duplicate
+        expense_idx = [i for i, r in enumerate(rows) if r.get("EXPENSE_CODE")]
+        if expense_idx and timekeeper_data:
+            idx = expense_idx[0]
+            base = rows[idx]
+
+            partners   = [tk for tk in timekeeper_data if _norm_tk(tk.get("TIMEKEEPER_CLASSIFICATION")) == "partner"]
+            associates = [tk for tk in timekeeper_data if _norm_tk(tk.get("TIMEKEEPER_CLASSIFICATION")) == "associate"]
+
+            if partners and associates:
+                import random as _rand
+                tk_p = _rand.choice(partners)
+                tk_a = _rand.choice(associates)
+
+                # Ensure duplicates are NOT block-billed: use a single-task description and remove any block marker
+                base_desc = str(base.get("DESCRIPTION", ""))
+                if ";" in base_desc:
+                    base_desc = base_desc.split(";")[0].strip()
+
+                row_p = dict(base)
+                row_a = dict(base)
+
+                row_p["DESCRIPTION"] = base_desc
+                row_a["DESCRIPTION"] = base_desc
+                row_p.pop("__is_block__", None)
+                row_a.pop("__is_block__", None)
+
+                # Only timekeeper fields differ
+                row_p["TIMEKEEPER_NAME"] = tk_p.get("TIMEKEEPER_NAME", "")
+                row_p["TIMEKEEPER_CLASSIFICATION"] = tk_p.get("TIMEKEEPER_CLASSIFICATION", "")
+                row_p["TIMEKEEPER_ID"] = tk_p.get("TIMEKEEPER_ID", "")
+
+                row_a["TIMEKEEPER_NAME"] = tk_a.get("TIMEKEEPER_NAME", "")
+                row_a["TIMEKEEPER_CLASSIFICATION"] = tk_a.get("TIMEKEEPER_CLASSIFICATION", "")
+                row_a["TIMEKEEPER_ID"] = tk_a.get("TIMEKEEPER_ID", "")
+
+                # Replace the original expense with the Partner/Associate pair
+                rows[idx:idx+1] = [row_p, row_a]
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
 
@@ -1793,18 +1836,9 @@ with tab_objects[1]:
 
 with tab_objects[2]:
     st.markdown("<h2 style='color: #1E1E1E;'>Fees & Expenses</h2>", unsafe_allow_html=True)
-    
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
 
-    
-    multiple_attendees_meeting = st.checkbox(
-        "Multiple Attendees at Same Meeting",
-        value=False,
-        help="If checked, generates two identical EXPENSE line items for the same meeting with different timekeepers (Partner & Associate)."
-    )
-    # Persist for generation
-    st.session_state['multiple_attendees_meeting'] = multiple_attendees_meeting
-# In the "Fees & Expenses" tab, before the sliders
+    # In the "Fees & Expenses" tab, before the sliders
     st.selectbox(
         "Invoice Size Presets",
         options=list(PRESETS.keys()),
