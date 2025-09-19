@@ -1024,20 +1024,20 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
         fee_idx = [i for i, r in enumerate(rows) if not r.get("EXPENSE_CODE")]
         base_row = rows[fee_idx[0]] if fee_idx else (rows[0] if rows else {})
 
-                # Append the two-attendee meeting rows if the checkbox is on
-            try:
-                _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
-            except Exception:
-                _multi_flag = False
-            
-            if _multi_flag:
-                rows = _append_two_attendee_meeting_rows(
-                    rows,
-                    timekeeper_data,
-                    billing_start_date,     # or current_start_date if that's your variable
-                    faker_instance
-                )
+        # Append the two-attendee meeting rows if the checkbox is on
+    try:
+        _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
+    except Exception:
+        _multi_flag = False
     
+    if _multi_flag:
+        rows = _append_two_attendee_meeting_rows(
+            rows,
+            timekeeper_data,
+            billing_start_date,     # or current_start_date if that's your variable
+            faker_instance
+        )
+
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
 
@@ -2386,6 +2386,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
