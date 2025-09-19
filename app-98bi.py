@@ -1,146 +1,5 @@
 import streamlit as st
 
-def _norm_tk_class(val: str) -> str:
-    s = str(val or "").strip().lower()
-    if "partner" in s:
-        return "Partner"
-    if "associate" in s:
-        return "Associate"
-    if "paralegal" in s or "legal assistant" in s:
-        return "Paralegal"
-    return ""
-
-
-def _normalize_task_records(task_activity_desc):
-    out = []
-    if not task_activity_desc:
-        return out
-    sample = task_activity_desc[0]
-    if isinstance(sample, tuple) and len(sample) == 3:
-        for t, a, d in task_activity_desc:
-            out.append({"TASK_CODE": t, "ACTIVITY_CODE": a, "DESCRIPTION": d, "TK_CLASSIFICATION": ""})
-    else:
-        for r in task_activity_desc:
-            out.append({
-                "TASK_CODE": r.get("TASK_CODE",""),
-                "ACTIVITY_CODE": r.get("ACTIVITY_CODE",""),
-                "DESCRIPTION": r.get("DESCRIPTION",""),
-                "TK_CLASSIFICATION": _norm_tk_class(r.get("TK_CLASSIFICATION",""))
-            })
-    return out
-
-def _class_matches(tk_class: str, rec_class: str) -> bool:
-    return (rec_class == "") or (rec_class == _norm_tk_class(tk_class))
-
-def _pick_record_for_tk(all_records, major_task_codes: set, tk_row: dict, used: set, bias: float = 0.8, force_rec_class: str = None):
-    majors = [r for r in all_records if r.get("TASK_CODE") in (major_task_codes or set())]
-    pool = majors or list(all_records)
-
-    if force_rec_class:
-        specific = [r for r in pool if _norm_tk_class(r.get("TK_CLASSIFICATION","")) == _norm_tk_class(force_rec_class)]
-        if specific:
-            pool = specific
-        else:
-            any_pool = [r for r in pool if not r.get("TK_CLASSIFICATION")]
-            pool = any_pool or pool
-    else:
-        tk_class = tk_row.get("TIMEKEEPER_CLASSIFICATION", "")
-        if bias > 0 and (random.random() < bias):
-            matched = [r for r in pool if _class_matches(tk_class, r.get("TK_CLASSIFICATION",""))]
-            if matched:
-                pool = matched
-
-    for _ in range(8):
-        cand = random.choice(pool)
-        key = (cand["TASK_CODE"], cand["ACTIVITY_CODE"], cand["DESCRIPTION"], cand.get("TK_CLASSIFICATION",""))
-        if key not in used:
-            used.add(key)
-            return cand
-    cand = random.choice(pool)
-    used.add((cand["TASK_CODE"], cand["ACTIVITY_CODE"], cand["DESCRIPTION"], cand.get("TK_CLASSIFICATION","")))
-    return cand
-
-
-def _generate_fees(
-    fee_count: int,
-    timekeeper_data,
-    billing_start_date,
-    billing_end_date,
-    task_activity_desc,
-    major_task_codes: set,
-    max_hours_per_tk_per_day: int,
-    faker_instance,
-    client_id: str,
-    law_firm_id: str,
-    invoice_desc: str,
-    tk_bias: float = 0.80
-):
-    rows = []
-    delta = billing_end_date - billing_start_date
-    num_days = max(1, delta.days + 1)
-    records = _normalize_task_records(task_activity_desc)
-    used_triples = set()
-    daily_hours_tracker = {}
-    MAX_DAILY_HOURS = max_hours_per_tk_per_day
-
-    for _ in range(fee_count):
-        if not records or not timekeeper_data:
-            break
-
-        tk_row = random.choice(timekeeper_data)
-        rec = _pick_record_for_tk(records, major_task_codes, tk_row, used_triples, bias=tk_bias)
-        if rec is None:
-            continue
-
-        random_day_offset = random.randint(0, num_days - 1)
-        line_item_date = (billing_start_date + datetime.timedelta(days=random_day_offset)).strftime("%Y-%m-%d")
-        tk_id = tk_row["TIMEKEEPER_ID"]
-
-        current = daily_hours_tracker.get((line_item_date, tk_id), 0.0)
-        remaining = MAX_DAILY_HOURS - current
-        if remaining <= 0:
-            continue
-
-        hours_to_bill = round(random.uniform(0.5, min(8.0, remaining)), 1)
-        if hours_to_bill == 0:
-            continue
-
-        rate = float(tk_row["RATE"])
-        total = round(hours_to_bill * rate, 2)
-
-        desc = _process_description(rec["DESCRIPTION"], faker_instance)
-
-        rows.append({
-            "INVOICE_DESCRIPTION": invoice_desc,
-            "CLIENT_ID": client_id,
-            "LAW_FIRM_ID": law_firm_id,
-            "LINE_ITEM_DATE": line_item_date,
-            "TIMEKEEPER_NAME": tk_row["TIMEKEEPER_NAME"],
-            "TIMEKEEPER_CLASSIFICATION": tk_row["TIMEKEEPER_CLASSIFICATION"],
-            "TIMEKEEPER_ID": tk_id,
-            "TASK_CODE": rec["TASK_CODE"],
-            "ACTIVITY_CODE": rec["ACTIVITY_CODE"],
-            "EXPENSE_CODE": "",
-            "DESCRIPTION": desc,
-            "HOURS": hours_to_bill,
-            "RATE": rate,
-            "LINE_ITEM_TOTAL": total
-        })
-        daily_hours_tracker[(line_item_date, tk_id)] = current + hours_to_bill
-
-    return rows
-
-# Compatibility wrapper for mixed environments
-def _generate_fees_compat(*args, **kwargs):
-    try:
-        return _generate_fees(*args, **kwargs)
-    except TypeError as e:
-        if "tk_bias" in str(e):
-            kwargs.pop("tk_bias", None)
-            return _generate_fees(*args, **kwargs)
-        raise
-
-
 # Baseline so static analyzers see it as defined before any use
 selected_items = []  # baseline for pylance
 
@@ -990,10 +849,37 @@ def _generate_expenses(expense_count: int, billing_start_date: datetime.date, bi
 def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: List[Dict], client_id: str, law_firm_id: str, invoice_desc: str, billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, num_block_billed: int, faker_instance: Faker) -> Tuple[List[Dict], float]:
     """Generate invoice data with fees and expenses."""
     rows = []
-    rows.extend(_generate_fees_compat(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc, tk_bias=tk_bias_pct/100.0))
+    rows.extend(_generate_fees(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc))
     rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
     
-    # Filter for fees only before creating block billed items
+    
+
+    # If Multiple Attendees at Same Meeting is enabled, duplicate one expense row with Partner and Associate timekeepers
+    try:
+        _multi_flag = st.session_state.get('multiple_attendees_meeting', False)
+    except Exception:
+        _multi_flag = False
+    if _multi_flag:
+        # Choose a base expense row to duplicate (keep date, units, rate, amount, code, description identical)
+        expense_rows = [r for r in rows if r.get("EXPENSE_CODE")]
+        if expense_rows and timekeeper_data:
+            import random as _rand
+            base = _rand.choice(expense_rows)
+            # Find Partner and Associate timekeepers
+            def _norm(s): return str(s or "").strip().lower()
+            partners = [tk for tk in timekeeper_data if _norm(tk.get("TIMEKEEPER_CLASSIFICATION","")).startswith("partner")]
+            associates = [tk for tk in timekeeper_data if _norm(tk.get("TIMEKEEPER_CLASSIFICATION","")).startswith("associate")]
+            if partners and associates:
+                # Create two duplicates differing only by timekeeper fields
+                pair = [("Partner", _rand.choice(partners)), ("Associate", _rand.choice(associates))]
+                for _role, _tk in pair:
+                    new_row = dict(base)
+                    new_row["TIMEKEEPER_NAME"] = _tk.get("TIMEKEEPER_NAME","")
+                    new_row["TIMEKEEPER_CLASSIFICATION"] = _tk.get("TIMEKEEPER_CLASSIFICATION","")
+                    new_row["TIMEKEEPER_ID"] = _tk.get("TIMEKEEPER_ID","")
+                    rows.append(new_row)
+            # else: silently skip if we don't have both roles
+# Filter for fees only before creating block billed items
     fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
     
     if num_block_billed > 0 and fee_rows:
@@ -1057,29 +943,7 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             rows = [row for row in rows if id(row) not in consolidated_row_ids]
             rows.extend(new_blocks)
 
-    
-        # --- Enforce TOTAL cap on extended (semicolon) lines across consolidated + catalog ---
-        TOTAL_BLOCK_LIMIT = int(num_block_billed)
-        def _is_blocky(desc: str) -> bool:
-            return ";" in str(desc or "")
-
-        # Determine which rows were consolidated (kept in consolidated_row_ids)
-        true_blocks = [r for r in rows if _is_blocky(r.get("DESCRIPTION")) and id(r) in consolidated_row_ids]
-        kept_true = min(len(true_blocks), TOTAL_BLOCK_LIMIT)
-        remaining_headroom = max(0, TOTAL_BLOCK_LIMIT - kept_true)
-
-        # For catalog 'block-like' rows, keep only remaining_headroom; trim the rest to a single task
-        for r in rows:
-            if _is_blocky(r.get("DESCRIPTION")) and id(r) not in consolidated_row_ids:
-                if remaining_headroom > 0:
-                    remaining_headroom -= 1
-                else:
-                    parts = [p.strip() for p in str(r.get("DESCRIPTION","")).split(";") if p.strip()]
-                    if parts:
-                        r["DESCRIPTION"] = parts[0]
-
-
-# Final total calculation
+    # Final total calculation
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
 
@@ -1721,17 +1585,6 @@ st.checkbox(
     on_change=update_send_email
 )
 
-# Control how strongly to match task descriptions to timekeeper roles
-tk_bias_pct = st.slider(
-    "Timekeeper match bias (%)",
-    min_value=0, max_value=100, value=80, step=5,
-    help="Higher picks more descriptions aligned to each timekeeper's classification."
-)
-
-
-
-
-
 # Sidebar
 st.sidebar.markdown("<h2 style='color: #1E1E1E;'>Quick Links</h2>", unsafe_allow_html=True)
 sample_timekeeper = pd.DataFrame({
@@ -1940,9 +1793,18 @@ with tab_objects[1]:
 
 with tab_objects[2]:
     st.markdown("<h2 style='color: #1E1E1E;'>Fees & Expenses</h2>", unsafe_allow_html=True)
+    
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
 
-    # In the "Fees & Expenses" tab, before the sliders
+    
+    multiple_attendees_meeting = st.checkbox(
+        "Multiple Attendees at Same Meeting",
+        value=False,
+        help="If checked, generates two identical EXPENSE line items for the same meeting with different timekeepers (Partner & Associate)."
+    )
+    # Persist for generation
+    st.session_state['multiple_attendees_meeting'] = multiple_attendees_meeting
+# In the "Fees & Expenses" tab, before the sliders
     st.selectbox(
         "Invoice Size Presets",
         options=list(PRESETS.keys()),
