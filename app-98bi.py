@@ -932,9 +932,9 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
 
         # Scaffold from an existing FEE row if available
         fee_idx = [i for i, r in enumerate(rows) if not r.get("EXPENSE_CODE")]
-        base = rows[fee_idx[0]] if fee_idx else (rows[0] if rows else {})
+        base_row = rows[fee_idx[0]] if fee_idx else (rows[0] if rows else {})
 
-        # Hardcoded description with a random name
+        # Hardcoded description with a single random name used for BOTH lines
         try:
             _name = faker_instance.name()
         except Exception:
@@ -957,8 +957,8 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             tk_p = _rand.choice(partners)
             tk_a = _rand.choice(associates)
 
-            row_p = dict(base)
-            row_a = dict(base)
+            row_p = dict(base_row)
+            row_a = dict(base_row)
 
             for rr in (row_p, row_a):
                 rr.pop("EXPENSE_CODE", None)  # ensure fee
@@ -974,8 +974,18 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             row_a["HOURS"] = dur
 
             # Stamp TK + RATE using helper
-            _rp = _force_timekeeper_on_row(row_p, tk_p.get("TIMEKEEPER_NAME",""), timekeeper_data)
-            _ra = _force_timekeeper_on_row(row_a, tk_a.get("TIMEKEEPER_NAME",""), timekeeper_data)
+            try:
+                _rp = _force_timekeeper_on_row(row_p, tk_p.get("TIMEKEEPER_NAME",""), timekeeper_data)
+                _ra = _force_timekeeper_on_row(row_a, tk_a.get("TIMEKEEPER_NAME",""), timekeeper_data)
+            except Exception:
+                _rp = row_p
+                _ra = row_a
+                _rp["TIMEKEEPER_NAME"] = tk_p.get("TIMEKEEPER_NAME","")
+                _rp["TIMEKEEPER_CLASSIFICATION"] = tk_p.get("TIMEKEEPER_CLASSIFICATION","")
+                _rp["TIMEKEEPER_ID"] = tk_p.get("TIMEKEEPER_ID","")
+                _ra["TIMEKEEPER_NAME"] = tk_a.get("TIMEKEEPER_NAME","")
+                _ra["TIMEKEEPER_CLASSIFICATION"] = tk_a.get("TIMEKEEPER_CLASSIFICATION","")
+                _ra["TIMEKEEPER_ID"] = tk_a.get("TIMEKEEPER_ID","")
 
             if _rp and _ra:
                 if fee_idx:
@@ -1836,7 +1846,8 @@ with tab_objects[2]:
     multiple_attendees_meeting = st.checkbox(
         "Multiple Attendees at Same Meeting",
         value=False,
-        help="If checked, create two identical FEE line items for the same meeting: one Partner and one Associate."
+        help="If checked, create two identical FEE line items for the same meeting: one Partner and one Associate.",
+        key="multiple_attendees_meeting",
     )
 
     # In the "Fees & Expenses" tab, before the sliders
