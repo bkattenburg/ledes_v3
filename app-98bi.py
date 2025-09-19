@@ -923,8 +923,7 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
     rows.extend(_generate_fees(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc))
     rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
 
-    # --- FIX: Add multiple attendee rows BEFORE block billing ---
-    # This ensures they can be included in the block billing consolidation.
+    # Add multiple attendee rows BEFORE block billing
     try:
         _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
     except Exception:
@@ -945,14 +944,12 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
     fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
     
     if num_block_billed > 0 and fee_rows:
-        # Group fee rows by timekeeper and date to find candidates for block billing
         from collections import defaultdict
         daily_tk_groups = defaultdict(list)
         for row in fee_rows:
             key = (row["TIMEKEEPER_ID"], row["LINE_ITEM_DATE"])
             daily_tk_groups[key].append(row)
             
-        # Find groups with multiple tasks that are within the max daily hours limit
         eligible_groups = []
         for key, group_rows in daily_tk_groups.items():
             if len(group_rows) > 1:
@@ -996,13 +993,14 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             
             blocks_created += 1
 
+        # --- FIX: This block is now DE-DENTED to run only once after the loop ---
         if consolidated_row_ids:
             rows = [row for row in rows if id(row) not in consolidated_row_ids]
             rows.extend(new_blocks)
     
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
-
+    
 def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> Tuple[List[Dict], List[str]]:
     """Ensure mandatory line items are included and return a list of any skipped items."""
     delta = billing_end_date - billing_start_date
@@ -2355,3 +2353,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
