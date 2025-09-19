@@ -846,6 +846,96 @@ def _generate_expenses(expense_count: int, billing_start_date: datetime.date, bi
 
     return rows
 
+def _append_two_attendee_meeting_rows(rows, timekeeper_data, billing_start_date, faker_instance):
+    """
+    Appends TWO FEE rows for a meeting with identical description (same generated name),
+    identical date/hours/codes, but different timekeepers (Partner vs Associate).
+    Returns the same rows list (mutated).
+    """
+    import random as _rand
+    from datetime import date as _date
+
+    def _norm_role(s):
+        s = str(s or "").strip().lower()
+        if s.startswith("partner"):
+            return "partner"
+        if s.startswith("associate"):
+            return "associate"
+        return s
+
+    # Pick Partner and Associate
+    partners   = [tk for tk in (timekeeper_data or []) if _norm_role(tk.get("TIMEKEEPER_CLASSIFICATION")) == "partner"]
+    associates = [tk for tk in (timekeeper_data or []) if _norm_role(tk.get("TIMEKEEPER_CLASSIFICATION")) == "associate"]
+    if not partners or not associates:
+        return rows  # nothing to do
+
+    tk_p = _rand.choice(partners)
+    tk_a = _rand.choice(associates)
+
+    # Use the first fee row (if any) to scaffold required fields & codes
+    fee_idx  = [i for i, r in enumerate(rows) if not r.get("EXPENSE_CODE")]
+    base_row = rows[fee_idx[0]] if fee_idx else {}
+
+    # One random name used for BOTH lines
+    try:
+        random_name = faker_instance.name()
+    except Exception:
+        try:
+            from faker import Faker
+            random_name = Faker().name()
+        except Exception:
+            random_name = "John Doe"
+
+    hardcoded_desc = (
+        "Participate in litigation strategy meeting with client team to analyze opposing party's "
+        "recent discovery responses and prepare for the deposition of witness {NAME_PLACEHOLDER}."
+    )
+    desc_final = hardcoded_desc.replace("{NAME_PLACEHOLDER}", random_name)
+
+    # Meeting date: prefer base fee row's DATE; else billing_start_date; else today
+    try:
+        meeting_date = base_row.get("DATE") if base_row else str(billing_start_date)
+    except Exception:
+        meeting_date = _date.today().isoformat()
+
+    # Duration (same for both)
+    try:
+        dur = round(_rand.uniform(0.5, 2.5), 1)
+    except Exception:
+        dur = 1.0
+
+    def _mk_base_fee():
+        r = dict(base_row) if base_row else {}
+        r.pop("EXPENSE_CODE", None)                  # ensure it's a fee
+        r["EXP/FEE/INV_ADJ_TYPE"] = "F"
+        r["DATE"] = meeting_date
+        r["DESCRIPTION"] = desc_final               # non-block description
+        r.pop("__is_block__", None)                 # clear any internal marker
+        r["HOURS"] = dur
+        return r
+
+    row_p = _mk_base_fee()
+    row_a = _mk_base_fee()
+
+    # Stamp TK + RATE (using your app helper if available)
+    try:
+        rp = _force_timekeeper_on_row(row_p, tk_p.get("TIMEKEEPER_NAME", ""), timekeeper_data) or row_p
+        ra = _force_timekeeper_on_row(row_a, tk_a.get("TIMEKEEPER_NAME", ""), timekeeper_data) or row_a
+    except Exception:
+        rp = row_p
+        ra = row_a
+        rp["TIMEKEEPER_NAME"] = tk_p.get("TIMEKEEPER_NAME", "")
+        rp["TIMEKEEPER_CLASSIFICATION"] = tk_p.get("TIMEKEEPER_CLASSIFICATION", "")
+        rp["TIMEKEEPER_ID"] = tk_p.get("TIMEKEEPER_ID", "")
+        ra["TIMEKEEPER_NAME"] = tk_a.get("TIMEKEEPER_NAME", "")
+        ra["TIMEKEEPER_CLASSIFICATION"] = tk_a.get("TIMEKEEPER_CLASSIFICATION", "")
+        ra["TIMEKEEPER_ID"] = tk_a.get("TIMEKEEPER_ID", "")
+
+    # Append the pair so they are guaranteed to be included
+    rows.extend([rp, ra])
+    return rows
+
+
 def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: List[Dict], client_id: str, law_firm_id: str, invoice_desc: str, billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, num_block_billed: int, faker_instance: Faker) -> Tuple[List[Dict], float]:
     """Generate invoice data with fees and expenses."""
     rows = []
@@ -992,6 +1082,21 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
                     rows[fee_idx[0]:fee_idx[0]+1] = [_rp, _ra]
                 else:
                     rows.extend([_rp, _ra])
+
+                # Append the two-attendee meeting rows if the checkbox is on
+            try:
+                _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
+            except Exception:
+                _multi_flag = False
+            
+            if _multi_flag:
+                rows = _append_two_attendee_meeting_rows(
+                    rows,
+                    timekeeper_data,
+                    billing_start_date,     # or current_start_date if that's your variable
+                    faker_instance
+                )
+    
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
 
@@ -2340,4 +2445,5 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
