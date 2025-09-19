@@ -400,9 +400,9 @@ def _create_ledes_line_1998b(row: Dict, line_no: int, inv_total: float, bill_sta
         task_code = "" if is_expense else row.get("TASK_CODE", "")
         activity_code = "" if is_expense else row.get("ACTIVITY_CODE", "")
         expense_code = row.get("EXPENSE_CODE", "") if is_expense else ""
-        timekeeper_id = row.get("TIMEKEEPER_ID", "")
-        timekeeper_class = row.get("TIMEKEEPER_CLASSIFICATION", "")
-        timekeeper_name = row.get("TIMEKEEPER_NAME", "")
+        timekeeper_id = "" if is_expense else row.get("TIMEKEEPER_ID", "")
+        timekeeper_class = "" if is_expense else row.get("TIMEKEEPER_CLASSIFICATION", "")
+        timekeeper_name = "" if is_expense else row.get("TIMEKEEPER_NAME", "")
         description = str(row.get("DESCRIPTION", "")).replace("|", " - ")
         return [
             bill_end.strftime("%Y%m%d"),
@@ -917,77 +917,7 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             rows.extend(new_blocks)
 
     # Final total calculation
-    # --- Enforce TOTAL cap on extended (multi-task) lines for FEES only ---
-    try:
-        TOTAL_BLOCK_LIMIT = int(num_block_billed)
-    except Exception:
-        TOTAL_BLOCK_LIMIT = 0
-
-    def _is_blocky(desc: str) -> bool:
-        return ";" in str(desc or "")
-
-    # Operate only on FEES (exclude EXPENSE rows)
-    fee_rows_idx = [i for i, r in enumerate(rows) if not r.get("EXPENSE_CODE")]
-    blocky_fee_idx = [i for i in fee_rows_idx if _is_blocky(rows[i].get("DESCRIPTION"))]
-
-    # Keep only the first N fee block-billed lines; trim the rest to single-task
-    for i in blocky_fee_idx[TOTAL_BLOCK_LIMIT:]:
-        parts = [p.strip() for p in str(rows[i].get("DESCRIPTION", "")).split(";") if p.strip()]
-        if parts:
-            rows[i]["DESCRIPTION"] = parts[0]
-
-    # --- Multiple attendees at same meeting (expenses; final step so it survives earlier processing) ---
-    try:
-        _multi_flag = bool(st.session_state.get('multiple_attendees_meeting', False))
-    except Exception:
-        _multi_flag = False
-
-    if _multi_flag:
-        def _norm_tk(s: str) -> str:
-            s = str(s or "").strip().lower()
-            if s.startswith("partner"): return "partner"
-            if s.startswith("associate"): return "associate"
-            return s
-
-        # Choose one expense row to duplicate
-        expense_idx = [i for i, r in enumerate(rows) if r.get("EXPENSE_CODE")]
-        if expense_idx and timekeeper_data:
-            idx = expense_idx[0]
-            base_row = rows[idx]
-
-            partners   = [tk for tk in timekeeper_data if _norm_tk(tk.get("TIMEKEEPER_CLASSIFICATION")) == "partner"]
-            associates = [tk for tk in timekeeper_data if _norm_tk(tk.get("TIMEKEEPER_CLASSIFICATION")) == "associate"]
-
-            if partners and associates:
-                import random as _rand
-                tk_p = _rand.choice(partners)
-                tk_a = _rand.choice(associates)
-
-                # Ensure duplicates are NOT block-billed: use a single-task description and remove any block marker
-                base_desc = str(base_row.get("DESCRIPTION", ""))
-                if ";" in base_desc:
-                    base_desc = base_desc.split(";")[0].strip()
-
-                row_p = dict(base_row)
-                row_a = dict(base_row)
-
-                row_p["DESCRIPTION"] = base_desc
-                row_a["DESCRIPTION"] = base_desc
-                row_p.pop("__is_block__", None)
-                row_a.pop("__is_block__", None)
-
-                # Only timekeeper fields differ
-                row_p["TIMEKEEPER_NAME"] = tk_p.get("TIMEKEEPER_NAME", "")
-                row_p["TIMEKEEPER_CLASSIFICATION"] = tk_p.get("TIMEKEEPER_CLASSIFICATION", "")
-                row_p["TIMEKEEPER_ID"] = tk_p.get("TIMEKEEPER_ID", "")
-
-                row_a["TIMEKEEPER_NAME"] = tk_a.get("TIMEKEEPER_NAME", "")
-                row_a["TIMEKEEPER_CLASSIFICATION"] = tk_a.get("TIMEKEEPER_CLASSIFICATION", "")
-                row_a["TIMEKEEPER_ID"] = tk_a.get("TIMEKEEPER_ID", "")
-
-                # Replace the original expense with the Partner/Associate pair
-                rows[idx:idx+1] = [row_p, row_a]
-    # --- Multiple attendees at same meeting (FEES only; final step) ---
+    # --- Multiple attendees at same meeting (FEES only; uses hardcoded description) ---
     try:
         _multi_flag = bool(st.session_state.get('multiple_attendees_meeting', False))
     except Exception:
@@ -1000,46 +930,58 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             if s.startswith("associate"): return "associate"
             return s
 
-        # Pick a fee row to duplicate (exclude expenses)
+        # Scaffold from an existing FEE row if available
         fee_idx = [i for i, r in enumerate(rows) if not r.get("EXPENSE_CODE")]
-        if fee_idx:
-            idx = fee_idx[0]
-            base = rows[idx]
+        base = rows[fee_idx[0]] if fee_idx else (rows[0] if rows else {})
 
-            # Force to single-task description (avoid block-billing) and clear any marker
-            base_desc = str(base.get("DESCRIPTION", ""))
-            if ";" in base_desc:
-                base_desc = base_desc.split(";")[0].strip()
+        # Hardcoded description with a random name
+        try:
+            _name = faker_instance.name()
+        except Exception:
+            try:
+                from faker import Faker
+                _fake_local = Faker()
+                _name = _fake_local.name()
+            except Exception:
+                _name = "John Doe"
 
-            # Find Partner and Associate timekeepers
-            partners   = [tk for tk in timekeeper_data if _norm_role(tk.get("TIMEKEEPER_CLASSIFICATION")) == "partner"]
-            associates = [tk for tk in timekeeper_data if _norm_role(tk.get("TIMEKEEPER_CLASSIFICATION")) == "associate"]
+        hardcoded_desc = "Participate in litigation strategy meeting with client team to analyze opposing party's recent discovery responses and prepare for the deposition of witness {NAME_PLACEHOLDER}."
+        desc_final = hardcoded_desc.replace("{NAME_PLACEHOLDER}", _name)
 
-            if partners and associates:
-                import random as _rand
-                tk_p = _rand.choice(partners)
-                tk_a = _rand.choice(associates)
+        # Find Partner and Associate timekeepers
+        partners   = [tk for tk in timekeeper_data if _norm_role(tk.get("TIMEKEEPER_CLASSIFICATION")) == "partner"]
+        associates = [tk for tk in timekeeper_data if _norm_role(tk.get("TIMEKEEPER_CLASSIFICATION")) == "associate"]
 
-                # Build two fee duplicates and force TK details (including RATE) using helper
-                row_p = dict(base)
-                row_a = dict(base)
+        if partners and associates:
+            import random as _rand
+            tk_p = _rand.choice(partners)
+            tk_a = _rand.choice(associates)
 
-                row_p["DESCRIPTION"] = base_desc
-                row_a["DESCRIPTION"] = base_desc
-                row_p.pop("__is_block__", None)
-                row_a.pop("__is_block__", None)
+            row_p = dict(base)
+            row_a = dict(base)
 
-                # Ensure these remain FEES (not expenses)
-                row_p.pop("EXPENSE_CODE", None)
-                row_a.pop("EXPENSE_CODE", None)
+            for rr in (row_p, row_a):
+                rr.pop("EXPENSE_CODE", None)  # ensure fee
+                rr.pop("__is_block__", None)  # ensure non-block
+                rr["DESCRIPTION"] = desc_final
 
-                # Use helper to stamp TK fields and rate
-                _rp = _force_timekeeper_on_row(row_p, tk_p.get("TIMEKEEPER_NAME",""), timekeeper_data)
-                _ra = _force_timekeeper_on_row(row_a, tk_a.get("TIMEKEEPER_NAME",""), timekeeper_data)
+            # Generate a meeting duration between 0.5 and 2.5 hours
+            try:
+                dur = round(_rand.uniform(0.5, 2.5), 1)
+            except Exception:
+                dur = 1.0
+            row_p["HOURS"] = dur
+            row_a["HOURS"] = dur
 
-                # If both assignments succeeded, replace original with the pair
-                if _rp and _ra:
-                    rows[idx:idx+1] = [_rp, _ra]
+            # Stamp TK + RATE using helper
+            _rp = _force_timekeeper_on_row(row_p, tk_p.get("TIMEKEEPER_NAME",""), timekeeper_data)
+            _ra = _force_timekeeper_on_row(row_a, tk_a.get("TIMEKEEPER_NAME",""), timekeeper_data)
+
+            if _rp and _ra:
+                if fee_idx:
+                    rows[fee_idx[0]:fee_idx[0]+1] = [_rp, _ra]
+                else:
+                    rows.extend([_rp, _ra])
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
 
@@ -1890,12 +1832,12 @@ with tab_objects[1]:
 with tab_objects[2]:
     st.markdown("<h2 style='color: #1E1E1E;'>Fees & Expenses</h2>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
+
     multiple_attendees_meeting = st.checkbox(
         "Multiple Attendees at Same Meeting",
         value=False,
-        help="If checked, create two identical EXPENSE line items for the same meeting: one Partner and one Associate."
+        help="If checked, create two identical FEE line items for the same meeting: one Partner and one Associate."
     )
-
 
     # In the "Fees & Expenses" tab, before the sliders
     st.selectbox(
