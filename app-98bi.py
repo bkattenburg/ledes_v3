@@ -1837,6 +1837,13 @@ with tab_objects[1]:
 with tab_objects[2]:
     st.markdown("<h2 style='color: #1E1E1E;'>Fees & Expenses</h2>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
+    
+    multiple_attendees_meeting = st.checkbox(
+    "Multiple Attendees at Same Meeting",
+    value=False,
+    help="If checked, create two identical EXPENSE line items for the same meeting: one Partner and one Associate."
+    )
+    st.caption(f"Multiple attendees flag = {multiple_attendees_meeting}")
 
     # In the "Fees & Expenses" tab, before the sliders
     st.selectbox(
@@ -2148,6 +2155,8 @@ if generate_button:
                     fees_used, expenses_used, timekeeper_data, client_id, law_firm_id,
                     current_invoice_desc, current_start_date, current_end_date,
                     task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, num_block_billed, faker
+                    multiple_attendees_meeting=multiple_attendees_meeting,
+                    multiple_attendees_meeting: bool = False,
                 )
 
                 skipped_mandatory_items = []
@@ -2328,4 +2337,5 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
