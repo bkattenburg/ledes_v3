@@ -1024,65 +1024,6 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
         fee_idx = [i for i, r in enumerate(rows) if not r.get("EXPENSE_CODE")]
         base_row = rows[fee_idx[0]] if fee_idx else (rows[0] if rows else {})
 
-        # Hardcoded description with a single random name used for BOTH lines
-        try:
-            _name = faker_instance.name()
-        except Exception:
-            try:
-                from faker import Faker
-                _fake_local = Faker()
-                _name = _fake_local.name()
-            except Exception:
-                _name = "John Doe"
-
-        hardcoded_desc = "Participate in litigation strategy meeting with client team to analyze opposing party's recent discovery responses and prepare for the deposition of witness {NAME_PLACEHOLDER}."
-        desc_final = hardcoded_desc.replace("{NAME_PLACEHOLDER}", _name)
-
-        # Find Partner and Associate timekeepers
-        partners   = [tk for tk in timekeeper_data if _norm_role(tk.get("TIMEKEEPER_CLASSIFICATION")) == "partner"]
-        associates = [tk for tk in timekeeper_data if _norm_role(tk.get("TIMEKEEPER_CLASSIFICATION")) == "associate"]
-
-        if partners and associates:
-            import random as _rand
-            tk_p = _rand.choice(partners)
-            tk_a = _rand.choice(associates)
-
-            row_p = dict(base_row)
-            row_a = dict(base_row)
-
-            for rr in (row_p, row_a):
-                rr.pop("EXPENSE_CODE", None)  # ensure fee
-                rr.pop("__is_block__", None)  # ensure non-block
-                rr["DESCRIPTION"] = desc_final
-
-            # Generate a meeting duration between 0.5 and 2.5 hours
-            try:
-                dur = round(_rand.uniform(0.5, 2.5), 1)
-            except Exception:
-                dur = 1.0
-            row_p["HOURS"] = dur
-            row_a["HOURS"] = dur
-
-            # Stamp TK + RATE using helper
-            try:
-                _rp = _force_timekeeper_on_row(row_p, tk_p.get("TIMEKEEPER_NAME",""), timekeeper_data)
-                _ra = _force_timekeeper_on_row(row_a, tk_a.get("TIMEKEEPER_NAME",""), timekeeper_data)
-            except Exception:
-                _rp = row_p
-                _ra = row_a
-                _rp["TIMEKEEPER_NAME"] = tk_p.get("TIMEKEEPER_NAME","")
-                _rp["TIMEKEEPER_CLASSIFICATION"] = tk_p.get("TIMEKEEPER_CLASSIFICATION","")
-                _rp["TIMEKEEPER_ID"] = tk_p.get("TIMEKEEPER_ID","")
-                _ra["TIMEKEEPER_NAME"] = tk_a.get("TIMEKEEPER_NAME","")
-                _ra["TIMEKEEPER_CLASSIFICATION"] = tk_a.get("TIMEKEEPER_CLASSIFICATION","")
-                _ra["TIMEKEEPER_ID"] = tk_a.get("TIMEKEEPER_ID","")
-
-            if _rp and _ra:
-                if fee_idx:
-                    rows[fee_idx[0]:fee_idx[0]+1] = [_rp, _ra]
-                else:
-                    rows.extend([_rp, _ra])
-
                 # Append the two-attendee meeting rows if the checkbox is on
             try:
                 _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
@@ -2445,5 +2386,6 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
