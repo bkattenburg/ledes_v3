@@ -1048,11 +1048,34 @@ def _append_two_attendee_meeting_rows(rows, timekeeper_data, billing_start_date,
     return rows
 
 
-def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: List[Dict], client_id: str, law_firm_id: str, invoice_desc: str, billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, num_block_billed: int, faker_instance: Faker) -> Tuple[List[Dict], float]:
+def _generate_invoice_data(
+    fee_count: int,
+    expense_count: int,
+    timekeeper_data: List[Dict],
+    client_id: str,
+    law_firm_id: str,
+    invoice_desc: str,
+    billing_start_date: datetime.date,
+    billing_end_date: datetime.date,
+    task_activity_desc: List[Tuple[str, str, str]],
+    major_task_codes: set,
+    max_hours_per_tk_per_day: int,
+    num_block_billed: int,               # <-- kept for compatibility; not used inside
+    faker_instance: Faker
+) -> Tuple[List[Dict], float]:
     """Generate invoice data with fees and expenses."""
     rows = []
-    rows.extend(_generate_fees(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc))
-    rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
+    rows.extend(_generate_fees(
+        fee_count, timekeeper_data, billing_start_date, billing_end_date,
+        task_activity_desc, major_task_codes, max_hours_per_tk_per_day,
+        faker_instance, client_id, law_firm_id, invoice_desc
+    ))
+    rows.extend(_generate_expenses(
+        expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc
+    ))
+
+    # Read remaining global block-billing budget (set by UI)
+    allowed_blocks = int(st.session_state.get("__bb_remaining", 0))
 
     # --- FIX: Add multiple attendee rows BEFORE block billing ---
     # This ensures they can be included in the block billing consolidation.
@@ -1072,21 +1095,26 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             invoice_desc
         )
 
-    # 
-    # --- Source-driven blockbilling branch ---
+    # --- Source-driven blockbilling branch (uses uploaded CSV Blockbilling flags) ---
     try:
-        df_source = st.session_state.get("custom_fee_df", None)
+        # Prefer full, non-deduped upload if available
+        df_source = (
+            st.session_state.get("custom_fee_df_full", None)
+            or st.session_state.get("custom_fee_df", None)
+        )
     except Exception:
         df_source = None
-    if df_source is not None:
-        bbcol = _get_blockbilling_col(df_source)
-    else:
-        bbcol = None
+
+    bbcol = _get_blockbilling_col(df_source) if df_source is not None else None
+
     if df_source is not None and bbcol:
         try:
             df_src_norm = _normalize_blockbilling(df_source, bbcol)
-            df_src_norm = _enforce_block_billed_limit_df(df_src_norm, num_block_billed)
-            # Remove any already-generated fees; regenerate from source for fees only
+            # Optional pre-trim by remaining global budget to reduce work:
+            # (still enforced again after generation)
+            df_src_norm = _enforce_block_billed_limit_df(df_src_norm, allowed_blocks)
+
+            # Keep existing expenses; regenerate fees from source only
             rows = [r for r in rows if r.get("EXPENSE_CODE")]
             fee_rows_from_src = _generate_fee_lines_from_source_df(
                 df_source=df_src_norm,
@@ -1100,35 +1128,40 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
                 max_hours_per_tk_per_day=max_hours_per_tk_per_day,
                 faker_instance=faker_instance
             )
-            # Enforce the limit on the row markers as well
-            if num_block_billed >= 0:
-                count = 0
-                for r in fee_rows_from_src:
-                    if r.get("_is_block_billed_from_source"):
-                        if count < num_block_billed:
-                            count += 1
-                        else:
-                            r["_is_block_billed_from_source"] = False
+
+            # Enforce global remaining cap on source-driven rows
+            created_here = 0
+            for r in fee_rows_from_src:
+                if r.get("_is_block_billed_from_source"):
+                    if created_here < allowed_blocks:
+                        created_here += 1
+                    else:
+                        r["_is_block_billed_from_source"] = False
+
+            # Update global remaining
+            try:
+                st.session_state["__bb_remaining"] = max(0, allowed_blocks - created_here)
+            except Exception:
+                pass
+
             rows.extend(fee_rows_from_src)
             total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
             return rows, total_amount
         except Exception as _e:
-            # Fall back to existing logic on error
+            # Fall back to legacy grouping logic on error
             pass
     # --- End source-driven branch ---
 
-    # Filter for fees only before creating block billed items
+    # Legacy grouping path (consolidate multiple tasks per TK/day)
     fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
     
-    if num_block_billed > 0 and fee_rows:
-        # Group fee rows by timekeeper and date to find candidates for block billing
+    if allowed_blocks > 0 and fee_rows:
         from collections import defaultdict
         daily_tk_groups = defaultdict(list)
         for row in fee_rows:
             key = (row["TIMEKEEPER_ID"], row["LINE_ITEM_DATE"])
             daily_tk_groups[key].append(row)
             
-        # Find groups with multiple tasks that are within the max daily hours limit
         eligible_groups = []
         for key, group_rows in daily_tk_groups.items():
             if len(group_rows) > 1:
@@ -1143,7 +1176,7 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
         blocks_created = 0
 
         for group in eligible_groups:
-            if blocks_created >= num_block_billed:
+            if blocks_created >= allowed_blocks:
                 break
             
             if any(id(row) in consolidated_row_ids for row in group):
@@ -1155,7 +1188,6 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             block_description = "; ".join(descriptions)
             
             first_row = group[0]
-            
             block_row = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
                 "LINE_ITEM_DATE": first_row["LINE_ITEM_DATE"], "TIMEKEEPER_NAME": first_row["TIMEKEEPER_NAME"],
@@ -1166,18 +1198,23 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
                 "LINE_ITEM_TOTAL": round(total_amount_block, 2)
             }
             new_blocks.append(block_row)
-            
             for row in group:
                 consolidated_row_ids.add(id(row))
-            
             blocks_created += 1
 
         if consolidated_row_ids:
             rows = [row for row in rows if id(row) not in consolidated_row_ids]
             rows.extend(new_blocks)
+
+        # Update global remaining
+        try:
+            st.session_state["__bb_remaining"] = max(0, allowed_blocks - blocks_created)
+        except Exception:
+            pass
     
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
+
 
 def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> Tuple[List[Dict], List[str]]:
     """Ensure mandatory line items are included and return a list of any skipped items."""
@@ -2177,7 +2214,10 @@ with tab_objects[output_tab_index]:
     num_block_billed = 0
     if include_block_billed:
         num_block_billed = st.number_input("Number of Block Billed Items:", min_value=1, max_value=10, value=2, step=1, help="The number of block billed items to create by consolidating multiple tasks from the same timekeeper on the same day.")
-    
+
+    # Initialize/Reset global block-billing budget whenever the UI value is set
+    st.session_state["__bb_remaining"] = int(num_block_billed)
+
     include_pdf = st.checkbox("Include PDF Invoice", value=False)
     
     uploaded_logo = None
@@ -2531,3 +2571,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
