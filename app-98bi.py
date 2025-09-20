@@ -929,6 +929,7 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
         )
 
     fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
+    expense_rows = [row for row in rows if row.get("EXPENSE_CODE")]
     
     if num_block_billed > 0 and fee_rows:
         from collections import defaultdict
@@ -936,27 +937,34 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
         for row in fee_rows:
             key = (row["TIMEKEEPER_ID"], row["LINE_ITEM_DATE"])
             daily_tk_groups[key].append(row)
-            
+        
+        # --- FIX: Explicitly separate single lines from groups eligible for blocking ---
         eligible_groups = []
+        single_fee_rows = [] 
+        
         for key, group_rows in daily_tk_groups.items():
-            if len(group_rows) > 1:
-                total_hours = sum(float(r["HOURS"]) for r in group_rows)
-                if total_hours <= max_hours_per_tk_per_day:
-                    eligible_groups.append(group_rows)
+            total_hours = sum(float(r["HOURS"]) for r in group_rows)
+            # A group is eligible only if it has multiple entries AND is within the daily hour limit
+            if len(group_rows) > 1 and total_hours <= max_hours_per_tk_per_day:
+                eligible_groups.append(group_rows)
+            else:
+                # Otherwise, these are all treated as single line items
+                single_fee_rows.extend(group_rows)
         
         random.shuffle(eligible_groups)
         
-        consolidated_row_ids = set()
         new_blocks = []
-        blocks_created = 0
+        
+        # Take the number of groups specified by the user
+        groups_to_process = eligible_groups[:num_block_billed]
+        
+        # Keep track of the original rows from the groups we are about to process
+        consolidated_row_ids = set()
+        for group in groups_to_process:
+            for row in group:
+                consolidated_row_ids.add(id(row))
 
-        for group in eligible_groups:
-            if blocks_created >= num_block_billed:
-                break
-            
-            if any(id(row) in consolidated_row_ids for row in group):
-                continue
-
+        for group in groups_to_process:
             total_hours = sum(float(row["HOURS"]) for row in group)
             total_amount_block = sum(float(row["LINE_ITEM_TOTAL"]) for row in group)
             descriptions = [row["DESCRIPTION"] for row in group]
@@ -975,14 +983,12 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             }
             new_blocks.append(block_row)
             
-            for row in group:
-                consolidated_row_ids.add(id(row))
-            
-            blocks_created += 1
-
-        if consolidated_row_ids:
-            rows = [row for row in rows if id(row) not in consolidated_row_ids]
-            rows.extend(new_blocks)
+        # --- NEW RECONSTRUCTION LOGIC ---
+        # Keep only the fee rows that were NEVER part of an eligible group
+        unconsolidated_fees = [row for row in fee_rows if id(row) not in consolidated_row_ids]
+        
+        # Final list is the unconsolidated fees, the new blocks, and the original expenses
+        rows = unconsolidated_fees + new_blocks + expense_rows
     
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
@@ -2339,6 +2345,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
