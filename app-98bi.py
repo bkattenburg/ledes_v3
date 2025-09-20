@@ -1,5 +1,132 @@
 import streamlit as st
 
+
+# --- Begin: Blockbilling-from-source helpers ---
+def _get_blockbilling_col(df):
+    for name in ["Blockbilling", "BlockBilling", "Blockbilled", "BlockBilled"]:
+        if name in df.columns:
+            return name
+    return None
+
+def _normalize_blockbilling(df, colname):
+    norm = (
+        df[colname]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .map({"Y": True, "N": False})
+        .fillna(False)
+    )
+    df = df.copy()
+    df["is_block_billed"] = norm
+    return df
+
+def _enforce_block_billed_limit_df(df, max_blocks:int):
+    if max_blocks is None or max_blocks < 0:
+        return df
+    df = df.copy()
+    if "is_block_billed" not in df.columns:
+        return df
+    mask = df["is_block_billed"]
+    if int(mask.sum()) <= int(max_blocks):
+        return df
+    true_idx = list(df.index[mask])
+    to_downgrade = true_idx[int(max_blocks):]
+    df.loc[to_downgrade, "is_block_billed"] = False
+    return df
+
+def _pick_timekeeper_by_class(timekeepers, target_class):
+    tks = [t for t in (timekeepers or []) if str(t.get("TIMEKEEPER_CLASSIFICATION","")).strip().lower() == str(target_class).strip().lower()]
+    if not tks:
+        tks = timekeepers or []
+    return random.choice(tks) if tks else None
+
+def _generate_fee_lines_from_source_df(df_source, fee_count, timekeeper_data, billing_start_date, billing_end_date, invoice_desc, client_id, law_firm_id, max_hours_per_tk_per_day, faker_instance):
+    rows = []
+    if df_source is None or df_source.empty or fee_count <= 0:
+        return rows
+    # Choose rows to use
+    df_use = df_source.sample(n=min(fee_count, len(df_source)), replace=False, random_state=None).reset_index(drop=True)
+
+    # Track hours per (date, tk_id)
+    daily_hours = {}
+
+    delta_days = (billing_end_date - billing_start_date).days
+    if delta_days < 0:
+        delta_days = 0
+
+    for _, r in df_use.iterrows():
+        task_code = str(r.get("TASK_CODE","")).strip()
+        activity_code = str(r.get("ACTIVITY_CODE","")).strip()
+        description = str(r.get("DESCRIPTION","")).strip()
+        tk_class = str(r.get("TK_CLASSIFICATION","")).strip() or None
+
+        # Pick a date
+        day_offset = random.randint(0, delta_days) if delta_days > 0 else 0
+        date_obj = billing_start_date + datetime.timedelta(days=day_offset)
+        date_str = date_obj.strftime("%Y-%m-%d")
+
+        # Pick timekeeper
+        tk = _pick_timekeeper_by_class(timekeeper_data, tk_class) if tk_class else (random.choice(timekeeper_data) if timekeeper_data else None)
+        if not tk:
+            # If no timekeepers are loaded, skip safely
+            continue
+        timekeeper_id = tk.get("TIMEKEEPER_ID","")
+        tk_name = tk.get("TIMEKEEPER_NAME","")
+        tk_class_actual = tk.get("TIMEKEEPER_CLASSIFICATION","")
+        rate = float(tk.get("RATE", 0.0))
+
+        # Remaining capacity for this TK+day
+        current = daily_hours.get((date_str, timekeeper_id), 0.0)
+        remaining = float(max_hours_per_tk_per_day) - float(current)
+        if remaining <= 0:
+            # pick a new day with capacity if possible
+            found = False
+            for _try in range(7):
+                if delta_days <= 0:
+                    break
+                d2 = billing_start_date + datetime.timedelta(days=random.randint(0, delta_days))
+                ds2 = d2.strftime("%Y-%m-%d")
+                cur2 = daily_hours.get((ds2, timekeeper_id), 0.0)
+                rem2 = float(max_hours_per_tk_per_day) - float(cur2)
+                if rem2 > 0:
+                    date_str = ds2
+                    remaining = rem2
+                    found = True
+                    break
+            if not found and remaining <= 0:
+                continue
+
+        # Hours: single-line, under cap
+        hours = round(random.uniform(0.5, min(8.0, remaining)), 1)
+        if hours <= 0:
+            hours = min(0.5, remaining)
+
+        # Description placeholders
+        description = _process_description(description, faker_instance)
+
+        rows.append({
+            "INVOICE_DESCRIPTION": invoice_desc,
+            "CLIENT_ID": client_id,
+            "LAW_FIRM_ID": law_firm_id,
+            "LINE_ITEM_DATE": date_str,
+            "TIMEKEEPER_NAME": tk_name,
+            "TIMEKEEPER_CLASSIFICATION": tk_class_actual,
+            "TIMEKEEPER_ID": timekeeper_id,
+            "TASK_CODE": task_code,
+            "ACTIVITY_CODE": activity_code,
+            "EXPENSE_CODE": "",
+            "DESCRIPTION": description,
+            "HOURS": float(hours),
+            "RATE": rate,
+            "LINE_ITEM_TOTAL": round(float(hours) * float(rate), 2),
+            # Marker (not serialized into LEDES but may be useful for debugging)
+            "_is_block_billed_from_source": bool(r.get("is_block_billed", False)),
+        })
+        daily_hours[(date_str, timekeeper_id)] = daily_hours.get((date_str, timekeeper_id), 0.0) + float(hours)
+
+    return rows
+# --- End: Blockbilling-from-source helpers ---
 # Baseline so static analyzers see it as defined before any use
 selected_items = []  # baseline for pylance
 
@@ -361,6 +488,7 @@ def _load_timekeepers(uploaded_file: Optional[Any]) -> Optional[List[Dict]]:
         logging.error(f"Timekeeper load error: {e}")
         return None
 
+
 def _load_custom_task_activity_data(uploaded_file: Optional[Any]) -> Optional[List[Tuple[str, str, str]]]:
     """Load custom task/activity data from CSV."""
     if uploaded_file is None:
@@ -374,19 +502,22 @@ def _load_custom_task_activity_data(uploaded_file: Optional[Any]) -> Optional[Li
         if df.empty:
             st.warning("Custom Task/Activity CSV file is empty.")
             return []
-   
         # NEW: remove exact duplicate task/activity/description triples
         df = df.drop_duplicates(subset=["TASK_CODE", "ACTIVITY_CODE", "DESCRIPTION"]).reset_index(drop=True)
-    
         # (Optional but helpful) shuffle once so selection spreads across the file
         df = df.sample(frac=1, random_state=None).reset_index(drop=True)
-    
+        # Stash the full (de-duplicated) DataFrame for fee-source usage (including optional Blockbilling logic)
+        try:
+            st.session_state["custom_fee_df"] = df.copy()
+        except Exception:
+            pass
         custom_tasks = [(str(r["TASK_CODE"]), str(r["ACTIVITY_CODE"]), str(r["DESCRIPTION"])) for _, r in df.iterrows()]
         return custom_tasks
     except Exception as e:
         st.error(f"Error loading custom tasks file: {e}")
         logging.error(f"Custom tasks load error: {e}")
         return None
+
 
 def _create_ledes_line_1998b(row: Dict, line_no: int, inv_total: float, bill_start: datetime.date, bill_end: datetime.date, invoice_number: str, matter_number: str) -> List[str]:
     """Create a single LEDES 1998B line."""
@@ -940,6 +1071,51 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             law_firm_id,
             invoice_desc
         )
+
+    # 
+    # --- Source-driven blockbilling branch ---
+    try:
+        df_source = st.session_state.get("custom_fee_df", None)
+    except Exception:
+        df_source = None
+    if df_source is not None:
+        bbcol = _get_blockbilling_col(df_source)
+    else:
+        bbcol = None
+    if df_source is not None and bbcol:
+        try:
+            df_src_norm = _normalize_blockbilling(df_source, bbcol)
+            df_src_norm = _enforce_block_billed_limit_df(df_src_norm, num_block_billed)
+            # Remove any already-generated fees; regenerate from source for fees only
+            rows = [r for r in rows if r.get("EXPENSE_CODE")]
+            fee_rows_from_src = _generate_fee_lines_from_source_df(
+                df_source=df_src_norm,
+                fee_count=fee_count,
+                timekeeper_data=timekeeper_data,
+                billing_start_date=billing_start_date,
+                billing_end_date=billing_end_date,
+                invoice_desc=invoice_desc,
+                client_id=client_id,
+                law_firm_id=law_firm_id,
+                max_hours_per_tk_per_day=max_hours_per_tk_per_day,
+                faker_instance=faker_instance
+            )
+            # Enforce the limit on the row markers as well
+            if num_block_billed >= 0:
+                count = 0
+                for r in fee_rows_from_src:
+                    if r.get("_is_block_billed_from_source"):
+                        if count < num_block_billed:
+                            count += 1
+                        else:
+                            r["_is_block_billed_from_source"] = False
+            rows.extend(fee_rows_from_src)
+            total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
+            return rows, total_amount
+        except Exception as _e:
+            # Fall back to existing logic on error
+            pass
+    # --- End source-driven branch ---
 
     # Filter for fees only before creating block billed items
     fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
