@@ -923,7 +923,6 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
     rows.extend(_generate_fees(fee_count, timekeeper_data, billing_start_date, billing_end_date, task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance, client_id, law_firm_id, invoice_desc))
     rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
 
-    # Add multiple attendee rows BEFORE block billing
     try:
         _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
     except Exception:
@@ -940,8 +939,12 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             invoice_desc
         )
 
-    # Filter for fees only before creating block billed items
+    # --- Start Debugging Block ---
+    st.write("--- DEBUGGING OUTPUT ---")
+    st.write(f"Function received `num_block_billed` limit: **{num_block_billed}**")
+    
     fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
+    st.write(f"Total fee rows available for consolidation: **{len(fee_rows)}**")
     
     if num_block_billed > 0 and fee_rows:
         from collections import defaultdict
@@ -957,17 +960,22 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
                 if total_hours <= max_hours_per_tk_per_day:
                     eligible_groups.append(group_rows)
         
+        st.write(f"Number of eligible groups found (days with multiple TK entries): **{len(eligible_groups)}**")
         random.shuffle(eligible_groups)
         
         consolidated_row_ids = set()
         new_blocks = []
         blocks_created = 0
 
-        for group in eligible_groups:
+        st.write("Starting block creation loop...")
+        for i, group in enumerate(eligible_groups):
+            st.write(f"- Loop Iteration {i+1}: `blocks_created` is **{blocks_created}**. Limit is **{num_block_billed}**.")
             if blocks_created >= num_block_billed:
+                st.write("  - Limit reached. Breaking loop.")
                 break
             
             if any(id(row) in consolidated_row_ids for row in group):
+                st.write("  - Group contains already consolidated rows. Skipping.")
                 continue
 
             total_hours = sum(float(row["HOURS"]) for row in group)
@@ -977,23 +985,19 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             
             first_row = group[0]
             
-            block_row = {
-                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-                "LINE_ITEM_DATE": first_row["LINE_ITEM_DATE"], "TIMEKEEPER_NAME": first_row["TIMEKEEPER_NAME"],
-                "TIMEKEEPER_CLASSIFICATION": first_row["TIMEKEEPER_CLASSIFICATION"],
-                "TIMEKEEPER_ID": first_row["TIMEKEEPER_ID"], "TASK_CODE": first_row["TASK_CODE"],
-                "ACTIVITY_CODE": first_row["ACTIVITY_CODE"], "EXPENSE_CODE": "",
-                "DESCRIPTION": block_description, "HOURS": round(total_hours, 2), "RATE": first_row["RATE"],
-                "LINE_ITEM_TOTAL": round(total_amount_block, 2)
-            }
+            block_row = { "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id, "LINE_ITEM_DATE": first_row["LINE_ITEM_DATE"], "TIMEKEEPER_NAME": first_row["TIMEKEEPER_NAME"], "TIMEKEEPER_CLASSIFICATION": first_row["TIMEKEEPER_CLASSIFICATION"], "TIMEKEEPER_ID": first_row["TIMEKEEPER_ID"], "TASK_CODE": first_row["TASK_CODE"], "ACTIVITY_CODE": first_row["ACTIVITY_CODE"], "EXPENSE_CODE": "", "DESCRIPTION": block_description, "HOURS": round(total_hours, 2), "RATE": first_row["RATE"], "LINE_ITEM_TOTAL": round(total_amount_block, 2) }
             new_blocks.append(block_row)
             
             for row in group:
                 consolidated_row_ids.add(id(row))
             
             blocks_created += 1
+            st.write(f"  - Block created. `blocks_created` is now **{blocks_created}**.")
 
-        # --- FIX: This block is now DE-DENTED to run only once after the loop ---
+        st.write("...Loop finished.")
+        st.write(f"Final number of blocks created (`new_blocks` size): **{len(new_blocks)}**")
+        st.write("--- END DEBUGGING OUTPUT ---")
+
         if consolidated_row_ids:
             rows = [row for row in rows if id(row) not in consolidated_row_ids]
             rows.extend(new_blocks)
@@ -2353,4 +2357,5 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
