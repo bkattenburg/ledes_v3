@@ -347,10 +347,7 @@ def _generate_invoice_data(
     """Assembles the final list of invoice rows based on user selections."""
     rows = []
     
-    # Generate fees by SELECTING from the pre-defined custom line items
     rows.extend(_generate_fees(fees, num_block_billed, custom_line_items, timekeeper_data, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
-    
-    # Generate expenses randomly as before
     rows.extend(_generate_expenses(expenses, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
 
     if st.session_state.get("multiple_attendees_meeting", False):
@@ -360,7 +357,6 @@ def _generate_invoice_data(
     return rows, total_amount
 
 def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> Tuple[List[Dict], List[str]]:
-    """Ensure mandatory line items are included and return a list of any skipped items."""
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
     skipped_items = []
@@ -484,7 +480,7 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
     doc.build(elements)
     buffer.seek(0)
     return buffer
-    
+
 # --- Streamlit App UI ---
 
 st.set_page_config(layout="wide")
@@ -497,7 +493,7 @@ with st.expander("Help & FAQs"):
     - **Add a 'Blockbilling' Column:** You must add a column named `Blockbilling` to this CSV. 
       - Mark rows with `Y` if they are pre-formatted block-billed tasks.
       - Mark rows with `N` if they are single, individual tasks.
-    - **The Sliders are Selectors:** The sliders on the "Fees & Expenses" tab control how many lines are **randomly selected** from your CSV files.
+    - **The Sliders are Selectors:** The sliders on the "Fees & Expenses" tab control how many lines are **randomly selected** from the `N` (single) and `Y` (block-billed) pools in your CSV.
     """)
 
 st.sidebar.markdown("<h2 style='color: #1E1E1E;'>Quick Links</h2>", unsafe_allow_html=True)
@@ -569,7 +565,10 @@ with tab_objects[2]:
         spend_agent = st.checkbox("Spend Agent Mode (add mandatory items)")
         if spend_agent:
             selected_items = st.multiselect("Select Mandatory Items", options=list(CONFIG["MANDATORY_ITEMS"].keys()))
-            # ... UI for mandatory item details ...
+            if 'Airfare E110' in selected_items:
+                st.number_input("Airfare Amount", key="airfare_amount", value=450.75)
+            if 'Uber E110' in selected_items:
+                st.number_input("Uber Amount", key="uber_amount", value=25.50)
 
 with tab_objects[3]:
     st.header("Output")
@@ -604,7 +603,7 @@ if st.button("Generate Invoice(s)"):
                     faker_instance=faker
                 )
                 
-                if spend_agent and 'selected_items' in locals() and selected_items:
+                if 'spend_agent' in locals() and spend_agent and 'selected_items' in locals() and selected_items:
                     rows, _ = _ensure_mandatory_lines(rows, st.session_state.timekeeper_data, invoice_desc, client_id, law_firm_id, billing_start_date, billing_end_date, selected_items)
                     total_amount = sum(float(r.get("LINE_ITEM_TOTAL", 0)) for r in rows)
 
