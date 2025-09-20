@@ -690,70 +690,59 @@ def _create_ledes_1998bi_content(rows: List[Dict],
 
     return "\n".join(lines)
 def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, faker_instance: Faker, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
-    """Generate fee line items for an invoice."""
+    """Generate fee line items for an invoice, ensuring some TKs have multiple entries per day."""
     rows = []
+    if fee_count == 0:
+        return rows
+        
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
-    major_items = [item for item in task_activity_desc if item[0] in major_task_codes]
-    other_items = [item for item in task_activity_desc if item[0] not in major_task_codes]
     daily_hours_tracker = {}
-    MAX_DAILY_HOURS = max_hours_per_tk_per_day
-
-    used_triples = set()  # NEW
     
-    for _ in range(fee_count):
-        if not task_activity_desc:
-            break
+    lines_created = 0
+    while lines_created < fee_count:
+        # Pick a timekeeper and a date for a "cluster" of work
         tk_row = random.choice(timekeeper_data)
         timekeeper_id = tk_row["TIMEKEEPER_ID"]
-        # NEW: try up to 7 times to get a new triple not already used
-        attempts = 0
-        while True:
-            if major_items and random.random() < 0.7:
-                task_code, activity_code, description = random.choice(major_items)
-            elif other_items:
-                task_code, activity_code, description = random.choice(other_items)
-            else:
-                # no candidates
-                task_code = activity_code = description = None
-
-            if task_code is None:
-                break
-
-            triple = (task_code, activity_code, description)
-            if triple not in used_triples or attempts >= 7:
-                used_triples.add(triple)
-                break
-            attempts += 1
-        if task_code is None:
-            continue
-
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
         line_item_date_str = line_item_date.strftime("%Y-%m-%d")
-        current_billed_hours = daily_hours_tracker.get((line_item_date_str, timekeeper_id), 0)
-        remaining_hours_capacity = MAX_DAILY_HOURS - current_billed_hours
-        if remaining_hours_capacity <= 0:
-            continue
 
-        hours_to_bill = round(random.uniform(0.5, min(8.0, remaining_hours_capacity)), 1)
-        if hours_to_bill == 0:
-            continue
+        # Create a cluster of 2 to 4 tasks for this person on this day
+        num_in_cluster = random.randint(2, 4)
+        
+        for _ in range(num_in_cluster):
+            if lines_created >= fee_count:
+                break
 
-        hourly_rate = tk_row["RATE"]
-        line_item_total = round(hours_to_bill * hourly_rate, 2)
-        daily_hours_tracker[(line_item_date_str, timekeeper_id)] = current_billed_hours + hours_to_bill
-        description = _process_description(description, faker_instance)
+            # Get a unique task/activity description
+            if not task_activity_desc: break
+            task_code, activity_code, description = random.choice(task_activity_desc)
+            
+            # Check for daily hour limits
+            current_billed_hours = daily_hours_tracker.get((line_item_date_str, timekeeper_id), 0)
+            remaining_hours_capacity = max_hours_per_tk_per_day - current_billed_hours
+            if remaining_hours_capacity <= 0.1:
+                continue
 
-        rows.append({
-            "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-            "LINE_ITEM_DATE": line_item_date_str, "TIMEKEEPER_NAME": tk_row["TIMEKEEPER_NAME"],
-            "TIMEKEEPER_CLASSIFICATION": tk_row["TIMEKEEPER_CLASSIFICATION"], "TIMEKEEPER_ID": timekeeper_id,
-            "TASK_CODE": task_code, "ACTIVITY_CODE": activity_code, "EXPENSE_CODE": "",
-            "DESCRIPTION": description, "HOURS": hours_to_bill, "RATE": hourly_rate, "LINE_ITEM_TOTAL": line_item_total
-        })
+            hours_to_bill = round(random.uniform(0.2, min(4.0, remaining_hours_capacity)), 1)
+            if hours_to_bill == 0:
+                continue
+
+            hourly_rate = tk_row["RATE"]
+            line_item_total = round(hours_to_bill * hourly_rate, 2)
+            daily_hours_tracker[(line_item_date_str, timekeeper_id)] = current_billed_hours + hours_to_bill
+            
+            rows.append({
+                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                "LINE_ITEM_DATE": line_item_date_str, "TIMEKEEPER_NAME": tk_row["TIMEKEEPER_NAME"],
+                "TIMEKEEPER_CLASSIFICATION": tk_row["TIMEKEEPER_CLASSIFICATION"], "TIMEKEEPER_ID": timekeeper_id,
+                "TASK_CODE": task_code, "ACTIVITY_CODE": activity_code, "EXPENSE_CODE": "",
+                "DESCRIPTION": _process_description(description, faker_instance), "HOURS": hours_to_bill, "RATE": hourly_rate, "LINE_ITEM_TOTAL": line_item_total
+            })
+            lines_created += 1
+            
     return rows
-
 
 def _generate_expenses(expense_count: int, billing_start_date: datetime.date, billing_end_date: datetime.date, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
     """Generate expense line items for an invoice with realistic amounts."""
@@ -939,12 +928,7 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             invoice_desc
         )
 
-    # --- Start Debugging Block ---
-    st.write("--- DEBUGGING OUTPUT ---")
-    st.write(f"Function received `num_block_billed` limit: **{num_block_billed}**")
-    
     fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
-    st.write(f"Total fee rows available for consolidation: **{len(fee_rows)}**")
     
     if num_block_billed > 0 and fee_rows:
         from collections import defaultdict
@@ -960,22 +944,17 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
                 if total_hours <= max_hours_per_tk_per_day:
                     eligible_groups.append(group_rows)
         
-        st.write(f"Number of eligible groups found (days with multiple TK entries): **{len(eligible_groups)}**")
         random.shuffle(eligible_groups)
         
         consolidated_row_ids = set()
         new_blocks = []
         blocks_created = 0
 
-        st.write("Starting block creation loop...")
-        for i, group in enumerate(eligible_groups):
-            st.write(f"- Loop Iteration {i+1}: `blocks_created` is **{blocks_created}**. Limit is **{num_block_billed}**.")
+        for group in eligible_groups:
             if blocks_created >= num_block_billed:
-                st.write("  - Limit reached. Breaking loop.")
                 break
             
             if any(id(row) in consolidated_row_ids for row in group):
-                st.write("  - Group contains already consolidated rows. Skipping.")
                 continue
 
             total_hours = sum(float(row["HOURS"]) for row in group)
@@ -985,18 +964,21 @@ def _generate_invoice_data(fee_count: int, expense_count: int, timekeeper_data: 
             
             first_row = group[0]
             
-            block_row = { "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id, "LINE_ITEM_DATE": first_row["LINE_ITEM_DATE"], "TIMEKEEPER_NAME": first_row["TIMEKEEPER_NAME"], "TIMEKEEPER_CLASSIFICATION": first_row["TIMEKEEPER_CLASSIFICATION"], "TIMEKEEPER_ID": first_row["TIMEKEEPER_ID"], "TASK_CODE": first_row["TASK_CODE"], "ACTIVITY_CODE": first_row["ACTIVITY_CODE"], "EXPENSE_CODE": "", "DESCRIPTION": block_description, "HOURS": round(total_hours, 2), "RATE": first_row["RATE"], "LINE_ITEM_TOTAL": round(total_amount_block, 2) }
+            block_row = {
+                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                "LINE_ITEM_DATE": first_row["LINE_ITEM_DATE"], "TIMEKEEPER_NAME": first_row["TIMEKEEPER_NAME"],
+                "TIMEKEEPER_CLASSIFICATION": first_row["TIMEKEEPER_CLASSIFICATION"],
+                "TIMEKEEPER_ID": first_row["TIMEKEEPER_ID"], "TASK_CODE": first_row["TASK_CODE"],
+                "ACTIVITY_CODE": first_row["ACTIVITY_CODE"], "EXPENSE_CODE": "",
+                "DESCRIPTION": block_description, "HOURS": round(total_hours, 2), "RATE": first_row["RATE"],
+                "LINE_ITEM_TOTAL": round(total_amount_block, 2)
+            }
             new_blocks.append(block_row)
             
             for row in group:
                 consolidated_row_ids.add(id(row))
             
             blocks_created += 1
-            st.write(f"  - Block created. `blocks_created` is now **{blocks_created}**.")
-
-        st.write("...Loop finished.")
-        st.write(f"Final number of blocks created (`new_blocks` size): **{len(new_blocks)}**")
-        st.write("--- END DEBUGGING OUTPUT ---")
 
         if consolidated_row_ids:
             rows = [row for row in rows if id(row) not in consolidated_row_ids]
@@ -2357,5 +2339,6 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
