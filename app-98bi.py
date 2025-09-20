@@ -1,5 +1,8 @@
 import streamlit as st
 
+# --- Page Configuration (Must be the FIRST Streamlit command) ---
+st.set_page_config(layout="wide")
+
 # Baseline so static analyzers see it as defined before any use
 selected_items = []  # baseline for pylance
 
@@ -483,7 +486,6 @@ def _create_pdf_invoice(df: pd.DataFrame, total_amount: float, invoice_number: s
 
 # --- Streamlit App UI ---
 
-st.set_page_config(layout="wide")
 st.markdown("<h1 style='color: #1E1E1E;'>LEDES Invoice Generator</h1>", unsafe_allow_html=True)
 
 with st.expander("Help & FAQs"):
