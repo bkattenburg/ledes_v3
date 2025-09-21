@@ -1,5 +1,147 @@
 import streamlit as st
 
+# --- Exact-count builders (fees/blocks/expenses) ---
+import datetime, random
+
+def _pick_tk_by_class(timekeepers, cls: str):
+    cls = (cls or "").strip().lower()
+    pool = [t for t in (timekeepers or []) if str(t.get("TIMEKEEPER_CLASSIFICATION","")).strip().lower()==cls]
+    pool = pool or (timekeepers or [])
+    return random.choice(pool) if pool else None
+
+def _make_fee_row(base: dict, *, desc: str, hours: float, tk: dict, date_str: str, block: bool=False):
+    row = {
+        "INVOICE_DESCRIPTION": base["INVOICE_DESCRIPTION"],
+        "CLIENT_ID": base["CLIENT_ID"],
+        "LAW_FIRM_ID": base["LAW_FIRM_ID"],
+        "LINE_ITEM_DATE": date_str,
+        "TIMEKEEPER_NAME": tk.get("TIMEKEEPER_NAME",""),
+        "TIMEKEEPER_CLASSIFICATION": tk.get("TIMEKEEPER_CLASSIFICATION",""),
+        "TIMEKEEPER_ID": tk.get("TIMEKEEPER_ID",""),
+        "TASK_CODE": base.get("TASK_CODE",""),
+        "ACTIVITY_CODE": base.get("ACTIVITY_CODE",""),
+        "EXPENSE_CODE": "",
+        "DESCRIPTION": ("[BLOCK] " + desc) if block else desc,
+        "HOURS": float(round(hours, 2)),
+        "RATE": float(tk.get("RATE", 0.0)),
+    }
+    row["LINE_ITEM_TOTAL"] = round(float(row["HOURS"]) * float(row["RATE"]), 2)
+    if block:
+        row["_is_block_billed"] = True
+    return row
+
+def _build_nonblock_fees_exact(n: int, timekeeper_data, billing_start_date, billing_end_date,
+                               invoice_desc, client_id, law_firm_id,
+                               task_activity_desc, major_task_codes,
+                               max_hours_per_tk_per_day, faker_instance):
+    """Return exactly n non-block fee rows (never consolidated)."""
+    if n <= 0:
+        return []
+    rows = []
+    # Consume two slots for multiple-attendees pair, if enabled and we have capacity
+    try:
+        _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
+    except Exception:
+        _multi_flag = False
+    use_n = int(n)
+    if _multi_flag and use_n >= 2:
+        try:
+            rows = _append_two_attendee_meeting_rows(
+                rows, timekeeper_data, billing_start_date, faker_instance, client_id, law_firm_id, invoice_desc
+            )
+            use_n -= 2
+        except Exception:
+            pass
+    # Use existing generator for the remainder
+    if use_n > 0:
+        more = _generate_fees(
+            use_n, timekeeper_data, billing_start_date, billing_end_date,
+            task_activity_desc, major_task_codes, max_hours_per_tk_per_day,
+            faker_instance, client_id, law_firm_id, invoice_desc
+        )
+        # ensure nothing is flagged as block
+        for r in more:
+            r.pop("_is_block_billed", None)
+            r.pop("_is_block_billed_from_source", None)
+            if isinstance(r.get("DESCRIPTION"), str) and r["DESCRIPTION"].startswith("[BLOCK] "):
+                r["DESCRIPTION"] = r["DESCRIPTION"][8:]
+        rows.extend(more)
+    return rows
+
+def _build_block_fees_exact(k: int, timekeeper_data, billing_start_date, billing_end_date,
+                            invoice_desc, client_id, law_firm_id,
+                            max_hours_per_tk_per_day, faker_instance):
+    """Return exactly k block-billed fee rows (one line per block)."""
+    if k <= 0:
+        return []
+    start, end = billing_start_date, billing_end_date
+    delta_days = max(0, (end - start).days)
+    rows = []
+
+    # Try to use source CSV with Blockbilling flag if available
+    df_src = None
+    try:
+        df_src = st.session_state.get("custom_fee_df_full") or st.session_state.get("custom_fee_df")
+    except Exception:
+        df_src = None
+
+    bbcol = None
+    if df_src is not None:
+        for name in ("Blockbilling","BlockBilling","Blockbilled","BlockBilled"):
+            if name in df_src.columns:
+                bbcol = name
+                break
+
+    picks = []
+    if df_src is not None and bbcol:
+        try:
+            df = df_src.copy()
+            norm = df[bbcol].astype(str).str.strip().str.upper().map({"Y": True, "N": False}).fillna(False)
+            df = df[norm]
+            if not df.empty:
+                df = df.sample(n=min(k, len(df)), replace=False, random_state=None).reset_index(drop=True)
+                for _, r in df.iterrows():
+                    picks.append({
+                        "TASK_CODE": str(r.get("TASK_CODE","")).strip(),
+                        "ACTIVITY_CODE": str(r.get("ACTIVITY_CODE","")).strip(),
+                        "DESC": str(r.get("DESCRIPTION","")).strip(),
+                        "TK_CLASSIFICATION": str(r.get("TK_CLASSIFICATION","")).strip(),
+                    })
+        except Exception:
+            pass
+
+    # Synthesize remainder if needed
+    while len(picks) < k:
+        picks.append({
+            "TASK_CODE": "", "ACTIVITY_CODE": "",
+            "DESC": "Block-billed work across related tasks; consolidated for billing clarity.",
+            "TK_CLASSIFICATION": random.choice(["Partner","Associate"]),
+        })
+
+    base = {"INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id}
+    for item in picks[:k]:
+        try:
+            day = start + datetime.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
+            date_str = day.strftime("%Y-%m-%d")
+            tk = _pick_tk_by_class(timekeeper_data, item.get("TK_CLASSIFICATION"))
+            if not tk:
+                continue
+            hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
+            hours = round(random.uniform(1.0, max(1.0, min(6.0, hours_cap))), 1)
+            row = _make_fee_row(
+                {**base, "TASK_CODE": item["TASK_CODE"], "ACTIVITY_CODE": item["ACTIVITY_CODE"]},
+                desc=item["DESC"], hours=hours, tk=tk, date_str=date_str, block=True
+            )
+            rows.append(row)
+        except Exception:
+            continue
+    return rows[:k]
+
+def _build_expenses_exact(m: int, billing_start_date, billing_end_date,
+                          client_id, law_firm_id, invoice_desc):
+    if m <= 0:
+        return []
+    return _generate_expenses(m, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc)
 
 # --- Begin: Blockbilling-from-source helpers ---
 def _get_blockbilling_col(df):
@@ -1063,173 +1205,30 @@ def _generate_invoice_data(
     num_block_billed: int,               # <-- kept for compatibility; not used inside
     faker_instance: Faker
 ) -> Tuple[List[Dict], float]:
-    """Generate invoice data with fees and expenses."""
+
+    """Generate invoice data with exact counts per type."""
     rows = []
-    rows.extend(_generate_fees(
+
+    # 1) Non-block fee rows: exactly fee_count
+    rows.extend(_build_nonblock_fees_exact(
         fee_count, timekeeper_data, billing_start_date, billing_end_date,
-        task_activity_desc, major_task_codes, max_hours_per_tk_per_day,
-        faker_instance, client_id, law_firm_id, invoice_desc
+        invoice_desc, client_id, law_firm_id,
+        task_activity_desc, major_task_codes, max_hours_per_tk_per_day, faker_instance
     ))
-    rows.extend(_generate_expenses(
+
+    # 2) Block-billed fee rows: exactly num_block_billed
+    rows.extend(_build_block_fees_exact(
+        num_block_billed, timekeeper_data, billing_start_date, billing_end_date,
+        invoice_desc, client_id, law_firm_id, max_hours_per_tk_per_day, faker_instance
+    ))
+
+    # 3) Expense rows: exactly expense_count
+    rows.extend(_build_expenses_exact(
         expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc
     ))
 
-    # Read remaining global block-billing budget (set by UI)
-    allowed_blocks = int(st.session_state.get("__bb_remaining", 0))
-
-    # --- FIX: Add multiple attendee rows BEFORE block billing ---
-    # This ensures they can be included in the block billing consolidation.
-    try:
-        _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
-    except Exception:
-        _multi_flag = False
-    
-    if _multi_flag:
-        rows = _append_two_attendee_meeting_rows(
-            rows,
-            timekeeper_data,
-            billing_start_date,
-            faker_instance,
-            client_id,
-            law_firm_id,
-            invoice_desc
-        )
-
-    # --- Source-driven blockbilling branch (uses uploaded CSV Blockbilling flags) ---
-    try:
-        # Prefer full, non-deduped upload if available
-        df_source = (
-            st.session_state.get("custom_fee_df_full", None)
-            or st.session_state.get("custom_fee_df", None)
-        )
-    except Exception:
-        df_source = None
-
-    bbcol = _get_blockbilling_col(df_source) if df_source is not None else None
-
-    if df_source is not None and bbcol:
-        try:
-            df_src_norm = _normalize_blockbilling(df_source, bbcol)
-            # Optional pre-trim by remaining global budget to reduce work:
-            # (still enforced again after generation)
-            df_src_norm = _enforce_block_billed_limit_df(df_src_norm, allowed_blocks)
-
-            # Keep existing expenses; regenerate fees from source only
-            rows = [r for r in rows if r.get("EXPENSE_CODE")]
-            fee_rows_from_src = _generate_fee_lines_from_source_df(
-                df_source=df_src_norm,
-                fee_count=fee_count,
-                timekeeper_data=timekeeper_data,
-                billing_start_date=billing_start_date,
-                billing_end_date=billing_end_date,
-                invoice_desc=invoice_desc,
-                client_id=client_id,
-                law_firm_id=law_firm_id,
-                max_hours_per_tk_per_day=max_hours_per_tk_per_day,
-                faker_instance=faker_instance
-            )
-
-            # Enforce global remaining cap on source-driven rows
-            created_here = 0
-            # Prefix descriptions for source-driven block-billed rows and set marker
-            for r in fee_rows_from_src:
-                if r.get("_is_block_billed_from_source"):
-                    try:
-                        if isinstance(r.get("DESCRIPTION"), str) and not r["DESCRIPTION"].startswith("[BLOCK] "):
-                            r["DESCRIPTION"] = "[BLOCK] " + r["DESCRIPTION"]
-                    except Exception:
-                        pass
-                    r["_is_block_billed"] = True
-            # Enforce cap
-            for r in fee_rows_from_src:
-                if r.get("_is_block_billed_from_source"):
-                    if created_here < allowed_blocks:
-                        created_here += 1
-                    else:
-                        r["_is_block_billed_from_source"] = False
-
-            rows.extend(fee_rows_from_src)
-            total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
-            return rows, total_amount
-        except Exception as _e:
-            # Fall back to legacy grouping logic on error
-            pass
-    # --- End source-driven branch ---
-
-    # Legacy grouping path (consolidate multiple tasks per TK/day)
-    fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
-    
-    if allowed_blocks > 0 and fee_rows:
-        from collections import defaultdict
-        daily_tk_groups = defaultdict(list)
-        for row in fee_rows:
-            key = (row["TIMEKEEPER_ID"], row["LINE_ITEM_DATE"])
-            daily_tk_groups[key].append(row)
-            
-        eligible_groups = []
-        for key, group_rows in daily_tk_groups.items():
-            if len(group_rows) > 1:
-                total_hours = sum(float(r["HOURS"]) for r in group_rows)
-                if total_hours <= max_hours_per_tk_per_day:
-                    eligible_groups.append(group_rows)
-        
-        random.shuffle(eligible_groups)
-        
-        consolidated_row_ids = set()
-        new_blocks = []
-        blocks_created = 0
-
-        for group in eligible_groups:
-            if blocks_created >= allowed_blocks:
-                break
-            
-            if any(id(row) in consolidated_row_ids for row in group):
-                continue
-
-            total_hours = sum(float(row["HOURS"]) for row in group)
-            total_amount_block = sum(float(row["LINE_ITEM_TOTAL"]) for row in group)
-            descriptions = [row["DESCRIPTION"] for row in group]
-            block_description = "; ".join(descriptions)
-            
-            first_row = group[0]
-            block_row = {
-                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-                "LINE_ITEM_DATE": first_row["LINE_ITEM_DATE"], "TIMEKEEPER_NAME": first_row["TIMEKEEPER_NAME"],
-                "TIMEKEEPER_CLASSIFICATION": first_row["TIMEKEEPER_CLASSIFICATION"],
-                "TIMEKEEPER_ID": first_row["TIMEKEEPER_ID"], "TASK_CODE": first_row["TASK_CODE"],
-                "ACTIVITY_CODE": first_row["ACTIVITY_CODE"], "EXPENSE_CODE": "",
-                "DESCRIPTION": "[BLOCK] " + block_description,
-                "_is_block_billed": True, "HOURS": round(total_hours, 2), "RATE": first_row["RATE"],
-                "LINE_ITEM_TOTAL": round(total_amount_block, 2)
-            }
-            new_blocks.append(block_row)
-            for row in group:
-                consolidated_row_ids.add(id(row))
-            blocks_created += 1
-
-        if consolidated_row_ids:
-            rows = [row for row in rows if id(row) not in consolidated_row_ids]
-            rows.extend(new_blocks)
-
-        # Update global remaining
-    # Final clamp: never exceed allowed_blocks by marker
-    if allowed_blocks >= 0:
-        block_rows = [r for r in rows if r.get("_is_block_billed") or r.get("_is_block_billed_from_source")]
-        if len(block_rows) > allowed_blocks:
-            for r in block_rows[allowed_blocks:]:
-                # Demote extras by removing marker/prefix only (does not ungroup legacy rows)
-                r["_is_block_billed"] = False
-                r["_is_block_billed_from_source"] = False
-                try:
-                    if isinstance(r.get("DESCRIPTION"), str) and r["DESCRIPTION"].startswith("[BLOCK] "):
-                        r["DESCRIPTION"] = r["DESCRIPTION"][8:]
-                except Exception:
-                    pass
-
-    total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
+    total_amount = sum(float(row.get("LINE_ITEM_TOTAL", 0.0)) for row in rows)
     return rows, total_amount
-
-
 def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> Tuple[List[Dict], List[str]]:
     """Ensure mandatory line items are included and return a list of any skipped items."""
     delta = billing_end_date - billing_start_date
@@ -2230,6 +2229,8 @@ with tab_objects[output_tab_index]:
         num_block_billed = st.number_input("Number of Block Billed Items:", min_value=1, max_value=10, value=2, step=1, help="The number of block billed items to create by consolidating multiple tasks from the same timekeeper on the same day.")
 
     # Initialize/Reset global block-billing budget whenever the UI value is set
+    st.session_state["__bb_remaining"] = int(num_block_billed)
+
     include_pdf = st.checkbox("Include PDF Invoice", value=False)
     
     uploaded_logo = None
