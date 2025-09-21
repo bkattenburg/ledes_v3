@@ -1131,18 +1131,22 @@ def _generate_invoice_data(
 
             # Enforce global remaining cap on source-driven rows
             created_here = 0
+            # Prefix descriptions for source-driven block-billed rows and set marker
+            for r in fee_rows_from_src:
+                if r.get("_is_block_billed_from_source"):
+                    try:
+                        if isinstance(r.get("DESCRIPTION"), str) and not r["DESCRIPTION"].startswith("[BLOCK] "):
+                            r["DESCRIPTION"] = "[BLOCK] " + r["DESCRIPTION"]
+                    except Exception:
+                        pass
+                    r["_is_block_billed"] = True
+            # Enforce cap
             for r in fee_rows_from_src:
                 if r.get("_is_block_billed_from_source"):
                     if created_here < allowed_blocks:
                         created_here += 1
                     else:
                         r["_is_block_billed_from_source"] = False
-
-            # Update global remaining
-            try:
-                st.session_state["__bb_remaining"] = max(0, allowed_blocks - created_here)
-            except Exception:
-                pass
 
             rows.extend(fee_rows_from_src)
             total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
@@ -1194,7 +1198,8 @@ def _generate_invoice_data(
                 "TIMEKEEPER_CLASSIFICATION": first_row["TIMEKEEPER_CLASSIFICATION"],
                 "TIMEKEEPER_ID": first_row["TIMEKEEPER_ID"], "TASK_CODE": first_row["TASK_CODE"],
                 "ACTIVITY_CODE": first_row["ACTIVITY_CODE"], "EXPENSE_CODE": "",
-                "DESCRIPTION": block_description, "HOURS": round(total_hours, 2), "RATE": first_row["RATE"],
+                "DESCRIPTION": "[BLOCK] " + block_description,
+                "_is_block_billed": True, "HOURS": round(total_hours, 2), "RATE": first_row["RATE"],
                 "LINE_ITEM_TOTAL": round(total_amount_block, 2)
             }
             new_blocks.append(block_row)
@@ -1207,11 +1212,20 @@ def _generate_invoice_data(
             rows.extend(new_blocks)
 
         # Update global remaining
-        try:
-            st.session_state["__bb_remaining"] = max(0, allowed_blocks - blocks_created)
-        except Exception:
-            pass
-    
+    # Final clamp: never exceed allowed_blocks by marker
+    if allowed_blocks >= 0:
+        block_rows = [r for r in rows if r.get("_is_block_billed") or r.get("_is_block_billed_from_source")]
+        if len(block_rows) > allowed_blocks:
+            for r in block_rows[allowed_blocks:]:
+                # Demote extras by removing marker/prefix only (does not ungroup legacy rows)
+                r["_is_block_billed"] = False
+                r["_is_block_billed_from_source"] = False
+                try:
+                    if isinstance(r.get("DESCRIPTION"), str) and r["DESCRIPTION"].startswith("[BLOCK] "):
+                        r["DESCRIPTION"] = r["DESCRIPTION"][8:]
+                except Exception:
+                    pass
+
     total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
     return rows, total_amount
 
@@ -2216,8 +2230,6 @@ with tab_objects[output_tab_index]:
         num_block_billed = st.number_input("Number of Block Billed Items:", min_value=1, max_value=10, value=2, step=1, help="The number of block billed items to create by consolidating multiple tasks from the same timekeeper on the same day.")
 
     # Initialize/Reset global block-billing budget whenever the UI value is set
-    st.session_state["__bb_remaining"] = int(num_block_billed)
-
     include_pdf = st.checkbox("Include PDF Invoice", value=False)
     
     uploaded_logo = None
