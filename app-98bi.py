@@ -1212,7 +1212,7 @@ def _append_two_attendee_meeting_rows(rows, timekeeper_data, billing_start_date,
 #                "ACTIVITY_CODE": first_row["ACTIVITY_CODE"], "EXPENSE_CODE": "",
 #                "DESCRIPTION": block_description, "HOURS": round(total_hours, 2), "RATE": first_row["RATE"],
 #                "LINE_ITEM_TOTAL": round(total_amount_block, 2)
-            }
+#            }
 #            new_blocks.append(block_row)
 #            for row in group:
 #                consolidated_row_ids.add(id(row))
@@ -2703,4 +2703,5 @@ def _generate_invoice_data(
 
     total_amount = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows)
     return rows, total_amount
+
 
