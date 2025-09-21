@@ -1231,6 +1231,118 @@ def _append_two_attendee_meeting_rows(rows, timekeeper_data, billing_start_date,
 #    total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
 #    return rows, total_amount
 
+# === Override: source-only fee generation using Blockbilling column ===
+def _generate_invoice_data(
+    fee_count: int,
+    expense_count: int,
+    timekeeper_data: List[Dict],
+    client_id: str,
+    law_firm_id: str,
+    invoice_desc: str,
+    billing_start_date: datetime.date,
+    billing_end_date: datetime.date,
+    task_activity_desc: List[Tuple[str, str, str]],
+    major_task_codes: set,
+    max_hours_per_tk_per_day: int,
+    num_block_billed: int,
+    faker_instance: Faker
+) -> Tuple[List[Dict], float]:
+    """Generate invoice data using ONLY the uploaded CSV:
+    - Non-block fees come from rows with Blockbilling=N
+    - Block-billed fees come from rows with Blockbilling=Y (no synthetic building)
+    - Expenses are generated as before
+    Mandatory items are appended by the caller after this returns.
+    """
+    rows: List[Dict] = []
+
+    # Get uploaded source
+    try:
+        df_src = st.session_state.get("custom_fee_df_full") or st.session_state.get("custom_fee_df")
+    except Exception:
+        df_src = None
+
+    # Helper to build a fee row
+    def _mk_fee_row(desc: str, tk: Dict, date_str: str, task_code: str, act_code: str, hours: float, block: bool=False) -> Dict:
+        rate = float(tk.get("RATE", 0.0))
+        row = {
+            "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+            "LINE_ITEM_DATE": date_str, "TIMEKEEPER_NAME": tk.get("TIMEKEEPER_NAME",""),
+            "TIMEKEEPER_CLASSIFICATION": tk.get("TIMEKEEPER_CLASSIFICATION",""), "TIMEKEEPER_ID": tk.get("TIMEKEEPER_ID",""),
+            "TASK_CODE": task_code, "ACTIVITY_CODE": act_code, "EXPENSE_CODE": "",
+            "DESCRIPTION": ("[BLOCK] " + desc) if block else desc,
+            "HOURS": float(round(hours, 2)), "RATE": rate
+        }
+        row["LINE_ITEM_TOTAL"] = round(float(row["HOURS"]) * rate, 2)
+        if block:
+            row["_is_block_billed_from_source"] = True
+            row["_is_block_billed"] = True
+        return row
+
+    # Time window
+    delta_days = max(0, (billing_end_date - billing_start_date).days)
+
+    # --- Non-block fees (N) ---
+    import random, datetime as _dt
+    nb_picks = []
+    if fee_count > 0:
+        nb_picks = _select_items_from_source(df_src, want_block=False, k=fee_count) if df_src is not None else []
+    for item in nb_picks:
+        day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
+        date_str = day.strftime("%Y-%m-%d")
+        tk = _pick_timekeeper_by_class(timekeeper_data, item.get("TK_CLASSIFICATION"))
+        if not tk: 
+            continue
+        hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
+        hours = round(random.uniform(0.5, max(0.6, min(3.5, hours_cap))), 1)
+        rows.append(_mk_fee_row(item["DESC"], tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
+
+    # --- Block-billed fees (Y) ---
+    include_blocks = True
+    try:
+        include_blocks = bool(st.session_state.get("include_block_billed", True))
+    except Exception:
+        pass
+    bb_picks = []
+    if include_blocks and num_block_billed > 0:
+        bb_picks = _select_items_from_source(df_src, want_block=True, k=num_block_billed) if df_src is not None else []
+    for item in bb_picks[:num_block_billed]:
+        day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
+        date_str = day.strftime("%Y-%m-%d")
+        tk = _pick_timekeeper_by_class(timekeeper_data, item.get("TK_CLASSIFICATION"))
+        if not tk: 
+            continue
+        hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
+        hours = round(random.uniform(1.0, max(1.0, min(6.0, hours_cap))), 1)
+        rows.append(_mk_fee_row(item["DESC"], tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=True))
+
+        # --- FIX: Add multiple attendee rows BEFORE block billing ---
+        # This ensures they can be included in the block billing consolidation.
+        try:
+            _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
+        except Exception:
+            _multi_flag = False
+        
+        if _multi_flag:
+            rows = _append_two_attendee_meeting_rows(
+                rows,
+                timekeeper_data,
+                billing_start_date,
+                faker_instance,
+                client_id,
+                law_firm_id,
+                invoice_desc
+            )
+    
+    # --- Expenses (unchanged) ---
+    if expense_count > 0:
+        try:
+            rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
+        except Exception:
+            # Fallback: no expenses on failure
+            pass
+
+    total_amount = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows)
+    return rows, total_amount
 
 def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> Tuple[List[Dict], List[str]]:
     """Ensure mandatory line items are included and return a list of any skipped items."""
@@ -2588,120 +2700,5 @@ if generate_button:
                         )
             status.update(label="Invoice generation complete!", state="complete")
 
-
-
-
-# === Override: source-only fee generation using Blockbilling column ===
-def _generate_invoice_data(
-    fee_count: int,
-    expense_count: int,
-    timekeeper_data: List[Dict],
-    client_id: str,
-    law_firm_id: str,
-    invoice_desc: str,
-    billing_start_date: datetime.date,
-    billing_end_date: datetime.date,
-    task_activity_desc: List[Tuple[str, str, str]],
-    major_task_codes: set,
-    max_hours_per_tk_per_day: int,
-    num_block_billed: int,
-    faker_instance: Faker
-) -> Tuple[List[Dict], float]:
-    """Generate invoice data using ONLY the uploaded CSV:
-    - Non-block fees come from rows with Blockbilling=N
-    - Block-billed fees come from rows with Blockbilling=Y (no synthetic building)
-    - Expenses are generated as before
-    Mandatory items are appended by the caller after this returns.
-    """
-    rows: List[Dict] = []
-
-    # Get uploaded source
-    try:
-        df_src = st.session_state.get("custom_fee_df_full") or st.session_state.get("custom_fee_df")
-    except Exception:
-        df_src = None
-
-    # Helper to build a fee row
-    def _mk_fee_row(desc: str, tk: Dict, date_str: str, task_code: str, act_code: str, hours: float, block: bool=False) -> Dict:
-        rate = float(tk.get("RATE", 0.0))
-        row = {
-            "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-            "LINE_ITEM_DATE": date_str, "TIMEKEEPER_NAME": tk.get("TIMEKEEPER_NAME",""),
-            "TIMEKEEPER_CLASSIFICATION": tk.get("TIMEKEEPER_CLASSIFICATION",""), "TIMEKEEPER_ID": tk.get("TIMEKEEPER_ID",""),
-            "TASK_CODE": task_code, "ACTIVITY_CODE": act_code, "EXPENSE_CODE": "",
-            "DESCRIPTION": ("[BLOCK] " + desc) if block else desc,
-            "HOURS": float(round(hours, 2)), "RATE": rate
-        }
-        row["LINE_ITEM_TOTAL"] = round(float(row["HOURS"]) * rate, 2)
-        if block:
-            row["_is_block_billed_from_source"] = True
-            row["_is_block_billed"] = True
-        return row
-
-    # Time window
-    delta_days = max(0, (billing_end_date - billing_start_date).days)
-
-    # --- Non-block fees (N) ---
-    import random, datetime as _dt
-    nb_picks = []
-    if fee_count > 0:
-        nb_picks = _select_items_from_source(df_src, want_block=False, k=fee_count) if df_src is not None else []
-    for item in nb_picks:
-        day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
-        date_str = day.strftime("%Y-%m-%d")
-        tk = _pick_timekeeper_by_class(timekeeper_data, item.get("TK_CLASSIFICATION"))
-        if not tk: 
-            continue
-        hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
-        hours = round(random.uniform(0.5, max(0.6, min(3.5, hours_cap))), 1)
-        rows.append(_mk_fee_row(item["DESC"], tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
-
-    # --- Block-billed fees (Y) ---
-    include_blocks = True
-    try:
-        include_blocks = bool(st.session_state.get("include_block_billed", True))
-    except Exception:
-        pass
-    bb_picks = []
-    if include_blocks and num_block_billed > 0:
-        bb_picks = _select_items_from_source(df_src, want_block=True, k=num_block_billed) if df_src is not None else []
-    for item in bb_picks[:num_block_billed]:
-        day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
-        date_str = day.strftime("%Y-%m-%d")
-        tk = _pick_timekeeper_by_class(timekeeper_data, item.get("TK_CLASSIFICATION"))
-        if not tk: 
-            continue
-        hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
-        hours = round(random.uniform(1.0, max(1.0, min(6.0, hours_cap))), 1)
-        rows.append(_mk_fee_row(item["DESC"], tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=True))
-
-        # --- FIX: Add multiple attendee rows BEFORE block billing ---
-        # This ensures they can be included in the block billing consolidation.
-        try:
-            _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
-        except Exception:
-            _multi_flag = False
-        
-        if _multi_flag:
-            rows = _append_two_attendee_meeting_rows(
-                rows,
-                timekeeper_data,
-                billing_start_date,
-                faker_instance,
-                client_id,
-                law_firm_id,
-                invoice_desc
-            )
-    
-    # --- Expenses (unchanged) ---
-    if expense_count > 0:
-        try:
-            rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
-        except Exception:
-            # Fallback: no expenses on failure
-            pass
-
-    total_amount = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows)
-    return rows, total_amount
 
 
