@@ -3,6 +3,103 @@ import streamlit as st
 # --- Exact-count builders (fees/blocks/expenses) ---
 import datetime, random
 
+
+# --- Post-process: strictly enforce "Include Block Billed" and cap ---
+
+
+def _postprocess_enforce_block_cap(rows: list, allowed_blocks: int, include_block_billed: bool) -> list:
+    """Exempt mandatory block-billed items; apply cap/include only to non-mandatory."""
+    def is_block(r):
+        if r.get("_is_block_billed") or r.get("_is_block_billed_from_source"):
+            return True
+        d = r.get("DESCRIPTION")
+        return isinstance(d, str) and d.startswith("[BLOCK] ")
+
+    # Partition block rows into mandatory vs non-mandatory
+    block_idxs_mand = [i for i,r in enumerate(rows) if is_block(r) and bool(r.get("_is_mandatory"))]
+    block_idxs_non  = [i for i,r in enumerate(rows) if is_block(r) and not bool(r.get("_is_mandatory"))]
+
+    # If include is off: keep mandatory as block, demote all non-mandatory
+    if not include_block_billed:
+        for i in block_idxs_non:
+            r = rows[i]
+            r["_is_block_billed"] = False
+            r["_is_block_billed_from_source"] = False
+            try:
+                if isinstance(r.get("DESCRIPTION"), str) and r["DESCRIPTION"].startswith("[BLOCK] "):
+                    r["DESCRIPTION"] = r["DESCRIPTION"][8:]
+            except Exception:
+                pass
+        return rows
+
+    # include is on: cap applies only to non-mandatory
+    if allowed_blocks is None:
+        allowed_blocks = 0
+    allowed = max(0, int(allowed_blocks))
+
+    # Clamp non-mandatory to 'allowed' (mandatory kept unlimited)
+    for i in block_idxs_non[allowed:]:
+        r = rows[i]
+        r["_is_block_billed"] = False
+        r["_is_block_billed_from_source"] = False
+        try:
+            if isinstance(r.get("DESCRIPTION"), str) and r["DESCRIPTION"].startswith("[BLOCK] "):
+                r["DESCRIPTION"] = r["DESCRIPTION"][8:]
+        except Exception:
+            pass
+    return rows
+
+    # include is on: cap applies only to non-mandatory
+    if allowed_blocks is None:
+        allowed_blocks = 0
+    allowed = max(0, int(allowed_blocks))
+
+    # Keep mandatory (unlimited), clamp non-mandatory to 'allowed'
+    for i in block_idxs_non[allowed:]:
+        r = rows[i]
+        r["_is_block_billed"] = False
+        r["_is_block_billed_from_source"] = False
+        try:
+            if isinstance(r.get("DESCRIPTION"), str) and r["DESCRIPTION"].startswith("[BLOCK] "):
+                r["DESCRIPTION"] = r["DESCRIPTION"][8:]
+        except Exception:
+            pass
+    return rows
+
+
+    # If include is on, clamp to allowed_blocks. Prefer rows created by block builder
+    block_idxs_from_builder = [i for i in block_indices if rows[i].get("_from_block_builder")]
+    remaining = allowed_blocks
+    keep_set = set()
+
+    # Take from builder first
+    for i in block_idxs_from_builder:
+        if remaining <= 0: break
+        keep_set.add(i); remaining -= 1
+
+    # Then take other block rows in order of appearance
+    if remaining > 0:
+        for i in block_indices:
+            if i in keep_set: continue
+            keep_set.add(i); remaining -= 1
+            if remaining == 0: break
+
+    # Demote all others
+    for i in block_indices:
+        if i in keep_set: continue
+        r = rows[i]
+        r["_is_block_billed"] = False
+        r["_is_block_billed_from_source"] = False
+        try:
+            if isinstance(r.get("DESCRIPTION"), str) and r["DESCRIPTION"].startswith("[BLOCK] "):
+                r["DESCRIPTION"] = r["DESCRIPTION"][8:]
+        except Exception:
+            pass
+    return rows
+
+
+
+
 def _pick_tk_by_class(timekeepers, cls: str):
     cls = (cls or "").strip().lower()
     pool = [t for t in (timekeepers or []) if str(t.get("TIMEKEEPER_CLASSIFICATION","")).strip().lower()==cls]
@@ -72,6 +169,12 @@ def _build_block_fees_exact(k: int, timekeeper_data, billing_start_date, billing
                             invoice_desc, client_id, law_firm_id,
                             max_hours_per_tk_per_day, faker_instance):
     """Return exactly k block-billed fee rows (one line per block)."""
+# Respect UI include flag if available
+    try:
+        if not bool(st.session_state.get("include_block_billed", True)):
+            return []
+    except Exception:
+        pass
     if k <= 0:
         return []
     start, end = billing_start_date, billing_end_date
@@ -1227,6 +1330,12 @@ def _generate_invoice_data(
         expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc
     ))
 
+        # Enforce include/cap strictly at the end
+    try:
+        include_flag = bool(st.session_state.get("include_block_billed", True))
+    except Exception:
+        include_flag = True
+    rows = _postprocess_enforce_block_cap(rows, int(num_block_billed), include_flag)
     total_amount = sum(float(row.get("LINE_ITEM_TOTAL", 0.0)) for row in rows)
     return rows, total_amount
 def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> Tuple[List[Dict], List[str]]:
@@ -1315,7 +1424,7 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
             else:
                 skipped_items.append(item_name) # Otherwise, log it as skipped
             
-    return rows, skipped_items
+    [r.update({"_is_mandatory": True}) or r for r in rows]; return rows, skipped_items
 
 def _validate_image_bytes(image_bytes: bytes) -> bool:
     """Validate that the provided bytes represent a valid image."""
