@@ -1294,7 +1294,11 @@ def _generate_invoice_data(
             continue
         hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
         hours = round(random.uniform(0.5, max(0.6, min(3.5, hours_cap))), 1)
-        rows.append(_mk_fee_row(item["DESC"], tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
+        # ADD THIS LINE
+        processed_desc = _process_description(item["DESC"], faker_instance)
+        # UPDATE THIS LINE
+        rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
+        #rows.append(_mk_fee_row(item["DESC"], tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
 
     # --- Block-billed fees (Y) ---
     include_blocks = True
@@ -1313,25 +1317,29 @@ def _generate_invoice_data(
             continue
         hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
         hours = round(random.uniform(1.0, max(1.0, min(6.0, hours_cap))), 1)
-        rows.append(_mk_fee_row(item["DESC"], tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=True))
+        # ADD THIS LINE
+        processed_desc = _process_description(item["DESC"], faker_instance)
+        # UPDATE THIS LINE
+        rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=True))
+        #rows.append(_mk_fee_row(item["DESC"], tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=True))
 
         # --- FIX: Add multiple attendee rows BEFORE block billing ---
         # This ensures they can be included in the block billing consolidation.
-        try:
-            _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
-        except Exception:
-            _multi_flag = False
-        
-        if _multi_flag:
-            rows = _append_two_attendee_meeting_rows(
-                rows,
-                timekeeper_data,
-                billing_start_date,
-                faker_instance,
-                client_id,
-                law_firm_id,
-                invoice_desc
-            )
+    try:
+        _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
+    except Exception:
+        _multi_flag = False
+    
+    if _multi_flag:
+        rows = _append_two_attendee_meeting_rows(
+            rows,
+            timekeeper_data,
+            billing_start_date,
+            faker_instance,
+            client_id,
+            law_firm_id,
+            invoice_desc
+        )
     
     # --- Expenses (unchanged) ---
     if expense_count > 0:
@@ -2699,6 +2707,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
