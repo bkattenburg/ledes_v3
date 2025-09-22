@@ -2174,7 +2174,8 @@ with tab_objects[1]:
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
     invoice_number_base = st.text_input("Invoice Number (Base):", "2025MMM-XXXXXX")
 
-    LEDES_OPTIONS = ["1998B", "1998BI", "1998BIv2", "XML 2.1"]
+    #LEDES_OPTIONS = ["1998B", "1998BI", "1998BIv2", "XML 2.1"]
+    LEDES_OPTIONS = ["1998B", "1998BI", "XML 2.1"]
     ledes_version = st.selectbox(
         "LEDES Version:",
         LEDES_OPTIONS,
@@ -2708,6 +2709,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
