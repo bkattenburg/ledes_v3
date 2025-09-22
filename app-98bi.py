@@ -35,6 +35,9 @@ def _select_items_from_source(df_src, want_block: bool, k: int):
             pass
     return picks
 
+def _profile_changed():
+    st.rerun()
+    
 # --- Begin: Blockbilling-from-source helpers ---
 def _get_blockbilling_col(df):
     for name in ["Blockbilling", "BlockBilling", "Blockbilled", "BlockBilled"]:
@@ -2796,6 +2799,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
