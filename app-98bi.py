@@ -2039,7 +2039,7 @@ if onit_tk_data:
 st.sidebar.markdown("<h5>Onit ELM - VAT</h5>", unsafe_allow_html=True)
 onit_tk_data = read_file_for_download("assets/onit_vat_tk.csv")
 if onit_tk_data:
-    st.sidebar.download_button("Onit VAT Timekeeper File", onit_tk_data, "onit_elm_tk.csv", "text/csv")
+    st.sidebar.download_button("Onit VAT Timekeeper File", onit_vat_tk_data, "onit_vat_tk.csv", "text/csv")
 
 # SimpleLegal Timekeepers
 st.sidebar.markdown("<h5>SimpleLegal</h5>", unsafe_allow_html=True)
@@ -2807,6 +2807,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
