@@ -2026,6 +2026,39 @@ def read_file_for_download(path):
         st.sidebar.error(f"File not found: {os.path.basename(path)}")
         return None
 
+# --- ADD NEW SECTION FOR REFERENCE FILES ---
+st.sidebar.markdown("<h2 style='color: #1E1E1E; margin-top: 20px;'>Reference Files</h2>", unsafe_allow_html=True)
+
+# Onit ELM Timekeepers
+st.sidebar.markdown("<h5>Onit ELM</h5>", unsafe_allow_html=True)
+onit_tk_data = read_file_for_download("assets/onit_elm_tk.csv")
+if onit_tk_data:
+    st.sidebar.download_button("Onit Timekeeper File", onit_tk_data, "onit_elm_tk.csv", "text/csv")
+
+# Onit ELM Timekeepers - VAT
+st.sidebar.markdown("<h5>Onit ELM</h5>", unsafe_allow_html=True)
+onit_tk_data = read_file_for_download("assets/onit_vat_tk.csv")
+if onit_tk_data:
+    st.sidebar.download_button("Onit VAT Timekeeper File", onit_tk_data, "onit_elm_tk.csv", "text/csv")
+
+# SimpleLegal Timekeepers
+st.sidebar.markdown("<h5>SimpleLegal</h5>", unsafe_allow_html=True)
+sl_tk_data = read_file_for_download("assets/simplelegal_tk.csv")
+if sl_tk_data:
+    st.sidebar.download_button("SimpleLegal Timekeeper File", sl_tk_data, "simplelegal_tk.csv", "text/csv")
+
+# Unity Timekeepers
+st.sidebar.markdown("<h5>Unity</h5>", unsafe_allow_html=True)
+unity_tk_data = read_file_for_download("assets/unity_tk.csv")
+if unity_tk_data:
+    st.sidebar.download_button("Download Unity Timekeeper File", sl_tk_data, "unity_tk.csv", "text/csv")
+
+# Custom Line Items
+st.sidebar.markdown("<h5>Line Items</h5>", unsafe_allow_html=True)
+onit_tasks_data = read_file_for_download("assets/custom_tasks.csv")
+if onit_tasks_data:
+    st.sidebar.download_button("Download Line Items File", onit_tasks_data, "custom_tasks.csv", "text/csv")
+
 # --- UPDATE THE SAMPLE CUSTOM TASK CSV DATA HERE ---
 sample_custom_df = pd.DataFrame({
     "TASK_CODE": ["L100", "L110"],
@@ -2039,38 +2072,11 @@ sample_custom_df = pd.DataFrame({
 })
 csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
 st.sidebar.download_button(
-    label="Download Sample Custom Tasks CSV",
+    label="Template Custom Tasks CSV",
     data=csv_custom_sample_bytes,
     file_name="sample_custom_tasks.csv",
     mime="text/csv"
 )
-
-# --- ADD NEW SECTION FOR REFERENCE FILES ---
-st.sidebar.markdown("<h2 style='color: #1E1E1E; margin-top: 20px;'>Reference Files</h2>", unsafe_allow_html=True)
-
-# Onit ELM Timekeepers
-st.sidebar.markdown("<h5>Onit ELM</h5>", unsafe_allow_html=True)
-onit_tk_data = read_file_for_download("assets/onit_elm_tk.csv")
-if onit_tk_data:
-    st.sidebar.download_button("Download Onit TK File", onit_tk_data, "onit_elm_tk.csv", "text/csv")
-
-# SimpleLegal Timekeepers
-st.sidebar.markdown("<h5>SimpleLegal</h5>", unsafe_allow_html=True)
-sl_tk_data = read_file_for_download("assets/simplelegal_tk.csv")
-if sl_tk_data:
-    st.sidebar.download_button("Download SimpleLegal TK File", sl_tk_data, "simplelegal_tk.csv", "text/csv")
-
-# Unity Timekeepers
-st.sidebar.markdown("<h5>Unity</h5>", unsafe_allow_html=True)
-unity_tk_data = read_file_for_download("assets/unity_tk.csv")
-if unity_tk_data:
-    st.sidebar.download_button("Download Unity TK File", sl_tk_data, "unity_tk.csv", "text/csv")
-
-# Custom Line Items
-st.sidebar.markdown("<h5>Line Items</h5>", unsafe_allow_html=True)
-onit_tasks_data = read_file_for_download("assets/custom_tasks.csv")
-if onit_tasks_data:
-    st.sidebar.download_button("Download Onit Tasks File", onit_tasks_data, "custom_tasks.csv", "text/csv")
 
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
@@ -2788,6 +2794,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
