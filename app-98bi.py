@@ -1269,7 +1269,8 @@ def _generate_invoice_data(
             "LINE_ITEM_DATE": date_str, "TIMEKEEPER_NAME": tk.get("TIMEKEEPER_NAME",""),
             "TIMEKEEPER_CLASSIFICATION": tk.get("TIMEKEEPER_CLASSIFICATION",""), "TIMEKEEPER_ID": tk.get("TIMEKEEPER_ID",""),
             "TASK_CODE": task_code, "ACTIVITY_CODE": act_code, "EXPENSE_CODE": "",
-            "DESCRIPTION": ("[BLOCK] " + desc) if block else desc,
+            #"DESCRIPTION": ("[BLOCK] " + desc) if block else desc,
+            "DESCRIPTION": desc,
             "HOURS": float(round(hours, 2)), "RATE": rate
         }
         row["LINE_ITEM_TOTAL"] = round(float(row["HOURS"]) * rate, 2)
@@ -2707,6 +2708,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
