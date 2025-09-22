@@ -2255,9 +2255,29 @@ with tab_objects[2]:
                 key="telephone_range_e105",
                 help="Random amount for each E105 line will be drawn from this range."
             )
-            st.number_input(
+            #st.number_input(
+            #    "Photocopies (E101) per-page rate ($)",
+            #    min_value=0.04, max_value=1.50, value=0.24, step=0.01,
+            #    key="copying_rate_e101",
+            #    help="Per-page rate used for E101 Photocopy expenses."
+            #)
+
+            with st.expander("Adjust Expense Amounts", expanded=False):
+            # ... other inputs ...
+        
+            # 1. Determine the default rate based on the selected LEDES version
+            if st.session_state.get("ledes_version") == "1998BI":
+                default_copy_rate = 0.04
+            else:
+                default_copy_rate = 0.24
+        
+            # 2. Use the variable as the slider's default value
+            st.slider(
                 "Photocopies (E101) per-page rate ($)",
-                min_value=0.04, max_value=1.50, value=0.24, step=0.01,
+                min_value=0.04,
+                max_value=1.50,
+                value=default_copy_rate, # <-- Use the dynamic variable here
+                step=0.01,
                 key="copying_rate_e101",
                 help="Per-page rate used for E101 Photocopy expenses."
             )
@@ -2712,6 +2732,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
