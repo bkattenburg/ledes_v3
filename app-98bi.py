@@ -2261,10 +2261,7 @@ with tab_objects[2]:
             #    key="copying_rate_e101",
             #    help="Per-page rate used for E101 Photocopy expenses."
             #)
-
-        with st.expander("Adjust Expense Amounts", expanded=False):
-            # ... other inputs ...
-        
+     
             # 1. Determine the default rate based on the selected LEDES version
             if st.session_state.get("ledes_version") == "1998BI":
                 default_copy_rate = 0.04
@@ -2732,6 +2729,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
