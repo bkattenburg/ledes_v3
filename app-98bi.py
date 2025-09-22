@@ -274,8 +274,8 @@ def apply_preset():
 # Billing Profiles Configuration
 # ===============================
 # Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
-BILLING_PROFILES = [("VAT", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
-    ("Onit ELM",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
+BILLING_PROFILES = [("Onit ELM",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
+    ("Onit ELM VAT", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
     ("SimpleLegal", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
     ("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
@@ -283,7 +283,7 @@ BILLING_PROFILES = [("VAT", "Onit LLC - Belgium", "", "Nelson and Murdock - Belg
 
 # Extended profile details (addresses, tax ids, defaults)
 BILLING_PROFILE_DETAILS = {
-    "VAT": {
+    "Onit ELM VAT": {
         "ledes_default": "1998BI",
         "invoice_currency": "EUR",
         # Law Firm details (Belgium)
@@ -2796,6 +2796,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
