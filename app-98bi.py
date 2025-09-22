@@ -2241,13 +2241,13 @@ with tab_objects[2]:
                 key="mileage_rate_e109",
                 help="Used to calculate E109 totals as miles × rate. Miles are stored in the HOURS column."
             )
-            st.number_input(
+            st.slider(
                 "Out-of-town Travel (E110) amount range ($)",
                 min_value=10.0, max_value=7500.0, value=(100.0, 800.0), step=10.0,
                 key="travel_range_e110",
                 help="Random amount for each E110 line will be drawn from this range."
             )
-            st.number_input(
+            st.slider(
                 "Telephone (E105) amount range ($)",
                 min_value=1.0, max_value=50.0, value=(5.0, 15.0), step=1.0,
                 key="telephone_range_e105",
@@ -2710,6 +2710,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
