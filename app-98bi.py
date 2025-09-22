@@ -2226,7 +2226,7 @@ with tab_objects[2]:
     else:
         max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
         st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
-        fees = st.slider(
+        fees = st.number_input(
             "Number of Fee Line Items",
             min_value=0,
             max_value=max_fees,
@@ -2241,26 +2241,26 @@ with tab_objects[2]:
                 key="mileage_rate_e109",
                 help="Used to calculate E109 totals as miles × rate. Miles are stored in the HOURS column."
             )
-            st.slider(
+            st.number_input(
                 "Out-of-town Travel (E110) amount range ($)",
                 min_value=10.0, max_value=7500.0, value=(100.0, 800.0), step=10.0,
                 key="travel_range_e110",
                 help="Random amount for each E110 line will be drawn from this range."
             )
-            st.slider(
+            st.number_input(
                 "Telephone (E105) amount range ($)",
                 min_value=1.0, max_value=50.0, value=(5.0, 15.0), step=1.0,
                 key="telephone_range_e105",
                 help="Random amount for each E105 line will be drawn from this range."
             )
-            st.slider(
+            st.number_input(
                 "Photocopies (E101) per-page rate ($)",
-                min_value=0.05, max_value=1.50, value=0.24, step=0.01,
+                min_value=0.04, max_value=1.50, value=0.24, step=0.01,
                 key="copying_rate_e101",
                 help="Per-page rate used for E101 Photocopy expenses."
             )
         st.caption("Number of expense line items to generate")
-        expenses = st.slider(
+        expenses = st.number_input(
             "Number of Expense Line Items",
             min_value=0,
             max_value=50,
@@ -2710,6 +2710,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
