@@ -2091,7 +2091,7 @@ tab_objects = st.tabs(tabs)
 with tab_objects[0]:
 
     st.markdown("<h3 style='color: #1E1E1E;'>Data Sources</h3>", unsafe_allow_html=True)
-    uploaded_timekeeper_file = st.file_uploader("Upload Timekeeper CSV (tk_info.csv)", type="csv")
+    uploaded_timekeeper_file = st.file_uploader("Upload Timekeeper CSV", type="csv")
     timekeeper_data = _load_timekeepers(uploaded_timekeeper_file)
     # Persist across reruns/tabs and always read from session thereafter
     if timekeeper_data is not None:
@@ -2134,7 +2134,7 @@ with tab_objects[0]:
     use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
     uploaded_custom_tasks_file = None
     if use_custom_tasks:
-        uploaded_custom_tasks_file = st.file_uploader("Upload Custom Line Items CSV (custom_details.csv)", type="csv")
+        uploaded_custom_tasks_file = st.file_uploader("Upload Custom Line Items CSV (custom_tasks.csv)", type="csv")
 
     task_activity_desc = CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
     if use_custom_tasks and uploaded_custom_tasks_file:
@@ -2796,6 +2796,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
