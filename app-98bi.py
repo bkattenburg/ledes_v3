@@ -2171,11 +2171,11 @@ with tab_objects[1]:
     """
     st.markdown(status_html, unsafe_allow_html=True)
 
-    st.write("Timekeeper classifications found:", sorted({str(tk.get("TIMEKEEPER_CLASSIFICATION","")) for tk in _get_timekeepers()}))
+    #st.write("Timekeeper classifications found:", sorted({str(tk.get("TIMEKEEPER_CLASSIFICATION","")) for tk in _get_timekeepers()}))
     
     # Other invoice details
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
-    invoice_number_base = st.text_input("Invoice Number (Base):", "2025MMM-XXXXXX")
+    invoice_number_base = st.text_input("Invoice Number (Base):", "INV-MMM-XXXXXX")
 
     #LEDES_OPTIONS = ["1998B", "1998BI", "1998BIv2", "XML 2.1"]
     LEDES_OPTIONS = ["1998B", "1998BI", "XML 2.1"]
@@ -2712,6 +2712,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
