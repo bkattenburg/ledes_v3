@@ -2154,7 +2154,7 @@ with tab_objects[1]:
     default_env = st.session_state.get("selected_env", "Onit ELM")
     if default_env not in env_names:
         default_env = env_names[0]
-    selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
+    selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env", on_change=_profile_changed)
     # Pre-populate from profile details when not overriding
     if "allow_override" not in st.session_state:
         st.session_state["allow_override"] = False
@@ -2796,6 +2796,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
