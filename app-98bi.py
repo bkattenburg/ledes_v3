@@ -2034,7 +2034,7 @@ sample_custom_df = pd.DataFrame({
         "Legal Research: Analyze legal precedents",
         "Legal Research: Review statutes and regulations"
     ],
-    "TK_CLASSIFICATION": ["Associate", "Partner"] # Example of adding TK Classification,
+    "TK_CLASSIFICATION": ["Associate", "Partner"], # Example of adding TK Classification
     "Blockbilling": ["N", "Y"], # Example of adding the Blockbilling column
 })
 csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
@@ -2788,6 +2788,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
