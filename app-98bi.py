@@ -1995,24 +1995,82 @@ st.checkbox(
 )
 
 # Sidebar
-st.sidebar.markdown("<h2 style='color: #1E1E1E;'>Quick Links</h2>", unsafe_allow_html=True)
-sample_timekeeper = pd.DataFrame({
-    "TIMEKEEPER_NAME": ["Tom Delaganis", "Ryan Kinsey"],
-    "TIMEKEEPER_CLASSIFICATION": ["Partner", "Associate"],
-    "TIMEKEEPER_ID": ["TD001", "RK001"],
-    "RATE": [250.0, 200.0]
-})
-csv_timekeeper = sample_timekeeper.to_csv(index=False).encode('utf-8')
-st.sidebar.download_button("Download Sample Timekeeper CSV", csv_timekeeper, "sample_timekeeper.csv", "text/csv")
+#st.sidebar.markdown("<h2 style='color: #1E1E1E;'>Quick Links</h2>", unsafe_allow_html=True)
+#sample_timekeeper = pd.DataFrame({
+#    "TIMEKEEPER_NAME": ["Tom Delaganis", "Ryan Kinsey"],
+#    "TIMEKEEPER_CLASSIFICATION": ["Partner", "Associate"],
+#    "TIMEKEEPER_ID": ["TD001", "RK001"],
+#    "RATE": [250.0, 200.0]
+#})
+#csv_timekeeper = sample_timekeeper.to_csv(index=False).encode('utf-8')
+#st.sidebar.download_button("Download Sample Timekeeper CSV", csv_timekeeper, "sample_timekeeper.csv", "text/csv")
+#
+#sample_custom = pd.DataFrame({
+#    "TASK_CODE": ["L100"],
+#    "ACTIVITY_CODE": ["A101"],
+#    "DESCRIPTION": ["Legal Research: Analyze legal precedents"],
+#    "Blockbilling": ["Y"]
+#})
+#csv_custom = sample_custom.to_csv(index=False).encode('utf-8')
+#st.sidebar.download_button("Download Sample Custom Tasks CSV", csv_custom, "sample_custom_tasks.csv", "text/csv")
 
-sample_custom = pd.DataFrame({
-    "TASK_CODE": ["L100"],
-    "ACTIVITY_CODE": ["A101"],
-    "DESCRIPTION": ["Legal Research: Analyze legal precedents"],
-    "Blockbilling": ["Y"]
+# Sidebar
+st.sidebar.markdown("<h2 style='color: #1E1E1E;'>Quick Links</h2>", unsafe_allow_html=True)
+
+# Helper function to read file data for buttons
+def read_file_for_download(path):
+    try:
+        with open(path, "rb") as fp:
+            return fp.read()
+    except FileNotFoundError:
+        st.sidebar.error(f"File not found: {os.path.basename(path)}")
+        return None
+
+# --- UPDATE THE SAMPLE CUSTOM TASK CSV DATA HERE ---
+sample_custom_df = pd.DataFrame({
+    "TASK_CODE": ["L100", "L110"],
+    "ACTIVITY_CODE": ["A101", "A101"],
+    "DESCRIPTION": [
+        "Legal Research: Analyze legal precedents",
+        "Legal Research: Review statutes and regulations"
+    ],
+    "TK_CLASSIFICATION": ["Associate", "Partner"] # Example of adding TK Classification,
+    "Blockbilling": ["N", "Y"], # Example of adding the Blockbilling column
 })
-csv_custom = sample_custom.to_csv(index=False).encode('utf-8')
-st.sidebar.download_button("Download Sample Custom Tasks CSV", csv_custom, "sample_custom_tasks.csv", "text/csv")
+csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
+st.sidebar.download_button(
+    label="Download Sample Custom Tasks CSV",
+    data=csv_custom_sample_bytes,
+    file_name="sample_custom_tasks.csv",
+    mime="text/csv"
+)
+
+# --- ADD NEW SECTION FOR REFERENCE FILES ---
+st.sidebar.markdown("<h2 style='color: #1E1E1E; margin-top: 20px;'>Reference Files</h2>", unsafe_allow_html=True)
+
+# Onit ELM Timekeepers
+st.sidebar.markdown("<h5>Onit ELM</h5>", unsafe_allow_html=True)
+onit_tk_data = read_file_for_download("assets/onit_elm_tk.csv")
+if onit_tk_data:
+    st.sidebar.download_button("Download Onit TK File", onit_tk_data, "onit_elm_tk.csv", "text/csv")
+
+# SimpleLegal Timekeepers
+st.sidebar.markdown("<h5>SimpleLegal</h5>", unsafe_allow_html=True)
+sl_tk_data = read_file_for_download("assets/simplelegal_tk.csv")
+if sl_tk_data:
+    st.sidebar.download_button("Download SimpleLegal TK File", sl_tk_data, "simplelegal_tk.csv", "text/csv")
+
+# Unity Timekeepers
+st.sidebar.markdown("<h5>Unity</h5>", unsafe_allow_html=True)
+unity_tk_data = read_file_for_download("assets/unity_tk.csv")
+if unity_tk_data:
+    st.sidebar.download_button("Download Unity TK File", sl_tk_data, "unity_tk.csv", "text/csv")
+
+# Custom Line Items
+st.sidebar.markdown("<h5>Line Items</h5>", unsafe_allow_html=True)
+onit_tasks_data = read_file_for_download("assets/custom_tasks.csv")
+if onit_tasks_data:
+    st.sidebar.download_button("Download Onit Tasks File", onit_tasks_data, "custom_tasks.csv", "text/csv")
 
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
@@ -2730,6 +2788,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
