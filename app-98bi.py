@@ -764,7 +764,9 @@ def _create_ledes_1998bi_content(rows: List[Dict],
     prepped = []
     for row in rows:
         is_expense = bool(row.get("EXPENSE_CODE", ""))
-        units = _f(row.get("HOURS", 0)) if not is_expense else _f(row.get("LINE_ITEM_NUMBER_OF_UNITS", 1) or 1)
+        # This correctly uses the number of copies (stored in HOURS) for expenses
+        units = _f(row.get("HOURS", 0))
+        #units = _f(row.get("HOURS", 0)) if not is_expense else _f(row.get("LINE_ITEM_NUMBER_OF_UNITS", 1) or 1)
         #unit_cost = _f(row.get("RATE", 0)) if not is_expense else _f(row.get("LINE_ITEM_UNIT_COST", 0))
         unit_cost = _f(row.get("RATE", 0))
         adj_amount = _f(row.get("LINE_ITEM_ADJUSTMENT_AMOUNT", 0))
@@ -2710,6 +2712,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
