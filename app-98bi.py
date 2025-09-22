@@ -2080,13 +2080,16 @@ st.sidebar.download_button(
     mime="text/csv"
 )
 
-# ADD THIS BLOCK to pre-calculate the correct LEDES version
-# Get the current profile selection from session state (defaults to "Onit ELM")
+# Pre-calculate the correct LEDES version based on the selected profile
 current_profile_key = st.session_state.get("selected_env", "Onit ELM")
-# If the selected profile has a default LEDES version, set it in the session state
+
+# If the selected profile is "VAT", set its specific LEDES default
 if current_profile_key in BILLING_PROFILE_DETAILS:
     prof = BILLING_PROFILE_DETAILS[current_profile_key]
-    st.session_state["ledes_version"] = prof.get("ledes_default", st.session_state.get("ledes_version", "1998B"))
+    st.session_state["ledes_version"] = prof.get("ledes_default")
+# For any other profile, reset the LEDES version to the standard default
+else:
+    st.session_state["ledes_version"] = "1998B"
 
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
@@ -2804,6 +2807,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
