@@ -2055,12 +2055,12 @@ if unity_tk_data:
 
 st.sidebar.markdown("<h2 style='color: #1E1E1E; margin-top: 20px;'>Line Items Download</h2>", unsafe_allow_html=True)
 # Custom Line Items
-st.sidebar.markdown("<h5>Line Items</h5>", unsafe_allow_html=True)
+#st.sidebar.markdown("<h5>Line Items</h5>", unsafe_allow_html=True)
 onit_tasks_data = read_file_for_download("assets/custom_tasks.csv")
 if onit_tasks_data:
-    st.sidebar.download_button("Download Line Items File", onit_tasks_data, "custom_tasks.csv", "text/csv")
+    st.sidebar.download_button("Line Items File", onit_tasks_data, "custom_tasks.csv", "text/csv")
 
-st.sidebar.markdown("<h2 style='color: #1E1E1E; margin-top: 20px;'>Line Item Template</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("<h2 style='color: #1E1E1E; margin-top: 20px;'>Line Items Template</h2>", unsafe_allow_html=True)
 # --- UPDATE THE SAMPLE CUSTOM TASK CSV DATA HERE ---
 sample_custom_df = pd.DataFrame({
     "TASK_CODE": ["L100", "L110"],
@@ -2074,7 +2074,7 @@ sample_custom_df = pd.DataFrame({
 })
 csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
 st.sidebar.download_button(
-    label="Template Custom Tasks CSV",
+    label="Line Items Template",
     data=csv_custom_sample_bytes,
     file_name="sample_custom_tasks.csv",
     mime="text/csv"
@@ -2796,6 +2796,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
