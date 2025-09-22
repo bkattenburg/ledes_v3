@@ -34,9 +34,6 @@ def _select_items_from_source(df_src, want_block: bool, k: int):
         except Exception:
             pass
     return picks
-
-def _profile_changed():
-    st.rerun()
     
 # --- Begin: Blockbilling-from-source helpers ---
 def _get_blockbilling_col(df):
@@ -2083,6 +2080,14 @@ st.sidebar.download_button(
     mime="text/csv"
 )
 
+# ADD THIS BLOCK to pre-calculate the correct LEDES version
+# Get the current profile selection from session state (defaults to "Onit ELM")
+current_profile_key = st.session_state.get("selected_env", "Onit ELM")
+# If the selected profile has a default LEDES version, set it in the session state
+if current_profile_key in BILLING_PROFILE_DETAILS:
+    prof = BILLING_PROFILE_DETAILS[current_profile_key]
+    st.session_state["ledes_version"] = prof.get("ledes_default", st.session_state.get("ledes_version", "1998B"))
+
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
 # Insert Tax Fields tab before Output when LEDES 1998BIv2 is selected
@@ -2157,7 +2162,7 @@ with tab_objects[1]:
     default_env = st.session_state.get("selected_env", "Onit ELM")
     if default_env not in env_names:
         default_env = env_names[0]
-    selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env", on_change=_profile_changed)
+    selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
     # Pre-populate from profile details when not overriding
     if "allow_override" not in st.session_state:
         st.session_state["allow_override"] = False
@@ -2799,6 +2804,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
