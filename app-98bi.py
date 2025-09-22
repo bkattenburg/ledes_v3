@@ -2009,6 +2009,7 @@ sample_custom = pd.DataFrame({
     "TASK_CODE": ["L100"],
     "ACTIVITY_CODE": ["A101"],
     "DESCRIPTION": ["Legal Research: Analyze legal precedents"]
+    "Blockbilling": ["Y"]
 })
 csv_custom = sample_custom.to_csv(index=False).encode('utf-8')
 st.sidebar.download_button("Download Sample Custom Tasks CSV", csv_custom, "sample_custom_tasks.csv", "text/csv")
@@ -2729,6 +2730,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
