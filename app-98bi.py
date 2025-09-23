@@ -2335,7 +2335,7 @@ with tab_objects[2]:
             min_value=0,
             max_value=max_fees,
             key="fee_slider",  # Add key
-            value=st.session_state.get("fee_slider", min(20, max_fees)) # Change value
+            #value=st.session_state.get("fee_slider", min(20, max_fees)) # Change value
         )
         st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
         with st.expander("Adjust Expense Amounts", expanded=False):
@@ -2386,7 +2386,7 @@ with tab_objects[2]:
             min_value=0,
             max_value=50,
             key="expense_slider",  # Add key
-            value=st.session_state.get("expense_slider", 5) # Change value
+            #value=st.session_state.get("expense_slider", 5) # Change value
         )
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
     
@@ -2831,6 +2831,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
