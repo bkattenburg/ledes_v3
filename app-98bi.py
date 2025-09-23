@@ -2250,18 +2250,18 @@ with tab_objects[1]:
     prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
 
     # Names
-    c1, c2 = st.columns(2)
-    with c1:
-        client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
-    with c2:
-        law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
+    #c1, c2 = st.columns(2)
+    #with c1:
+    #    client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
+    #with c2:
+    #    law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
 
     # IDs (no format restrictions)
-    c3, c4 = st.columns(2)
-    with c3:
-        client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
-    with c4:
-        law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
+    #c3, c4 = st.columns(2)
+    #with c3:
+    #    client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
+    #with c4:
+    #    law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
 
     # Status footer
     status_html = f"""
@@ -2831,6 +2831,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
