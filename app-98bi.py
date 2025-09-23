@@ -2177,7 +2177,7 @@ with tab_objects[1]:
         prof_client_id = prof.get("client", {}).get("id", prof_client_id)
         prof_law_firm_id = prof.get("law_firm", {}).get("id", prof_law_firm_id)
     
-    
+    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")    
     # Names
     c1, c2 = st.columns(2)
     with c1:
@@ -2246,8 +2246,6 @@ with tab_objects[1]:
     # Ensure base keys also reflect identical Client ID and Client Tax ID
     if st.session_state.get("client_tax_id"):
         st.session_state["client_id"] = st.session_state["client_tax_id"]
-
-    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")
 
     prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
 
@@ -2833,6 +2831,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
