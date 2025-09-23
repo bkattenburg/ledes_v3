@@ -2166,51 +2166,77 @@ with tab_objects[1]:
     if default_env not in env_names:
         default_env = env_names[0]
     selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
-    # Pre-populate from profile details when not overriding
-    if "allow_override" not in st.session_state:
-        st.session_state["allow_override"] = False
-    if selected_env in BILLING_PROFILE_DETAILS and not st.session_state["allow_override"]:
+    # Get the tuple of default values for the selected profile
+    prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
+    
+    # If a detailed profile exists (like for VAT), use its specific values instead
+    if selected_env in BILLING_PROFILE_DETAILS and not st.session_state.get("allow_override"):
         prof = BILLING_PROFILE_DETAILS[selected_env]
-        # Default LEDES version for profile
-        st.session_state["ledes_version"] = prof.get("ledes_default", st.session_state.get("ledes_version", "1998B"))
-        # Default invoice currency
-        st.session_state["tax_invoice_currency"] = prof.get("invoice_currency", st.session_state.get("tax_invoice_currency", "USD"))
-        # Law firm fields
-        lf = prof.get("law_firm", {})
-        st.session_state["law_firm_name"] = lf.get("name", st.session_state.get("law_firm_name", ""))
-        st.session_state["law_firm_id"] = lf.get("id", st.session_state.get("law_firm_id", ""))
-        st.session_state["lf_address1"] = lf.get("address1", st.session_state.get("lf_address1", ""))
-        st.session_state["lf_address2"] = lf.get("address2", st.session_state.get("lf_address2", ""))
-        st.session_state["lf_city"] = lf.get("city", st.session_state.get("lf_city", ""))
-        st.session_state["lf_state"] = lf.get("state", st.session_state.get("lf_state", ""))
-        st.session_state["lf_postcode"] = lf.get("postcode", st.session_state.get("lf_postcode", ""))
-        st.session_state["lf_country"] = lf.get("country", st.session_state.get("lf_country", ""))
-        # Client fields
-        cl = prof.get("client", {})
-        st.session_state["client_name"] = cl.get("name", st.session_state.get("client_name", ""))
-        st.session_state["client_id"] = cl.get("id", st.session_state.get("client_id", ""))
-        st.session_state["client_tax_id"] = cl.get("tax_id", st.session_state.get("client_tax_id", ""))
-        st.session_state["client_address1"] = cl.get("address1", st.session_state.get("client_address1", ""))
-        st.session_state["client_address2"] = cl.get("address2", st.session_state.get("client_address2", ""))
-        st.session_state["client_city"] = cl.get("city", st.session_state.get("client_city", ""))
-        st.session_state["client_state"] = cl.get("state", st.session_state.get("client_state", ""))
-        st.session_state["client_postcode"] = cl.get("postcode", st.session_state.get("client_postcode", ""))
-        st.session_state["client_country"] = cl.get("country", st.session_state.get("client_country", ""))
-        # Mirror values into the 'pf_*' UI keys so the expanders display them
-        st.session_state["pf_law_firm_id"] = st.session_state.get("law_firm_id", "")
-        st.session_state["pf_lf_address1"] = st.session_state.get("lf_address1", "")
-        st.session_state["pf_lf_address2"] = st.session_state.get("lf_address2", "")
-        st.session_state["pf_lf_city"] = st.session_state.get("lf_city", "")
-        st.session_state["pf_lf_state"] = st.session_state.get("lf_state", "")
-        st.session_state["pf_lf_postcode"] = st.session_state.get("lf_postcode", "")
-        st.session_state["pf_lf_country"] = st.session_state.get("lf_country", "")
-        st.session_state["pf_client_tax_id"] = st.session_state.get("client_tax_id", "")
-        st.session_state["pf_client_address1"] = st.session_state.get("client_address1", "")
-        st.session_state["pf_client_address2"] = st.session_state.get("client_address2", "")
-        st.session_state["pf_client_city"] = st.session_state.get("client_city", "")
-        st.session_state["pf_client_state"] = st.session_state.get("client_state", "")
-        st.session_state["pf_client_postcode"] = st.session_state.get("client_postcode", "")
-        st.session_state["pf_client_country"] = st.session_state.get("client_country", "")
+        prof_client_name = prof.get("client", {}).get("name", prof_client_name)
+        prof_law_firm_name = prof.get("law_firm", {}).get("name", prof_law_firm_name)
+        prof_client_id = prof.get("client", {}).get("id", prof_client_id)
+        prof_law_firm_id = prof.get("law_firm", {}).get("id", prof_law_firm_id)
+    
+    
+    # Names
+    c1, c2 = st.columns(2)
+    with c1:
+        client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
+    with c2:
+        law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
+    
+    # IDs (no format restrictions)
+    c3, c4 = st.columns(2)
+    with c3:
+        client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
+    with c4:
+        law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
+    
+    # Pre-populate from profile details when not overriding
+    #if "allow_override" not in st.session_state:
+    #    st.session_state["allow_override"] = False
+    #if selected_env in BILLING_PROFILE_DETAILS and not st.session_state["allow_override"]:
+    #    prof = BILLING_PROFILE_DETAILS[selected_env]
+    #    # Default LEDES version for profile
+    #    st.session_state["ledes_version"] = prof.get("ledes_default", st.session_state.get("ledes_version", "1998B"))
+    #    # Default invoice currency
+    #    st.session_state["tax_invoice_currency"] = prof.get("invoice_currency", st.session_state.get("tax_invoice_currency", "USD"))
+    #    # Law firm fields
+    #    lf = prof.get("law_firm", {})
+    #    st.session_state["law_firm_name"] = lf.get("name", st.session_state.get("law_firm_name", ""))
+    #    st.session_state["law_firm_id"] = lf.get("id", st.session_state.get("law_firm_id", ""))
+    #    st.session_state["lf_address1"] = lf.get("address1", st.session_state.get("lf_address1", ""))
+    #    st.session_state["lf_address2"] = lf.get("address2", st.session_state.get("lf_address2", ""))
+    #    st.session_state["lf_city"] = lf.get("city", st.session_state.get("lf_city", ""))
+    #    st.session_state["lf_state"] = lf.get("state", st.session_state.get("lf_state", ""))
+    #    st.session_state["lf_postcode"] = lf.get("postcode", st.session_state.get("lf_postcode", ""))
+    #    st.session_state["lf_country"] = lf.get("country", st.session_state.get("lf_country", ""))
+    #    # Client fields
+    #    cl = prof.get("client", {})
+    #    st.session_state["client_name"] = cl.get("name", st.session_state.get("client_name", ""))
+    #    st.session_state["client_id"] = cl.get("id", st.session_state.get("client_id", ""))
+    #    st.session_state["client_tax_id"] = cl.get("tax_id", st.session_state.get("client_tax_id", ""))
+    #    st.session_state["client_address1"] = cl.get("address1", st.session_state.get("client_address1", ""))
+    #    st.session_state["client_address2"] = cl.get("address2", st.session_state.get("client_address2", ""))
+    #    st.session_state["client_city"] = cl.get("city", st.session_state.get("client_city", ""))
+    #    st.session_state["client_state"] = cl.get("state", st.session_state.get("client_state", ""))
+    #    st.session_state["client_postcode"] = cl.get("postcode", st.session_state.get("client_postcode", ""))
+    #    st.session_state["client_country"] = cl.get("country", st.session_state.get("client_country", ""))
+    #    # Mirror values into the 'pf_*' UI keys so the expanders display them
+    #    st.session_state["pf_law_firm_id"] = st.session_state.get("law_firm_id", "")
+    #    st.session_state["pf_lf_address1"] = st.session_state.get("lf_address1", "")
+    #    st.session_state["pf_lf_address2"] = st.session_state.get("lf_address2", "")
+    #    st.session_state["pf_lf_city"] = st.session_state.get("lf_city", "")
+    #    st.session_state["pf_lf_state"] = st.session_state.get("lf_state", "")
+    #    st.session_state["pf_lf_postcode"] = st.session_state.get("lf_postcode", "")
+    #    st.session_state["pf_lf_country"] = st.session_state.get("lf_country", "")
+    #    st.session_state["pf_client_tax_id"] = st.session_state.get("client_tax_id", "")
+    #    st.session_state["pf_client_address1"] = st.session_state.get("client_address1", "")
+    #    st.session_state["pf_client_address2"] = st.session_state.get("client_address2", "")
+    #    st.session_state["pf_client_city"] = st.session_state.get("client_city", "")
+    #    st.session_state["pf_client_state"] = st.session_state.get("client_state", "")
+    #    st.session_state["pf_client_postcode"] = st.session_state.get("client_postcode", "")
+    #    st.session_state["pf_client_country"] = st.session_state.get("client_country", "")
 
     # Ensure base keys reflect identical Client ID and Client Tax ID (safe before widgets instantiate)
     if st.session_state.get("client_tax_id"):
@@ -2807,6 +2833,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
