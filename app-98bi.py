@@ -2549,10 +2549,10 @@ if "Tax Fields" in tabs:
 
         st.text_input("Matter Name *", key="tax_matter_name")
         st.text_input("PO Number (optional)", key="tax_po_number")
-        st.text_input("Client Matter ID (optional)", key="tax_client_matter_id")
-        st.selectbox("Invoice Currency", ["USD", "AUD", "CAD", "GBP", "EUR"], index=["USD", "AUD", "CAD", "GBP", "EUR"].index(st.session_state.get("tax_invoice_currency", "USD")), key="tax_invoice_currency")
-        st.number_input("Tax Rate", min_value=0.0, max_value=1.0, step=0.01, value=st.session_state.get("tax_rate", 0.19), key="tax_rate")
-        st.selectbox("Tax Type", ["VAT","PST","QST","GST"], index=0, key="tax_type", help="Type of tax to apply to line items.")
+        st.text_input("Client Matter ID *", key="tax_client_matter_id")
+        st.selectbox("Invoice Currency *", ["USD", "AUD", "CAD", "GBP", "EUR"], index=["USD", "AUD", "CAD", "GBP", "EUR"].index(st.session_state.get("tax_invoice_currency", "USD")), key="tax_invoice_currency")
+        st.number_input("Tax Rate *", min_value=0.0, max_value=1.0, step=0.01, value=st.session_state.get("tax_rate", 0.19), key="tax_rate")
+        st.selectbox("Tax Type *", ["VAT","PST","QST","GST"], index=0, key="tax_type", help="Type of tax to apply to line items.")
 
         with st.expander("Law Firm Details"):
             st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=not st.session_state.get("allow_override", False))
@@ -2832,6 +2832,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
