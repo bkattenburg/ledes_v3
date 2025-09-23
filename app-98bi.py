@@ -2372,7 +2372,7 @@ with tab_objects[2]:
                 default_copy_rate = 0.24
         
             # 2. Use the variable as the slider's default value
-            st.slider(
+            st.number_input(
                 "Photocopies (E101) per-page rate ($)",
                 min_value=0.04,
                 max_value=1.50,
@@ -2832,6 +2832,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
