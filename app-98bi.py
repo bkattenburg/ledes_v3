@@ -2162,7 +2162,11 @@ with tab_objects[0]:
                 )
                 st.dataframe(vc, use_container_width=True)
                 partner_count = int(vc.loc[vc["Classification"].str.lower() == "partner", "Count"].sum())
+                associate_count = int(vc.loc[vc["Classification"].str.lower() == "associate", "Count"].sum())
+                paralegal_count = int(vc.loc[vc["Classification"].str.lower() == "paralegal", "Count"].sum())
                 st.write(f"Partners detected: {partner_count}")
+                st.write(f"Associates detected: {associate_count}")
+                st.write(f"Paralegals detected: {paralegal_count}")
             else:
                 st.info("No timekeepers loaded yet.")
         
@@ -2857,6 +2861,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
