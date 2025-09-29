@@ -263,6 +263,7 @@ PRESETS = {
     "Large": {"fees": 100, "expenses": 25},
 }
 
+# THIS IS THE CORRECTED CODE
 def apply_preset():
     preset_name = st.session_state.invoice_preset
     if preset_name in PRESETS:
@@ -270,12 +271,11 @@ def apply_preset():
         st.session_state.fee_slider = preset["fees"]
         st.session_state.expense_slider = preset["expenses"]
 
-    # --- NEW: Initialize session state on first run ---
+# --- Initialize session state on first run (Moved outside the function) ---
 if "app_initialized" not in st.session_state:
-    st.session_state.invoice_preset = "Custom"  # Set the default preset name
-    apply_preset()                              # Call the function to apply its values
+    st.session_state.invoice_preset = "Custom"
+    apply_preset()
     st.session_state.app_initialized = True
-
 # ===============================
 # Billing Profiles Configuration
 # ===============================
@@ -2867,6 +2867,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
