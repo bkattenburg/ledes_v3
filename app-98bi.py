@@ -271,10 +271,10 @@ def apply_preset():
         st.session_state.expense_slider = preset["expenses"]
 
     # --- NEW: Initialize session state on first run ---
-    if "app_initialized" not in st.session_state:
-        st.session_state.invoice_preset = "Custom"  # Set the default preset name
-        apply_preset()                              # Call the function to apply its values
-        st.session_state.app_initialized = True
+if "app_initialized" not in st.session_state:
+    st.session_state.invoice_preset = "Custom"  # Set the default preset name
+    apply_preset()                              # Call the function to apply its values
+    st.session_state.app_initialized = True
 
 # ===============================
 # Billing Profiles Configuration
