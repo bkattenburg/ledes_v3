@@ -1977,12 +1977,14 @@ def update_send_email():
 with st.expander("Help & FAQs"):
     st.markdown("""
     ### FAQs
-    - **Sidebar contains links to usable Timekeeper and Line Item files. These can be edited if needed. See instructions below regarding how to format the files correctly." 
+    - **Sidebar contains links to usable Timekeeper and Line Item files.** These can be edited if needed. See instructions below regarding how to format the files correctly." 
     - **What does the "Spend Agent"checkbox do?** Includes specific line items (e.g., KBCG, John Doe, Uber E110) to trigger Spend Agent alerts. Select items in the Fees & Expenses tab.
     - **What does the "Multiple Attendees at Same Meeting" checkbox do?** Two identical line items are created for two randomly selected Timekeepers. This will trigger a Spend Agent warning.
-    - **How do I format the timekeeper CSV?** Columns: TIMEKEEPER_NAME,TIMEKEEPER_CLASSIFICATION,TIMEKEEPER_ID,RATE  
+    - **How do I format the timekeeper CSV?**
+      **Columns: TIMEKEEPER_NAME,TIMEKEEPER_CLASSIFICATION,TIMEKEEPER_ID,RATE**  
       Example: "John Doe,Partner,TK001,300.0"
-    - **How do I format the custom tasks CSV?** Columns: TASK_CODE,ACTIVITY_CODE,DESCRIPTION,Blockbilling  
+    - **How do I format the custom tasks CSV?**
+      **Columns: TASK_CODE,ACTIVITY_CODE,DESCRIPTION,Blockbilling**
       Example: "L200,A111,Attend hearing and argue motion re mediation planning,Partner,N"
       Example: "L300,A107,Prepare interrogatories and RFPs re settlement framework; Draft notice of removal re mediation planning; Analyze document production for key facts,Associate,Y"
       Note: Using "{NAME_PLACEHOLDER}" in the DESCRIPTION field will generate a random First and Last Name
@@ -2835,6 +2837,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
