@@ -2182,7 +2182,7 @@ with tab_objects[0]:
                 task_activity_desc = custom_tasks_data
 
 with tab_objects[1]:
-    st.markdown("<h2 style='color: #1E1E1E;'>Invoice Details</h2>", unsafe_allow_html=True)
+    #st.markdown("<h2 style='color: #1E1E1E;'>Invoice Details</h2>", unsafe_allow_html=True)
 
     # ===== Billing Profiles =====
     st.markdown("<h3 style='color: #1E1E1E;'>Billing Profiles</h3>", unsafe_allow_html=True)
@@ -2289,17 +2289,17 @@ with tab_objects[1]:
     #    law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
 
     # Status footer
-    status_html = f"""
-    <div style="margin-top:0.25rem;font-size:0.92rem;color:#444">
-      Using: <strong>{selected_env}</strong>
-      &nbsp;—&nbsp; Client ID: <span style="color:#15803d">{prof_client_id}</span>
-      &nbsp;•&nbsp; Law Firm ID: <span style="color:#15803d">{prof_law_firm_id}</span>
-    </div>
-    """
+    #status_html = f"""
+    #<div style="margin-top:0.25rem;font-size:0.92rem;color:#444">
+    #  Using: <strong>{selected_env}</strong>
+    #  &nbsp;—&nbsp; Client ID: <span style="color:#15803d">{prof_client_id}</span>
+    #  &nbsp;•&nbsp; Law Firm ID: <span style="color:#15803d">{prof_law_firm_id}</span>
+    #</div>
+    #"""
     st.markdown(status_html, unsafe_allow_html=True)
 
     #st.write("Timekeeper classifications found:", sorted({str(tk.get("TIMEKEEPER_CLASSIFICATION","")) for tk in _get_timekeepers()}))
-    
+    st.markdown("<h3 style='color: #1E1E1E;'>Numbers & Version</h3>", unsafe_allow_html=True)
     # Other invoice details
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
     invoice_number_base = st.text_input("Invoice Number (Base):", "INV-MMM-XXXXXX")
@@ -2857,6 +2857,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
