@@ -1977,14 +1977,17 @@ def update_send_email():
 with st.expander("Help & FAQs"):
     st.markdown("""
     ### FAQs
-    - **What is Spend Agent mode?** Ensures specific mandatory line items (e.g., KBCG, John Doe, Uber E110) are included for testing or compliance. Select items in the Advanced Settings tab.
-    - **How to format timekeeper CSV?** Columns: TIMEKEEPER_NAME, TIMEKEEPER_CLASSIFICATION, TIMEKEEPER_ID, RATE  
+    - **Sidebar contains links to usable Timekeeper and Line Item files. These can be edited if needed. See instructions below regarding how to format the files correctly." 
+    - **What does the "Spend Agent"checkbox do?** Includes specific line items (e.g., KBCG, John Doe, Uber E110) to trigger Spend Agent alerts. Select items in the Fees & Expenses tab.
+    - **What does the "Multiple Attendees at Same Meeting" checkbox do?** Two identical line items are created for two randomly selected Timekeepers. This will trigger a Spend Agent warning.
+    - **How do I format the timekeeper CSV?** Columns: TIMEKEEPER_NAME,TIMEKEEPER_CLASSIFICATION,TIMEKEEPER_ID,RATE  
       Example: "John Doe,Partner,TK001,300.0"
-    - **How to format custom tasks CSV?** Columns: TASK_CODE, ACTIVITY_CODE, DESCRIPTION  
-      Example: "L100,A101,Legal Research: Analyze legal precedents"
-    - **How to use a custom logo?** Upload a valid JPG or PNG image file in the Advanced Settings tab when PDF output is enabled. Only JPEG and PNG formats are supported. Other formats (e.g., GIF, BMP) will be converted to PNG. Maximum file size is 5MB. Ensure the image is not corrupted and displays correctly in an image viewer. If no logo is uploaded, the default logo (assets/nelsonmurdock2.jpg or assets/icon.jpg) or a placeholder will be used.
-    - **What if my logo doesn’t appear in the PDF?** Check that the file is a valid JPEG or PNG, not corrupted, and under 5MB. Try re-saving the image using an image editor. If issues persist, enable logging to debug (see Advanced Settings for custom default logo path).
-    """)
+    - **How do I format the custom tasks CSV?** Columns: TASK_CODE,ACTIVITY_CODE,DESCRIPTION,Blockbilling  
+      Example: "L200,A111,Attend hearing and argue motion re mediation planning,Partner,N"
+      Example: "L300,A107,Prepare interrogatories and RFPs re settlement framework; Draft notice of removal re mediation planning; Analyze document production for key facts,Associate,Y"
+      Note: Using "{NAME_PLACEHOLDER}" in the DESCRIPTION field will generate a random First and Last Name
+      Example: "L300,A110,Prepare deposition cross outline re scheduling and deadlines with {NAME_PLACEHOLDER},Associate,N"
+       """)
 
 st.markdown("<h3 style='color: #1E1E1E;'>Output & Delivery Options</h3>", unsafe_allow_html=True)
 st.checkbox(
@@ -2832,6 +2835,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
