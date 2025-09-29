@@ -2361,13 +2361,17 @@ with tab_objects[2]:
     else:
         max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
         st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
+        
+        # Initialize the fee slider's state if it doesn't exist
+        if "fee_slider" not in st.session_state:
+            st.session_state.fee_slider = PRESETS["Custom"]["fees"]
+        
         fees = st.number_input(
             "Number of Fee Line Items",
             min_value=0,
             max_value=max_fees,
             key="fee_slider",  # Add key
             #value=st.session_state.get("fee_slider", min(20, max_fees)) # Change value
-            value=st.session_state.get("fee_slider", PRESETS["Custom"]["fees"]),
         )
         st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
         with st.expander("Adjust Expense Amounts", expanded=False):
@@ -2413,13 +2417,17 @@ with tab_objects[2]:
                 help="Per-page rate used for E101 Photocopy expenses."
             )
         st.caption("Number of expense line items to generate")
+        
+        # Initialize the expense slider's state if it doesn't exist
+        if "expense_slider" not in st.session_state:
+            st.session_state.expense_slider = PRESETS["Custom"]["expenses"]
+        
         expenses = st.number_input(
             "Number of Expense Line Items",
             min_value=0,
             max_value=50,
             key="expense_slider",  # Add key
             #value=st.session_state.get("expense_slider", 5) # Change value
-            value=st.session_state.get("expense_slider", PRESETS["Custom"]["expenses"]),
         )
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
     
@@ -2864,6 +2872,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
