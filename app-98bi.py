@@ -2064,41 +2064,41 @@ with st.sidebar.expander("Line Items"):
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Help & FAQs")
 
-with st.sidebar.expander("Where can I find sample files?"):
-    st.sidebar.markdown("""
-    All necessary files are available in the **Downloads** section above.
-    """)
-
-with st.sidebar.expander('What does the "Spend Agent" checkbox do?'):
-    st.sidebar.markdown("""
-    This option includes specific, pre-defined line items designed to trigger compliance rules and alerts in a spend management system like Onit's Spend Agent.
-    """)
-
-with st.sidebar.expander('What does the "Multiple Attendees at Same Meeting" checkbox do?'):
-    st.sidebar.markdown("""
-    This creates two identical fee line items for a single meeting, assigned to different timekeepers. It's used to test billing guidelines against duplicate work.
-    """)
-
-with st.sidebar.expander("How do I format the timekeeper CSV?"):
-    st.sidebar.markdown("""
-    The CSV requires a header with these exact column names:
-    - `TIMEKEEPER_NAME`
-    - `TIMEKEEPER_CLASSIFICATION`
-    - `TIMEKEEPER_ID`
-    - `RATE`
-    """)
-
-with st.sidebar.expander("How do I format the custom line items CSV?"):
-    st.sidebar.markdown("""
-    The CSV requires the following columns:
-    - `TASK_CODE`
-    - `ACTIVITY_CODE`
-    - `DESCRIPTION`
-    - `TK_CLASSIFICATION` (Optional)
-    - `Blockbilling` ('Y' or 'N')
-
-    **Note:** Use `{NAME_PLACEHOLDER}` in a description to auto-insert a random name.
-    """)
+    with st.sidebar.expander("Where can I find sample files?"):
+        st.sidebar.markdown("""
+        All necessary files are available in the **Downloads** section above.
+        """)
+    
+    with st.sidebar.expander('What does the "Spend Agent" checkbox do?'):
+        st.sidebar.markdown("""
+        This option includes specific, pre-defined line items designed to trigger compliance rules and alerts in a spend management system like Onit's Spend Agent.
+        """)
+    
+    with st.sidebar.expander('What does the "Multiple Attendees at Same Meeting" checkbox do?'):
+        st.sidebar.markdown("""
+        This creates two identical fee line items for a single meeting, assigned to different timekeepers. It's used to test billing guidelines against duplicate work.
+        """)
+    
+    with st.sidebar.expander("How do I format the timekeeper CSV?"):
+        st.sidebar.markdown("""
+        The CSV requires a header with these exact column names:
+        - `TIMEKEEPER_NAME`
+        - `TIMEKEEPER_CLASSIFICATION`
+        - `TIMEKEEPER_ID`
+        - `RATE`
+        """)
+    
+    with st.sidebar.expander("How do I format the custom line items CSV?"):
+        st.sidebar.markdown("""
+        The CSV requires the following columns:
+        - `TASK_CODE`
+        - `ACTIVITY_CODE`
+        - `DESCRIPTION`
+        - `TK_CLASSIFICATION` (Optional)
+        - `Blockbilling` ('Y' or 'N')
+    
+        **Note:** Use `{NAME_PLACEHOLDER}` in a description to auto-insert a random name.
+        """)
     
 # Pre-calculate the correct LEDES version based on the selected profile
 current_profile_key = st.session_state.get("selected_env", "Onit ELM")
@@ -2852,6 +2852,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
