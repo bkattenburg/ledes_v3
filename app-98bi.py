@@ -2160,7 +2160,7 @@ with tab_objects[0]:
                     .sort_values("Classification", kind="stable")
                     .reset_index(drop=True)
                 )
-                st.dataframe(vc, use_container_width=True)
+                st.dataframe(vc, use_container_width=True, hide_index=True)
                 partner_count = int(vc.loc[vc["Classification"].str.lower() == "partner", "Count"].sum())
                 associate_count = int(vc.loc[vc["Classification"].str.lower() == "associate", "Count"].sum())
                 paralegal_count = int(vc.loc[vc["Classification"].str.lower() == "paralegal", "Count"].sum())
@@ -2861,6 +2861,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
