@@ -2296,7 +2296,7 @@ with tab_objects[1]:
     #  &nbsp;•&nbsp; Law Firm ID: <span style="color:#15803d">{prof_law_firm_id}</span>
     #</div>
     #"""
-    st.markdown(status_html, unsafe_allow_html=True)
+    #st.markdown(status_html, unsafe_allow_html=True)
 
     #st.write("Timekeeper classifications found:", sorted({str(tk.get("TIMEKEEPER_CLASSIFICATION","")) for tk in _get_timekeepers()}))
     st.markdown("<h3 style='color: #1E1E1E;'>Numbers & Version</h3>", unsafe_allow_html=True)
@@ -2857,6 +2857,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
