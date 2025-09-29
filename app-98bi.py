@@ -2330,7 +2330,7 @@ with tab_objects[1]:
     )
 
 with tab_objects[2]:
-    st.markdown("<h2 style='color: #1E1E1E;'>Fees & Expenses</h2>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
 
     multiple_attendees_meeting = st.checkbox(
@@ -2495,7 +2495,7 @@ with tab_objects[2]:
 
 output_tab_index = tabs.index("Output")
 with tab_objects[output_tab_index]:
-    st.markdown("<h2 style='color: #1E1E1E;'>Output</h2>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #1E1E1E;'>Output</h3>", unsafe_allow_html=True)
     include_block_billed = st.checkbox("Include Block Billed Line Items", value=True)
     num_block_billed = 0
     if include_block_billed:
@@ -2857,6 +2857,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
