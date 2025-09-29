@@ -1975,8 +1975,10 @@ def update_send_email():
     logging.debug(f"Updated st.session_state.send_email to {st.session_state.send_email}")
 
 with st.expander("Help & FAQs"):
-    st.markdown("#### **General**")
-    
+    # Use markdown for category titles
+    st.markdown("#### General")
+
+    # Each question is its own top-level expander
     with st.expander("Where can I find sample files?"):
         st.markdown("""
         The sidebar on the left contains download links for all the necessary files to use this tool, including:
@@ -2001,8 +2003,9 @@ with st.expander("Help & FAQs"):
         This is used to simulate scenarios that might violate billing guidelines, such as having multiple attorneys bill for the same internal meeting, which would trigger a Spend Agent warning.
         """)
 
-    st.markdown("---")
-    st.markdown("#### **File Formatting**")
+    st.markdown("---") # Visual separator
+    
+    st.markdown("#### File Formatting")
 
     with st.expander("How do I format the timekeeper CSV?"):
         st.markdown("""
@@ -2887,6 +2890,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
