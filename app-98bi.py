@@ -2402,7 +2402,7 @@ with tab_objects[2]:
      
             # 1. Determine the default rate based on the selected LEDES version
             if st.session_state.get("ledes_version") == "1998BI":
-                default_copy_rate = 0.04
+                default_copy_rate = 0.10
             else:
                 default_copy_rate = 0.24
         
@@ -2872,6 +2872,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
