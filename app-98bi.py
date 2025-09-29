@@ -2487,17 +2487,17 @@ with tab_objects[output_tab_index]:
     
     if include_pdf:
         include_logo = st.checkbox("Include Logo in PDF", value=True, help="Uncheck to exclude logo from PDF header, using only law firm text.")
-        if include_logo:
-            use_custom_logo = st.checkbox("Use Custom Logo", value=False)
-            if use_custom_logo:
-                default_logo_path = st.text_input("Custom Default Logo Path (Optional):", help="Enter the path to a custom default logo (JPEG/PNG). Leave blank to use assets/nelsonmurdock2.jpg or assets/icon.jpg.")
-                uploaded_logo = st.file_uploader(
-                    "Upload Custom Logo (JPG/PNG)",
-                    type=["jpg", "png", "jpeg"],
-                    help="Upload a valid JPG or PNG image file (e.g., logo.jpg or logo.png). Only JPEG and PNG formats are supported."
-                )
-                logo_width = st.slider("Logo Width (inches):", 0.5, 2.0, 0.6, step=0.1)
-                logo_height = st.slider("Logo Height (inches):", 0.5, 2.0, 0.6, step=0.1)
+#        if include_logo:
+#            use_custom_logo = st.checkbox("Use Custom Logo", value=False)
+#            if use_custom_logo:
+#                default_logo_path = st.text_input("Custom Default Logo Path (Optional):", help="Enter the path to a custom default logo (JPEG/PNG). Leave blank to use assets/nelsonmurdock2.jpg or assets/icon.jpg.")
+#                uploaded_logo = st.file_uploader(
+#                    "Upload Custom Logo (JPG/PNG)",
+#                    type=["jpg", "png", "jpeg"],
+#                    help="Upload a valid JPG or PNG image file (e.g., logo.jpg or logo.png). Only JPEG and PNG formats are supported."
+#                )
+#                logo_width = st.slider("Logo Width (inches):", 0.5, 2.0, 0.6, step=0.1)
+#                logo_height = st.slider("Logo Height (inches):", 0.5, 2.0, 0.6, step=0.1)
     
     generate_multiple = st.checkbox("Generate Multiple Invoices", help="Create more than one invoice.")
     num_invoices = 1
@@ -2832,6 +2832,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
