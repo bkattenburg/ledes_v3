@@ -1975,73 +1975,73 @@ def update_send_email():
     logging.debug(f"Updated st.session_state.send_email to {st.session_state.send_email}")
 
 # Create a clear section header using markdown instead of an expander
-st.markdown("## Help & FAQs")
-
+#st.markdown("## Help & FAQs")
+#
 # Each question is its own top-level expander, no longer nested
-with st.expander("Where can I find sample files?"):
-    st.markdown("""
-    The sidebar on the left contains download links for all the necessary files to use this tool, including:
-    - Timekeeper files for each environment (Onit ELM, SimpleLegal, etc.)
-    - A general Line Items file (`custom_tasks.csv`)
-    - A template for creating your own Line Items file
-    """)
-
-with st.expander('What does the "Spend Agent" checkbox do?'):
-    st.markdown("""
-    This option is designed to test compliance rules in a spend management system.
-    
-    When checked, it ensures that specific, pre-defined line items are included in the generated invoice. These items are often configured to trigger alerts or flags in systems like Onit's Spend Agent for review.
-    
-    You can select which mandatory items to include in the **Fees & Expenses** tab.
-    """)
-
-with st.expander('What does the "Multiple Attendees at Same Meeting" checkbox do?'):
-    st.markdown("""
-    This option creates two nearly identical fee line items for the same meeting, assigning them to two different timekeepers (typically a Partner and an Associate). 
-    
-    This is used to simulate scenarios that might violate billing guidelines, such as having multiple attorneys bill for the same internal meeting, which would trigger a Spend Agent warning.
-    """)
-
-st.markdown("---") # Visual separator
-
-st.markdown("#### File Formatting")
-
-with st.expander("How do I format the timekeeper CSV?"):
-    st.markdown("""
-    The timekeeper CSV file requires a specific header row. The column names must be exactly as follows:
-    - `TIMEKEEPER_NAME`
-    - `TIMEKEEPER_CLASSIFICATION`
-    - `TIMEKEEPER_ID`
-    - `RATE`
-    
-    **Example:**
-    ```csv
-    TIMEKEEPER_NAME,TIMEKEEPER_CLASSIFICATION,TIMEKEEPER_ID,RATE
-    John Doe,Partner,JD001,550.0
-    Jane Smith,Associate,JS002,350.0
-    ```
-    """)
-
-with st.expander("How do I format the custom line items CSV?"):
-    st.markdown("""
-    The custom line items CSV file allows you to provide specific tasks, activities, and descriptions. The required columns are:
-    - `TASK_CODE`
-    - `ACTIVITY_CODE`
-    - `DESCRIPTION`
-    - `TK_CLASSIFICATION` (Optional: Helps assign the line to a specific timekeeper role like 'Partner' or 'Associate')
-    - `Blockbilling` (Use 'Y' for block-billed, 'N' for non-block-billed)
-
-    **Using Placeholders:**
-    You can use `{NAME_PLACEHOLDER}` in the `DESCRIPTION` field to have a random full name automatically inserted during generation.
-
-    **Example:**
-    ```csv
-    TASK_CODE,ACTIVITY_CODE,DESCRIPTION,TK_CLASSIFICATION,Blockbilling
-    L100,A101,"Legal Research: Analyze legal precedents",Associate,N
-    L300,A110,"Prepare deposition cross-outline for {NAME_PLACEHOLDER}",Partner,N
-    L390,A107,"Draft settlement agreement; confer with client re same; revise agreement",Partner,Y
-    ```
-    """)
+#with st.expander("Where can I find sample files?"):
+#    st.markdown("""
+#    The sidebar on the left contains download links for all the necessary files to use this tool, including:
+#    - Timekeeper files for each environment (Onit ELM, SimpleLegal, etc.)
+#    - A general Line Items file (`custom_tasks.csv`)
+#    - A template for creating your own Line Items file
+#    """)
+#
+#with st.expander('What does the "Spend Agent" checkbox do?'):
+#    st.markdown("""
+#    This option is designed to test compliance rules in a spend management system.
+#    
+#    When checked, it ensures that specific, pre-defined line items are included in the generated invoice. These items are often configured to trigger alerts or flags in systems like Onit's Spend Agent for review.
+#    
+#    You can select which mandatory items to include in the **Fees & Expenses** tab.
+#    """)
+#
+#with st.expander('What does the "Multiple Attendees at Same Meeting" checkbox do?'):
+#    st.markdown("""
+#    This option creates two nearly identical fee line items for the same meeting, assigning them to two different timekeepers (typically a Partner and an Associate). 
+#    
+#    This is used to simulate scenarios that might violate billing guidelines, such as having multiple attorneys bill for the same internal meeting, which would trigger a Spend Agent warning.
+#    """)
+#
+#st.markdown("---") # Visual separator
+#
+#st.markdown("#### File Formatting")
+#
+#with st.expander("How do I format the timekeeper CSV?"):
+#    st.markdown("""
+#    The timekeeper CSV file requires a specific header row. The column names must be exactly as follows:
+#    - `TIMEKEEPER_NAME`
+#    - `TIMEKEEPER_CLASSIFICATION`
+#    - `TIMEKEEPER_ID`
+#    - `RATE`
+#    
+#    **Example:**
+#    ```csv
+#    TIMEKEEPER_NAME,TIMEKEEPER_CLASSIFICATION,TIMEKEEPER_ID,RATE
+#    John Doe,Partner,JD001,550.0
+#    Jane Smith,Associate,JS002,350.0
+#    ```
+#    """)
+#
+#with st.expander("How do I format the custom line items CSV?"):
+#    st.markdown("""
+#    The custom line items CSV file allows you to provide specific tasks, activities, and descriptions. The required columns are:
+#    - `TASK_CODE`
+#    - `ACTIVITY_CODE`
+#    - `DESCRIPTION`
+#    - `TK_CLASSIFICATION` (Optional: Helps assign the line to a specific timekeeper role like 'Partner' or 'Associate')
+#    - `Blockbilling` (Use 'Y' for block-billed, 'N' for non-block-billed)
+#
+#    **Using Placeholders:**
+#    You can use `{NAME_PLACEHOLDER}` in the `DESCRIPTION` field to have a random full name automatically inserted during generation.
+#
+#    **Example:**
+#    ```csv
+#    TASK_CODE,ACTIVITY_CODE,DESCRIPTION,TK_CLASSIFICATION,Blockbilling
+#    L100,A101,"Legal Research: Analyze legal precedents",Associate,N
+#    L300,A110,"Prepare deposition cross-outline for {NAME_PLACEHOLDER}",Partner,N
+#    L390,A107,"Draft settlement agreement; confer with client re same; revise agreement",Partner,Y
+#    ```
+#    """)
 
 st.markdown("<h3 style='color: #1E1E1E;'>Output & Delivery Options</h3>", unsafe_allow_html=True)
 st.checkbox(
@@ -2071,8 +2071,7 @@ st.checkbox(
 #csv_custom = sample_custom.to_csv(index=False).encode('utf-8')
 #st.sidebar.download_button("Download Sample Custom Tasks CSV", csv_custom, "sample_custom_tasks.csv", "text/csv")
 
-# Sidebar
-#st.sidebar.markdown("<h2 style='color: #1E1E1E;'>Quick Links</h2>", unsafe_allow_html=True)
+# --- Sidebar Reorganization ---
 
 # Helper function to read file data for buttons
 def read_file_for_download(path):
@@ -2083,60 +2082,93 @@ def read_file_for_download(path):
         st.sidebar.error(f"File not found: {os.path.basename(path)}")
         return None
 
-# --- ADD NEW SECTION FOR REFERENCE FILES ---
-st.sidebar.markdown("<h2 style='color: #1E1E1E; margin-top: 20px;'>Timekeeper Downloads</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("## Downloads")
 
-# Onit ELM Timekeepers
-st.sidebar.markdown("<h5>Onit ELM</h5>", unsafe_allow_html=True)
-onit_tk_data = read_file_for_download("assets/onit_elm_tk.csv")
-if onit_tk_data:
-    st.sidebar.download_button("Onit Timekeeper File", onit_tk_data, "onit_elm_tk.csv", "text/csv")
+with st.sidebar.expander("Timekeeper Downloads"):
+    # Onit ELM Timekeepers
+    onit_tk_data = read_file_for_download("assets/onit_elm_tk.csv")
+    if onit_tk_data:
+        st.download_button("Onit ELM", onit_tk_data, "onit_elm_tk.csv", "text/csv")
 
-# Onit ELM Timekeepers - VAT
-st.sidebar.markdown("<h5>Onit ELM - VAT</h5>", unsafe_allow_html=True)
-onit_vat_tk_data = read_file_for_download("assets/onit_vat_tk.csv")
-if onit_vat_tk_data:
-    st.sidebar.download_button("Onit VAT Timekeeper File", onit_vat_tk_data, "onit_vat_tk.csv", "text/csv")
+    # Onit ELM Timekeepers - VAT
+    onit_vat_tk_data = read_file_for_download("assets/onit_vat_tk.csv")
+    if onit_vat_tk_data:
+        st.download_button("Onit ELM - VAT", onit_vat_tk_data, "onit_vat_tk.csv", "text/csv")
 
-# SimpleLegal Timekeepers
-st.sidebar.markdown("<h5>SimpleLegal</h5>", unsafe_allow_html=True)
-sl_tk_data = read_file_for_download("assets/simplelegal_tk.csv")
-if sl_tk_data:
-    st.sidebar.download_button("SimpleLegal Timekeeper File", sl_tk_data, "simplelegal_tk.csv", "text/csv")
+    # SimpleLegal Timekeepers
+    sl_tk_data = read_file_for_download("assets/simplelegal_tk.csv")
+    if sl_tk_data:
+        st.download_button("SimpleLegal", sl_tk_data, "simplelegal_tk.csv", "text/csv")
 
-# Unity Timekeepers
-st.sidebar.markdown("<h5>Unity</h5>", unsafe_allow_html=True)
-unity_tk_data = read_file_for_download("assets/unity_tk.csv")
-if unity_tk_data:
-    st.sidebar.download_button("Unity Timekeeper File", sl_tk_data, "unity_tk.csv", "text/csv")
+    # Unity Timekeepers
+    unity_tk_data = read_file_for_download("assets/unity_tk.csv")
+    if unity_tk_data:
+        st.download_button("Unity", unity_tk_data, "unity_tk.csv", "text/csv")
+        
+with st.sidebar.expander("Line Items"):
+    # Custom Line Items File
+    onit_tasks_data = read_file_for_download("assets/custom_tasks.csv")
+    if onit_tasks_data:
+        st.download_button("Line Items File", onit_tasks_data, "custom_tasks.csv", "text/csv")
 
-st.sidebar.markdown("<h2 style='color: #1E1E1E; margin-top: 20px;'>Line Items Download</h2>", unsafe_allow_html=True)
-# Custom Line Items
-#st.sidebar.markdown("<h5>Line Items</h5>", unsafe_allow_html=True)
-onit_tasks_data = read_file_for_download("assets/custom_tasks.csv")
-if onit_tasks_data:
-    st.sidebar.download_button("Line Items File", onit_tasks_data, "custom_tasks.csv", "text/csv")
+    # Line Items Template
+    sample_custom_df = pd.DataFrame({
+        "TASK_CODE": ["L100", "L110"],
+        "ACTIVITY_CODE": ["A101", "A101"],
+        "DESCRIPTION": [
+            "Legal Research: Analyze legal precedents",
+            "Legal Research: Review statutes and regulations"
+        ],
+        "TK_CLASSIFICATION": ["Associate", "Partner"],
+        "Blockbilling": ["N", "Y"],
+    })
+    csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Line Items Template",
+        data=csv_custom_sample_bytes,
+        file_name="sample_custom_tasks.csv",
+        mime="text/csv"
+    )
+# --- FAQs moved to Sidebar ---
+st.sidebar.markdown("---")
+st.sidebar.markdown("## Help & FAQs")
 
-st.sidebar.markdown("<h2 style='color: #1E1E1E; margin-top: 20px;'>Line Items Template</h2>", unsafe_allow_html=True)
-# --- UPDATE THE SAMPLE CUSTOM TASK CSV DATA HERE ---
-sample_custom_df = pd.DataFrame({
-    "TASK_CODE": ["L100", "L110"],
-    "ACTIVITY_CODE": ["A101", "A101"],
-    "DESCRIPTION": [
-        "Legal Research: Analyze legal precedents",
-        "Legal Research: Review statutes and regulations"
-    ],
-    "TK_CLASSIFICATION": ["Associate", "Partner"], # Example of adding TK Classification
-    "Blockbilling": ["N", "Y"], # Example of adding the Blockbilling column
-})
-csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
-st.sidebar.download_button(
-    label="Line Items Template",
-    data=csv_custom_sample_bytes,
-    file_name="sample_custom_tasks.csv",
-    mime="text/csv"
-)
+with st.sidebar.expander("Where can I find sample files?"):
+    st.sidebar.markdown("""
+    All necessary files are available in the **Downloads** section above.
+    """)
 
+with st.sidebar.expander('What does the "Spend Agent" checkbox do?'):
+    st.sidebar.markdown("""
+    This option includes specific, pre-defined line items designed to trigger compliance rules and alerts in a spend management system like Onit's Spend Agent.
+    """)
+
+with st.sidebar.expander('What does the "Multiple Attendees at Same Meeting" checkbox do?'):
+    st.sidebar.markdown("""
+    This creates two identical fee line items for a single meeting, assigned to different timekeepers. It's used to test billing guidelines against duplicate work.
+    """)
+
+with st.sidebar.expander("How do I format the timekeeper CSV?"):
+    st.sidebar.markdown("""
+    The CSV requires a header with these exact column names:
+    - `TIMEKEEPER_NAME`
+    - `TIMEKEEPER_CLASSIFICATION`
+    - `TIMEKEEPER_ID`
+    - `RATE`
+    """)
+
+with st.sidebar.expander("How do I format the custom line items CSV?"):
+    st.sidebar.markdown("""
+    The CSV requires the following columns:
+    - `TASK_CODE`
+    - `ACTIVITY_CODE`
+    - `DESCRIPTION`
+    - `TK_CLASSIFICATION` (Optional)
+    - `Blockbilling` ('Y' or 'N')
+
+    **Note:** Use `{NAME_PLACEHOLDER}` in a description to auto-insert a random name.
+    """)
+    
 # Pre-calculate the correct LEDES version based on the selected profile
 current_profile_key = st.session_state.get("selected_env", "Onit ELM")
 
@@ -2889,6 +2921,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
