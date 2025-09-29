@@ -270,6 +270,12 @@ def apply_preset():
         st.session_state.fee_slider = preset["fees"]
         st.session_state.expense_slider = preset["expenses"]
 
+    # --- NEW: Initialize session state on first run ---
+    if "app_initialized" not in st.session_state:
+        st.session_state.invoice_preset = "Custom"  # Set the default preset name
+        apply_preset()                              # Call the function to apply its values
+        st.session_state.app_initialized = True
+
 # ===============================
 # Billing Profiles Configuration
 # ===============================
@@ -2336,11 +2342,7 @@ with tab_objects[1]:
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
-# --- FIX: Initialize slider values for the default 'Custom' preset ---
-    if "fee_slider" not in st.session_state:
-        st.session_state.fee_slider = PRESETS["Custom"]["fees"]
-    if "expense_slider" not in st.session_state:
-        st.session_state.expense_slider = PRESETS["Custom"]["expenses"]
+
     multiple_attendees_meeting = st.checkbox(
         "Multiple Attendees at Same Meeting",
         value=False,
@@ -2865,6 +2867,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
