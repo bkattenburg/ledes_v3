@@ -1975,21 +1975,71 @@ def update_send_email():
     logging.debug(f"Updated st.session_state.send_email to {st.session_state.send_email}")
 
 with st.expander("Help & FAQs"):
-    st.markdown("""
-    ### FAQs
-    - **Sidebar contains links to usable Timekeeper and Line Item files.** These can be edited if needed. See instructions below regarding how to format the files correctly." 
-    - **What does the "Spend Agent"checkbox do?** Includes specific line items (e.g., KBCG, John Doe, Uber E110) to trigger Spend Agent alerts. Select items in the Fees & Expenses tab.
-    - **What does the "Multiple Attendees at Same Meeting" checkbox do?** Two identical line items are created for two randomly selected Timekeepers. This will trigger a Spend Agent warning.
-    - **How do I format the timekeeper CSV?**
-      **Columns: TIMEKEEPER_NAME,TIMEKEEPER_CLASSIFICATION,TIMEKEEPER_ID,RATE**  
-      Example: "John Doe,Partner,TK001,300.0"
-    - **How do I format the custom tasks CSV?**
-      **Columns: TASK_CODE,ACTIVITY_CODE,DESCRIPTION,Blockbilling**
-      Example: "L200,A111,Attend hearing and argue motion re mediation planning,Partner,N"
-      Example: "L300,A107,Prepare interrogatories and RFPs re settlement framework; Draft notice of removal re mediation planning; Analyze document production for key facts,Associate,Y"
-      Note: Using "{NAME_PLACEHOLDER}" in the DESCRIPTION field will generate a random First and Last Name
-      Example: "L300,A110,Prepare deposition cross outline re scheduling and deadlines with {NAME_PLACEHOLDER},Associate,N"
-       """)
+    st.markdown("#### **General**")
+    
+    with st.expander("Where can I find sample files?"):
+        st.markdown("""
+        The sidebar on the left contains download links for all the necessary files to use this tool, including:
+        - Timekeeper files for each environment (Onit ELM, SimpleLegal, etc.)
+        - A general Line Items file (`custom_tasks.csv`)
+        - A template for creating your own Line Items file
+        """)
+
+    with st.expander('What does the "Spend Agent" checkbox do?'):
+        st.markdown("""
+        This option is designed to test compliance rules in a spend management system.
+        
+        When checked, it ensures that specific, pre-defined line items are included in the generated invoice. These items are often configured to trigger alerts or flags in systems like Onit's Spend Agent for review.
+        
+        You can select which mandatory items to include in the **Fees & Expenses** tab.
+        """)
+
+    with st.expander('What does the "Multiple Attendees at Same Meeting" checkbox do?'):
+        st.markdown("""
+        This option creates two nearly identical fee line items for the same meeting, assigning them to two different timekeepers (typically a Partner and an Associate). 
+        
+        This is used to simulate scenarios that might violate billing guidelines, such as having multiple attorneys bill for the same internal meeting, which would trigger a Spend Agent warning.
+        """)
+
+    st.markdown("---")
+    st.markdown("#### **File Formatting**")
+
+    with st.expander("How do I format the timekeeper CSV?"):
+        st.markdown("""
+        The timekeeper CSV file requires a specific header row. The column names must be exactly as follows:
+        - `TIMEKEEPER_NAME`
+        - `TIMEKEEPER_CLASSIFICATION`
+        - `TIMEKEEPER_ID`
+        - `RATE`
+        
+        **Example:**
+        ```csv
+        TIMEKEEPER_NAME,TIMEKEEPER_CLASSIFICATION,TIMEKEEPER_ID,RATE
+        John Doe,Partner,JD001,550.0
+        Jane Smith,Associate,JS002,350.0
+        ```
+        """)
+
+    with st.expander("How do I format the custom line items CSV?"):
+        st.markdown("""
+        The custom line items CSV file allows you to provide specific tasks, activities, and descriptions. The required columns are:
+        - `TASK_CODE`
+        - `ACTIVITY_CODE`
+        - `DESCRIPTION`
+        - `TK_CLASSIFICATION` (Optional: Helps assign the line to a specific timekeeper role like 'Partner' or 'Associate')
+        - `Blockbilling` (Use 'Y' for block-billed, 'N' for non-block-billed)
+
+        **Using Placeholders:**
+        You can use `{NAME_PLACEHOLDER}` in the `DESCRIPTION` field to have a random full name automatically inserted during generation.
+
+        **Example:**
+        ```csv
+        TASK_CODE,ACTIVITY_CODE,DESCRIPTION,TK_CLASSIFICATION,Blockbilling
+        L100,A101,"Legal Research: Analyze legal precedents",Associate,N
+        L300,A110,"Prepare deposition cross-outline for {NAME_PLACEHOLDER}",Partner,N
+        L390,A107,"Draft settlement agreement; confer with client re same; revise agreement",Partner,Y
+        ```
+        """)
 
 st.markdown("<h3 style='color: #1E1E1E;'>Output & Delivery Options</h3>", unsafe_allow_html=True)
 st.checkbox(
@@ -2837,6 +2887,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
