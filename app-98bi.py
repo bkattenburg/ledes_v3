@@ -34,7 +34,7 @@ def _select_items_from_source(df_src, want_block: bool, k: int):
         except Exception:
             pass
     return picks
-    
+
 # --- Begin: Blockbilling-from-source helpers ---
 def _get_blockbilling_col(df):
     for name in ["Blockbilling", "BlockBilling", "Blockbilled", "BlockBilled"]:
@@ -213,37 +213,6 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont
 import zipfile
 
-#st.markdown("""
-#    <style>
-#        /* --- ERROR (Red) --- */
-#        div[data-testid="stAlert"][data-alert-container-variant="error"] {
-#            background-color: #000000;
-#            color: #ff0000; /* Bright Red Text */
-#            border-color: #8b0000 !important;
-#        }
-#
-#        /* --- WARNING (Yellow) --- */
-#        div[data-testid="stAlert"][data-alert-container-variant="warning"] {
-#            background-color: #fff3cd;
-#            color: #664d03; /* Dark Yellow/Brown Text */
-#            border-color: #ffc107 !important;
-#        }
-#        
-#        /* --- INFO (Blue) --- */
-#        div[data-testid="stAlert"][data-alert-container-variant="info"] {
-#            background-color: #d1ecf1;
-#            color: #0c5460; /* Dark Blue/Teal Text */
-#            border-color: #bee5eb !important;
-#        }
-#
-#        /* --- SUCCESS (Green) --- */
-#        div[data-testid="stAlert"][data-alert-container-variant="success"] {
-#            background-color: #d4edda;
-#            color: #155724; /* Dark Green Text */
-#            border-color: #c3e6cb !important;
-#        }
-#    </style>
-#""", unsafe_allow_html=True)
 
 st.markdown("""
     <style>
@@ -263,7 +232,6 @@ PRESETS = {
     "Large": {"fees": 100, "expenses": 25},
 }
 
-# THIS IS THE CORRECTED CODE
 def apply_preset():
     preset_name = st.session_state.invoice_preset
     if preset_name in PRESETS:
@@ -461,7 +429,7 @@ def _force_timekeeper_on_row(row: Dict, forced_name: str, timekeepers: List[Dict
 
     row["TIMEKEEPER_NAME"] = forced_name
     tk = _find_timekeeper_by_name(timekeepers, forced_name)
-    
+
     # If a matching timekeeper was found, populate details and return the row.
     if tk:
         row["TIMEKEEPER_ID"] = tk.get("TIMEKEEPER_ID", "")
@@ -473,7 +441,7 @@ def _force_timekeeper_on_row(row: Dict, forced_name: str, timekeepers: List[Dict
         except Exception as e:
             logging.error(f"Error setting timekeeper rate: {e}")
         return row
-    
+
     # If no match was found, return None to signal that this row should be skipped.
     return None
 
@@ -767,8 +735,6 @@ def _create_ledes_1998bi_content(rows: List[Dict],
         is_expense = bool(row.get("EXPENSE_CODE", ""))
         # This correctly uses the number of copies (stored in HOURS) for expenses
         units = _f(row.get("HOURS", 0))
-        #units = _f(row.get("HOURS", 0)) if not is_expense else _f(row.get("LINE_ITEM_NUMBER_OF_UNITS", 1) or 1)
-        #unit_cost = _f(row.get("RATE", 0)) if not is_expense else _f(row.get("LINE_ITEM_UNIT_COST", 0))
         unit_cost = _f(row.get("RATE", 0))
         adj_amount = _f(row.get("LINE_ITEM_ADJUSTMENT_AMOUNT", 0))
         base_amount = _f(row.get("LINE_ITEM_TOTAL", units * unit_cost))
@@ -1085,157 +1051,6 @@ def _append_two_attendee_meeting_rows(rows, timekeeper_data, billing_start_date,
     rows.extend([rp, ra])
     return rows
 
-
-#def _generate_invoice_data(
-#    fee_count: int,
-#    expense_count: int,
-#    timekeeper_data: List[Dict],
-#    client_id: str,
-#    law_firm_id: str,
-#    invoice_desc: str,
-#    billing_start_date: datetime.date,
-#    billing_end_date: datetime.date,
-#    task_activity_desc: List[Tuple[str, str, str]],
-#    major_task_codes: set,
-#    max_hours_per_tk_per_day: int,
-#    num_block_billed: int,               # <-- kept for compatibility; not used inside
-#    faker_instance: Faker
-#) -> Tuple[List[Dict], float]:
-#    """Generate invoice data with fees and expenses."""
-#    rows = []
-#    rows.extend(_generate_fees(
-#        fee_count, timekeeper_data, billing_start_date, billing_end_date,
-#        task_activity_desc, major_task_codes, max_hours_per_tk_per_day,
-#        faker_instance, client_id, law_firm_id, invoice_desc
-#    ))
-#    rows.extend(_generate_expenses(
-#        expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc
-#    ))
-
-    # Read remaining global block-billing budget (set by UI)
-#    allowed_blocks = int(st.session_state.get("__bb_remaining", 0))
-
-    # --- Source-driven blockbilling branch (uses uploaded CSV Blockbilling flags) ---
-#    try:
-#        # Prefer full, non-deduped upload if available
-#        df_source = (
-#            st.session_state.get("custom_fee_df_full", None)
-#            or st.session_state.get("custom_fee_df", None)
-#        )
-#    except Exception:
-#        df_source = None
-
-#    bbcol = _get_blockbilling_col(df_source) if df_source is not None else None
-
-#    if df_source is not None and bbcol:
-#        try:
-#            df_src_norm = _normalize_blockbilling(df_source, bbcol)
-            # Optional pre-trim by remaining global budget to reduce work:
-            # (still enforced again after generation)
-#            df_src_norm = _enforce_block_billed_limit_df(df_src_norm, allowed_blocks)
-
-            # Keep existing expenses; regenerate fees from source only
-#            rows = [r for r in rows if r.get("EXPENSE_CODE")]
-#            fee_rows_from_src = _generate_fee_lines_from_source_df(
-#                df_source=df_src_norm,
-#                fee_count=fee_count,
-#                timekeeper_data=timekeeper_data,
-#                billing_start_date=billing_start_date,
-#                billing_end_date=billing_end_date,
-#                invoice_desc=invoice_desc,
-#                client_id=client_id,
-#                law_firm_id=law_firm_id,
-#                max_hours_per_tk_per_day=max_hours_per_tk_per_day,
-#                faker_instance=faker_instance
-#            )
-
-            # Enforce global remaining cap on source-driven rows
-#            created_here = 0
-#            for r in fee_rows_from_src:
-#                if r.get("_is_block_billed_from_source"):
-#                    if created_here < allowed_blocks:
-#                        created_here += 1
-#                    else:
-#                        r["_is_block_billed_from_source"] = False
-
-            # Update global remaining
-#            try:
-#                st.session_state["__bb_remaining"] = max(0, allowed_blocks - created_here)
-#            except Exception:
-#                pass
-
-#            rows.extend(fee_rows_from_src)
-#            total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
-#            return rows, total_amount
-#        except Exception as _e:
-            # Fall back to legacy grouping logic on error
-#            pass
-    # --- End source-driven branch ---
-
-    # Legacy grouping path (consolidate multiple tasks per TK/day)
-#    fee_rows = [row for row in rows if not row.get("EXPENSE_CODE")]
-    
-#    if allowed_blocks > 0 and fee_rows:
-#        from collections import defaultdict
-#        daily_tk_groups = defaultdict(list)
-#        for row in fee_rows:
-#            key = (row["TIMEKEEPER_ID"], row["LINE_ITEM_DATE"])
-#            daily_tk_groups[key].append(row)
-            
-#        eligible_groups = []
-#        for key, group_rows in daily_tk_groups.items():
-#            if len(group_rows) > 1:
-#                total_hours = sum(float(r["HOURS"]) for r in group_rows)
-#                if total_hours <= max_hours_per_tk_per_day:
-#                    eligible_groups.append(group_rows)
-        
-#        random.shuffle(eligible_groups)
-        
-#        consolidated_row_ids = set()
-#        new_blocks = []
-#        blocks_created = 0
-
-#        for group in eligible_groups:
-#            if blocks_created >= allowed_blocks:
-#                break
-            
-#            if any(id(row) in consolidated_row_ids for row in group):
-#                continue
-
-#            total_hours = sum(float(row["HOURS"]) for row in group)
-#            total_amount_block = sum(float(row["LINE_ITEM_TOTAL"]) for row in group)
-#            descriptions = [row["DESCRIPTION"] for row in group]
-#            block_description = "; ".join(descriptions)
-            
-#            first_row = group[0]
-#            block_row = {
-#                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-#                "LINE_ITEM_DATE": first_row["LINE_ITEM_DATE"], "TIMEKEEPER_NAME": first_row["TIMEKEEPER_NAME"],
-#                "TIMEKEEPER_CLASSIFICATION": first_row["TIMEKEEPER_CLASSIFICATION"],
-#                "TIMEKEEPER_ID": first_row["TIMEKEEPER_ID"], "TASK_CODE": first_row["TASK_CODE"],
-#                "ACTIVITY_CODE": first_row["ACTIVITY_CODE"], "EXPENSE_CODE": "",
-#                "DESCRIPTION": block_description, "HOURS": round(total_hours, 2), "RATE": first_row["RATE"],
-#                "LINE_ITEM_TOTAL": round(total_amount_block, 2)
-#            }
-#            new_blocks.append(block_row)
-#            for row in group:
-#                consolidated_row_ids.add(id(row))
-#            blocks_created += 1
-
-#        if consolidated_row_ids:
-#            rows = [row for row in rows if id(row) not in consolidated_row_ids]
-#            rows.extend(new_blocks)
-
-        # Update global remaining
-#        try:
-#            st.session_state["__bb_remaining"] = max(0, allowed_blocks - blocks_created)
-#        except Exception:
-#            pass
-    
-#    total_amount = sum(float(row["LINE_ITEM_TOTAL"]) for row in rows)
-#    return rows, total_amount
-
-# === Override: source-only fee generation using Blockbilling column ===
 def _generate_invoice_data(
     fee_count: int,
     expense_count: int,
@@ -1273,7 +1088,6 @@ def _generate_invoice_data(
             "LINE_ITEM_DATE": date_str, "TIMEKEEPER_NAME": tk.get("TIMEKEEPER_NAME",""),
             "TIMEKEEPER_CLASSIFICATION": tk.get("TIMEKEEPER_CLASSIFICATION",""), "TIMEKEEPER_ID": tk.get("TIMEKEEPER_ID",""),
             "TASK_CODE": task_code, "ACTIVITY_CODE": act_code, "EXPENSE_CODE": "",
-            #"DESCRIPTION": ("[BLOCK] " + desc) if block else desc,
             "DESCRIPTION": desc,
             "HOURS": float(round(hours, 2)), "RATE": rate
         }
@@ -1299,11 +1113,8 @@ def _generate_invoice_data(
             continue
         hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
         hours = round(random.uniform(0.5, max(0.6, min(3.5, hours_cap))), 1)
-        # ADD THIS LINE
         processed_desc = _process_description(item["DESC"], faker_instance)
-        # UPDATE THIS LINE
         rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
-        #rows.append(_mk_fee_row(item["DESC"], tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
 
     # --- Block-billed fees (Y) ---
     include_blocks = True
@@ -1322,14 +1133,9 @@ def _generate_invoice_data(
             continue
         hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
         hours = round(random.uniform(1.0, max(1.0, min(6.0, hours_cap))), 1)
-        # ADD THIS LINE
         processed_desc = _process_description(item["DESC"], faker_instance)
-        # UPDATE THIS LINE
         rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=True))
-        #rows.append(_mk_fee_row(item["DESC"], tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=True))
 
-        # --- FIX: Add multiple attendee rows BEFORE block billing ---
-        # This ensures they can be included in the block billing consolidation.
     try:
         _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
     except Exception:
@@ -1983,25 +1789,6 @@ st.checkbox(
     on_change=update_send_email
 )
 
-# Sidebar
-#st.sidebar.markdown("<h2 style='color: #1E1E1E;'>Quick Links</h2>", unsafe_allow_html=True)
-#sample_timekeeper = pd.DataFrame({
-#    "TIMEKEEPER_NAME": ["Tom Delaganis", "Ryan Kinsey"],
-#    "TIMEKEEPER_CLASSIFICATION": ["Partner", "Associate"],
-#    "TIMEKEEPER_ID": ["TD001", "RK001"],
-#    "RATE": [250.0, 200.0]
-#})
-#csv_timekeeper = sample_timekeeper.to_csv(index=False).encode('utf-8')
-#st.sidebar.download_button("Download Sample Timekeeper CSV", csv_timekeeper, "sample_timekeeper.csv", "text/csv")
-#
-#sample_custom = pd.DataFrame({
-#    "TASK_CODE": ["L100"],
-#    "ACTIVITY_CODE": ["A101"],
-#    "DESCRIPTION": ["Legal Research: Analyze legal precedents"],
-#    "Blockbilling": ["Y"]
-#})
-#csv_custom = sample_custom.to_csv(index=False).encode('utf-8')
-#st.sidebar.download_button("Download Sample Custom Tasks CSV", csv_custom, "sample_custom_tasks.csv", "text/csv")
 
 # --- Sidebar Reorganization ---
 
@@ -2066,25 +1853,21 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("## Help & FAQs")
 
 with st.sidebar.expander("Where can I find sample files?"):
-    # REMOVED "st.sidebar." from the markdown call
     st.markdown("""
     All necessary files are available in the **Downloads** section above.
     """)
 
 with st.sidebar.expander('What does the "Spend Agent" checkbox do?'):
-    # REMOVED "st.sidebar." from the markdown call
     st.markdown("""
     This option includes specific, pre-defined line items designed to trigger compliance rules and alerts in a spend management system like Onit's Spend Agent.
     """)
 
 with st.sidebar.expander('What does the "Multiple Attendees at Same Meeting" checkbox do?'):
-    # REMOVED "st.sidebar." from the markdown call
     st.markdown("""
     This creates two identical fee line items for a single meeting, assigned to different timekeepers. It's used to test billing guidelines against duplicate work.
     """)
 
 with st.sidebar.expander("How do I format the timekeeper CSV?"):
-    # REMOVED "st.sidebar." from the markdown call
     st.markdown("""
     The CSV requires a header with these exact column names:
     - `TIMEKeeper_NAME`
@@ -2094,7 +1877,6 @@ with st.sidebar.expander("How do I format the timekeeper CSV?"):
     """)
 
 with st.sidebar.expander("How do I format the custom line items CSV?"):
-    # REMOVED "st.sidebar." from the markdown call
     st.markdown("""
     The CSV requires the following columns:
     - `TASK_CODE`
@@ -2165,9 +1947,6 @@ with tab_objects[0]:
                 partner_count = int(vc.loc[vc["Classification"].str.lower() == "partner", "Count"].sum())
                 associate_count = int(vc.loc[vc["Classification"].str.lower() == "associate", "Count"].sum())
                 paralegal_count = int(vc.loc[vc["Classification"].str.lower() == "paralegal", "Count"].sum())
-                #st.write(f"Partners detected: {partner_count}")
-                #st.write(f"Associates detected: {associate_count}")
-                #st.write(f"Paralegals detected: {paralegal_count}")
             else:
                 st.info("No timekeepers loaded yet.")
         
@@ -2186,20 +1965,24 @@ with tab_objects[0]:
             if custom_tasks_data:
                 task_activity_desc = custom_tasks_data
 
+# #############################################################################
+# ##### CORRECTED INVOICE DETAILS TAB #########################################
+# #############################################################################
 with tab_objects[1]:
-    #st.markdown("<h2 style='color: #1E1E1E;'>Invoice Details</h2>", unsafe_allow_html=True)
-
-    # ===== Billing Profiles =====
+    # ===== 1. GET USER INPUT THAT DRIVES LOGIC =====
     st.markdown("<h3 style='color: #1E1E1E;'>Billing Profiles</h3>", unsafe_allow_html=True)
     env_names = [p[0] for p in BILLING_PROFILES]
     default_env = st.session_state.get("selected_env", "Onit ELM")
     if default_env not in env_names:
         default_env = env_names[0]
     selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
-    # Get the tuple of default values for the selected profile
-    prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
+
+    # ===== 2. PERFORM ALL LOGIC AND STATE MODIFICATIONS =====
     
-    # If a detailed profile exists (like for VAT), use its specific values instead
+    # Get base values from the selected profile
+    prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
+
+    # If a detailed profile exists, use its specific values to override the base ones
     if selected_env in BILLING_PROFILE_DETAILS and not st.session_state.get("allow_override"):
         prof = BILLING_PROFILE_DETAILS[selected_env]
         prof_client_name = prof.get("client", {}).get("name", prof_client_name)
@@ -2207,7 +1990,7 @@ with tab_objects[1]:
         prof_client_id = prof.get("client", {}).get("id", prof_client_id)
         prof_law_firm_id = prof.get("law_firm", {}).get("id", prof_law_firm_id)
 
-     # Pre-populate from profile details when not overriding
+    # Pre-populate session_state from the detailed profile if it exists
     if "allow_override" not in st.session_state:
         st.session_state["allow_override"] = False
     if selected_env in BILLING_PROFILE_DETAILS and not st.session_state["allow_override"]:
@@ -2237,7 +2020,7 @@ with tab_objects[1]:
         st.session_state["client_state"] = cl.get("state", st.session_state.get("client_state", ""))
         st.session_state["client_postcode"] = cl.get("postcode", st.session_state.get("client_postcode", ""))
         st.session_state["client_country"] = cl.get("country", st.session_state.get("client_country", ""))
-        # Mirror values into the 'pf_*' UI keys
+        # Mirror values into the 'pf_*' UI keys so the expanders display them
         st.session_state["pf_law_firm_id"] = st.session_state.get("law_firm_id", "")
         st.session_state["pf_lf_address1"] = st.session_state.get("lf_address1", "")
         st.session_state["pf_lf_address2"] = st.session_state.get("lf_address2", "")
@@ -2252,12 +2035,13 @@ with tab_objects[1]:
         st.session_state["pf_client_state"] = st.session_state.get("client_state", "")
         st.session_state["pf_client_postcode"] = st.session_state.get("client_postcode", "")
         st.session_state["pf_client_country"] = st.session_state.get("client_country", "")
+        
+        # Sync client_id with client_tax_id if it exists
+        if st.session_state.get("client_tax_id"):
+            st.session_state["client_id"] = st.session_state["client_tax_id"]
+            prof_client_id = st.session_state["client_id"] # Also update the local variable for the widget
 
-    # --- ADD THIS LOGIC HERE, AT THE END OF THE BLOCK ---
-    # Sync client_id with client_tax_id if it exists
-    if st.session_state.get("client_tax_id"):
-        st.session_state["client_id"] = st.session_state["client_tax_id"]
-    
+    # ===== 3. CREATE WIDGETS (now that all state is set) =====
     allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")    
     # Names
     c1, c2 = st.columns(2)
@@ -2272,56 +2056,18 @@ with tab_objects[1]:
         client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
     with c4:
         law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
-    
-    # Ensure base keys reflect identical Client ID and Client Tax ID (safe before widgets instantiate)
-    if st.session_state.get("client_tax_id"):
-        st.session_state["client_id"] = st.session_state["client_tax_id"]
 
-
-    # Ensure base keys also reflect identical Client ID and Client Tax ID
-    if st.session_state.get("client_tax_id"):
-        st.session_state["client_id"] = st.session_state["client_tax_id"]
-
-    prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
-
-    # Names
-    #c1, c2 = st.columns(2)
-    #with c1:
-    #    client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
-    #with c2:
-    #    law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
-
-    # IDs (no format restrictions)
-    #c3, c4 = st.columns(2)
-    #with c3:
-    #    client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
-    #with c4:
-    #    law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
-
-    # Status footer
-    #status_html = f"""
-    #<div style="margin-top:0.25rem;font-size:0.92rem;color:#444">
-    #  Using: <strong>{selected_env}</strong>
-    #  &nbsp;—&nbsp; Client ID: <span style="color:#15803d">{prof_client_id}</span>
-    #  &nbsp;•&nbsp; Law Firm ID: <span style="color:#15803d">{prof_law_firm_id}</span>
-    #</div>
-    #"""
-    #st.markdown(status_html, unsafe_allow_html=True)
-
-    #st.write("Timekeeper classifications found:", sorted({str(tk.get("TIMEKEEPER_CLASSIFICATION","")) for tk in _get_timekeepers()}))
     st.markdown("<h3 style='color: #1E1E1E;'>Numbers & Version</h3>", unsafe_allow_html=True)
     # Other invoice details
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
     invoice_number_base = st.text_input("Invoice Number (Base):", "INV-MMM-XXXXXX")
 
-    #LEDES_OPTIONS = ["1998B", "1998BI", "1998BIv2", "XML 2.1"]
-    #LEDES_OPTIONS = ["1998B", "1998BI", "XML 2.1"]
     LEDES_OPTIONS = ["1998B", "1998BI"]
     ledes_version = st.selectbox(
         "LEDES Version:",
         LEDES_OPTIONS,
         key="ledes_version",
-        help="XML 2.1 export is not implemented yet; please use 1998B or 1998BIv2."
+        help="XML 2.1 export is not implemented yet; please use 1998B or 1998BI."
     )
     if ledes_version == "XML 2.1":
         st.warning("This is not yet implemented - please use 1998B")
@@ -2338,6 +2084,10 @@ with tab_objects[1]:
         value="Professional Services Rendered",
         height=150
     )
+# #############################################################################
+# ##### END OF CORRECTIONS ####################################################
+# #############################################################################
+
 
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
@@ -2375,8 +2125,7 @@ with tab_objects[2]:
             "Number of Fee Line Items",
             min_value=0,
             max_value=max_fees,
-            key="fee_slider",  # Add key
-            #value=st.session_state.get("fee_slider", min(20, max_fees)) # Change value
+            key="fee_slider",
         )
         st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
         with st.expander("Adjust Expense Amounts", expanded=False):
@@ -2398,12 +2147,6 @@ with tab_objects[2]:
                 key="telephone_range_e105",
                 help="Random amount for each E105 line will be drawn from this range."
             )
-            #st.number_input(
-            #    "Photocopies (E101) per-page rate ($)",
-            #    min_value=0.04, max_value=1.50, value=0.24, step=0.01,
-            #    key="copying_rate_e101",
-            #    help="Per-page rate used for E101 Photocopy expenses."
-            #)
      
             # 1. Determine the default rate based on the selected LEDES version
             if st.session_state.get("ledes_version") == "1998BI":
@@ -2416,7 +2159,7 @@ with tab_objects[2]:
                 "Photocopies (E101) per-page rate ($)",
                 min_value=0.04,
                 max_value=1.50,
-                value=default_copy_rate, # <-- Use the dynamic variable here
+                value=default_copy_rate, 
                 step=0.01,
                 key="copying_rate_e101",
                 help="Per-page rate used for E101 Photocopy expenses."
@@ -2431,8 +2174,7 @@ with tab_objects[2]:
             "Number of Expense Line Items",
             min_value=0,
             max_value=50,
-            key="expense_slider",  # Add key
-            #value=st.session_state.get("expense_slider", 5) # Change value
+            key="expense_slider",
         )
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
     
@@ -2532,17 +2274,6 @@ with tab_objects[output_tab_index]:
     
     if include_pdf:
         include_logo = st.checkbox("Include Logo in PDF", value=True, help="Uncheck to exclude logo from PDF header, using only law firm text.")
-#        if include_logo:
-#            use_custom_logo = st.checkbox("Use Custom Logo", value=False)
-#            if use_custom_logo:
-#                default_logo_path = st.text_input("Custom Default Logo Path (Optional):", help="Enter the path to a custom default logo (JPEG/PNG). Leave blank to use assets/nelsonmurdock2.jpg or assets/icon.jpg.")
-#                uploaded_logo = st.file_uploader(
-#                    "Upload Custom Logo (JPG/PNG)",
-#                    type=["jpg", "png", "jpeg"],
-#                    help="Upload a valid JPG or PNG image file (e.g., logo.jpg or logo.png). Only JPEG and PNG formats are supported."
-#                )
-#                logo_width = st.slider("Logo Width (inches):", 0.5, 2.0, 0.6, step=0.1)
-#                logo_height = st.slider("Logo Height (inches):", 0.5, 2.0, 0.6, step=0.1)
     
     generate_multiple = st.checkbox("Generate Multiple Invoices", help="Create more than one invoice.")
     num_invoices = 1
@@ -2617,10 +2348,6 @@ if "Tax Fields" in tabs:
             st.text_input("Client Country", key="pf_client_country", disabled=not st.session_state.get("allow_override", False))
             st.text_input("Client Tax ID", key="pf_client_tax_id", disabled=not st.session_state.get("allow_override", False))
 
-
-
-
-
 is_valid_input = True
 if timekeeper_data is None:
     st.error("Please upload a valid timekeeper CSV file.")
@@ -2654,7 +2381,6 @@ st.markdown("---")
 generate_button = st.button("Generate Invoice(s)", disabled=not is_valid_input)
 
 # Main App Logic
-# Main App Logic
 if generate_button:
     if ledes_version == "XML 2.1":
         st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
@@ -2685,8 +2411,6 @@ if generate_button:
                 
                 current_invoice_desc = descriptions[i] if multiple_periods and i < len(descriptions) else descriptions[0]
                 
-                # --- FIX: Correctly calculate the number of fees/expenses to generate ---
-                # This ensures mandatory items don't add to the total count requested by the user.
                 num_mandatory_fees = sum(1 for item in selected_items if not CONFIG['MANDATORY_ITEMS'][item]['is_expense'])
                 num_mandatory_expenses = len(selected_items) - num_mandatory_fees
                 
@@ -2707,7 +2431,6 @@ if generate_button:
                     )
                 
                 df_invoice = pd.DataFrame(rows)
-                # Recalculate total amount after adding/skipping mandatory lines
                 total_amount = df_invoice["LINE_ITEM_TOTAL"].sum()
                 
                 if skipped_mandatory_items:
