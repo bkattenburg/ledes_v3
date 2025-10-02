@@ -2235,7 +2235,7 @@ with tab_objects[1]:
         st.session_state["client_address2"] = cl.get("address2", st.session_state.get("client_address2", ""))
         st.session_state["client_city"] = cl.get("city", st.session_state.get("client_city", ""))
         st.session_state["client_state"] = cl.get("state", st.session_state.get("client_state", ""))
-         st.session_state["client_postcode"] = cl.get("postcode", st.session_state.get("client_postcode", ""))
+        st.session_state["client_postcode"] = cl.get("postcode", st.session_state.get("client_postcode", ""))
         st.session_state["client_country"] = cl.get("country", st.session_state.get("client_country", ""))
         # Mirror values into the 'pf_*' UI keys
         st.session_state["pf_law_firm_id"] = st.session_state.get("law_firm_id", "")
@@ -2877,6 +2877,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
