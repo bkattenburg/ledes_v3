@@ -834,14 +834,14 @@ def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_da
     daily_hours_tracker = {}
     MAX_DAILY_HOURS = max_hours_per_tk_per_day
 
-    used_triples = set()  # NEW
+    used_triples = set()
     
     for _ in range(fee_count):
         if not task_activity_desc:
             break
         tk_row = random.choice(timekeeper_data)
         timekeeper_id = tk_row["TIMEKEEPER_ID"]
-        # NEW: try up to 7 times to get a new triple not already used
+
         attempts = 0
         while True:
             if major_items and random.random() < 0.7:
@@ -849,7 +849,6 @@ def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_da
             elif other_items:
                 task_code, activity_code, description = random.choice(other_items)
             else:
-                # no candidates
                 task_code = activity_code = description = None
 
             if task_code is None:
@@ -1298,6 +1297,9 @@ def _get_logo_bytes(uploaded_logo: Optional[Any], law_firm_id: str, use_custom: 
     return buf.getvalue()
 
 
+# #############################################################################
+# ##### PDF CREATION FUNCTION WITH REQUESTED CHANGES ##########################
+# #############################################################################
 def _create_pdf_invoice(
     df: pd.DataFrame,
     total_amount: float,
@@ -1327,8 +1329,8 @@ def _create_pdf_invoice(
     # Styles
     header_info_style = ParagraphStyle('HeaderInfo', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=14, alignment=TA_LEFT)
     client_info_style = ParagraphStyle('ClientInfo', parent=header_info_style, alignment=TA_RIGHT)
-    table_header_style = ParagraphStyle('TableHeader', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=12, alignment=TA_CENTER, wordWrap='CJK')
-    table_data_style = ParagraphStyle('TableData', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=12, alignment=TA_LEFT, wordWrap='CJK')
+    table_header_style = ParagraphStyle('TableHeader', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, leading=12, alignment=TA_CENTER, wordWrap='CJK')
+    table_data_style = ParagraphStyle('TableData', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=12, alignment=TA_LEFT, wordWrap='CJK')
     right_align_style = styles['Heading4']
 
     # Header info
@@ -1371,7 +1373,6 @@ def _create_pdf_invoice(
     invoice_info = f"Invoice #: {invoice_number}<br/>Invoice Date: {invoice_date.strftime('%Y-%m-%d')}<br/>Billing Period: {billing_start_date.strftime('%Y-%m-%d')} to {billing_end_date.strftime('%Y-%m-%d')}"
     invoice_para = Paragraph(invoice_info, right_align_style)
 
-    # --- 1998BIv2 Tax Header Block ---
     if ledes_version == "1998BIv2":
         tax_data = [
             [Paragraph("Matter Name:", styles['Normal']), Paragraph(matter_name or "-", styles['Normal'])],
@@ -1389,45 +1390,77 @@ def _create_pdf_invoice(
     elements.append(invoice_table)
     elements.append(Spacer(1, 0.1 * inch))
 
-    # Table headers
+    # **CHANGE 1: Update table headers**
     data = [[
         Paragraph("Date", table_header_style),
+        Paragraph("Type", table_header_style),
         Paragraph("Task<br/>Code", table_header_style),
         Paragraph("Activity<br/>Code", table_header_style),
-        Paragraph("Timekeeper", table_header_style),
+        Paragraph("Exp<br/>Code", table_header_style),
+        Paragraph("Timekeeper<br/>ID", table_header_style),
         Paragraph("Description", table_header_style),
         Paragraph("Hours", table_header_style),
         Paragraph("Rate", table_header_style),
         Paragraph("Total", table_header_style),
     ]]
 
-    # Rows
+    # **CHANGE 2: Loop through rows and populate new data structure**
     for _, row in df.iterrows():
+        is_expense = bool(row.get("EXPENSE_CODE"))
+
+        # Logic for all columns based on your requests
         date = row["LINE_ITEM_DATE"]
-        timekeeper = Paragraph(row["TIMEKEEPER_NAME"] if row["TIMEKEEPER_NAME"] else "N/A", table_data_style)
-        task_code = row.get("TASK_CODE", "") if not row["EXPENSE_CODE"] else ""
-        activity_code = row.get("ACTIVITY_CODE", "") if not row["EXPENSE_CODE"] else ""
+        line_type = "E" if is_expense else "F"
+        task_code = row.get("TASK_CODE", "") if not is_expense else ""
+        activity_code = row.get("ACTIVITY_CODE", "") if not is_expense else ""
+        expense_code = row.get("EXPENSE_CODE", "") if is_expense else ""
+        timekeeper_id = Paragraph(row.get("TIMEKEEPER_ID", "") if not is_expense else "N/A", table_data_style)
         description = Paragraph(row["DESCRIPTION"], table_data_style)
-        hours = f"{row['HOURS']:.1f}" if not row["EXPENSE_CODE"] else f"{int(row['HOURS'])}"
+        hours = f"{row['HOURS']:.1f}" if not is_expense else f"{int(row['HOURS'])}"
         rate = f"${row['RATE']:.2f}" if row["RATE"] else "N/A"
         total = f"${row['LINE_ITEM_TOTAL']:.2f}"
-        data.append([date, task_code, activity_code, timekeeper, description, hours, rate, total])
+        
+        data.append([
+            date,
+            line_type,
+            task_code,
+            activity_code,
+            expense_code,
+            timekeeper_id,
+            description,
+            hours,
+            rate,
+            total
+        ])
 
-    table = Table(data, colWidths=[0.8 * inch, 0.7 * inch, 0.7 * inch, 1.3 * inch, 1.8 * inch, 0.8 * inch, 0.8 * inch, 0.8 * inch])
+    # **CHANGE 3: Adjust column widths to fit the new table structure**
+    table = Table(data, colWidths=[
+        0.7 * inch,  # Date
+        0.4 * inch,  # Type
+        0.5 * inch,  # Task Code
+        0.5 * inch,  # Activity Code
+        0.5 * inch,  # Exp Code
+        0.8 * inch,  # Timekeeper ID
+        2.1 * inch,  # Description
+        0.5 * inch,  # Hours
+        0.6 * inch,  # Rate
+        0.7 * inch,  # Total
+    ])
+
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
         ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (1, 1), (2, -1), 'CENTER'),
-        ('ALIGN', (5, 0), (5, -1), 'CENTER'),
-        ('ALIGN', (6, 0), (6, -1), 'RIGHT'),
-        ('ALIGN', (7, 0), (7, -1), 'RIGHT'),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'), # Date
+        ('ALIGN', (1, 1), (1, -1), 'CENTER'), # Type
+        ('ALIGN', (2, 1), (5, -1), 'CENTER'), # Codes & TK ID
+        ('ALIGN', (7, 0), (7, -1), 'CENTER'), # Hours
+        ('ALIGN', (8, 0), (9, -1), 'RIGHT'),  # Rate & Total
         ('LEFTPADDING', (0, 0), (-1, -1), 2),
         ('RIGHTPADDING', (0, 0), (-1, -1), 2),
         ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -1435,14 +1468,12 @@ def _create_pdf_invoice(
     ]))
     elements.append(table)
 
-    # Totals block (right-aligned)
+    # Totals block (right-aligned) - No changes needed here
     if 'EXPENSE_CODE' in df.columns:
-        # Create a boolean mask for fees. Fees are where EXPENSE_CODE is empty or NaN.
         is_fee = df['EXPENSE_CODE'].fillna('').eq('')
         fees_total = df.loc[is_fee, 'LINE_ITEM_TOTAL'].sum()
         expenses_total = df.loc[~is_fee, 'LINE_ITEM_TOTAL'].sum()
     else:
-        # If no 'EXPENSE_CODE' column, all are fees
         fees_total = df['LINE_ITEM_TOTAL'].sum()
         expenses_total = 0.0
 
@@ -1468,7 +1499,6 @@ def _create_pdf_invoice(
     ]))
     elements.append(totals_table)
 
-        # --- 1998BIv2 Tax Totals Block ---
     if ledes_version == "1998BIv2":
         subtotal_for_tax = df['LINE_ITEM_TOTAL'].sum()
         tax_amount_calc = round(subtotal_for_tax * float(tax_rate), 2)
@@ -1481,7 +1511,6 @@ def _create_pdf_invoice(
     doc.build(elements)
     buffer.seek(0)
     return buffer
-
 
 def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str, io.BytesIO]:
     """Enhanced realistic receipt generator (see chat notes for details)."""
@@ -2085,9 +2114,6 @@ with tab_objects[1]:
         height=150
     )
 # #############################################################################
-# ##### END OF CORRECTIONS ####################################################
-# #############################################################################
-
 
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
