@@ -2206,23 +2206,8 @@ with tab_objects[1]:
         prof_law_firm_name = prof.get("law_firm", {}).get("name", prof_law_firm_name)
         prof_client_id = prof.get("client", {}).get("id", prof_client_id)
         prof_law_firm_id = prof.get("law_firm", {}).get("id", prof_law_firm_id)
-    
-    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")    
-    # Names
-    c1, c2 = st.columns(2)
-    with c1:
-        client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
-    with c2:
-        law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
-    
-    # IDs (no format restrictions)
-    c3, c4 = st.columns(2)
-    with c3:
-        client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
-    with c4:
-        law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
-    
-    # Pre-populate from profile details when not overriding
+
+     # Pre-populate from profile details when not overriding
     if "allow_override" not in st.session_state:
         st.session_state["allow_override"] = False
     if selected_env in BILLING_PROFILE_DETAILS and not st.session_state["allow_override"]:
@@ -2267,7 +2252,22 @@ with tab_objects[1]:
         st.session_state["pf_client_state"] = st.session_state.get("client_state", "")
         st.session_state["pf_client_postcode"] = st.session_state.get("client_postcode", "")
         st.session_state["pf_client_country"] = st.session_state.get("client_country", "")
-
+    
+    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")    
+    # Names
+    c1, c2 = st.columns(2)
+    with c1:
+        client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
+    with c2:
+        law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
+    
+    # IDs (no format restrictions)
+    c3, c4 = st.columns(2)
+    with c3:
+        client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
+    with c4:
+        law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
+    
     # Ensure base keys reflect identical Client ID and Client Tax ID (safe before widgets instantiate)
     if st.session_state.get("client_tax_id"):
         st.session_state["client_id"] = st.session_state["client_tax_id"]
@@ -2872,6 +2872,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
