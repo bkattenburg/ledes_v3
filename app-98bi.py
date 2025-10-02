@@ -2235,9 +2235,9 @@ with tab_objects[1]:
         st.session_state["client_address2"] = cl.get("address2", st.session_state.get("client_address2", ""))
         st.session_state["client_city"] = cl.get("city", st.session_state.get("client_city", ""))
         st.session_state["client_state"] = cl.get("state", st.session_state.get("client_state", ""))
-        st.session_state["client_postcode"] = cl.get("postcode", st.session_state.get("client_postcode", ""))
+         st.session_state["client_postcode"] = cl.get("postcode", st.session_state.get("client_postcode", ""))
         st.session_state["client_country"] = cl.get("country", st.session_state.get("client_country", ""))
-        # Mirror values into the 'pf_*' UI keys so the expanders display them
+        # Mirror values into the 'pf_*' UI keys
         st.session_state["pf_law_firm_id"] = st.session_state.get("law_firm_id", "")
         st.session_state["pf_lf_address1"] = st.session_state.get("lf_address1", "")
         st.session_state["pf_lf_address2"] = st.session_state.get("lf_address2", "")
@@ -2252,6 +2252,11 @@ with tab_objects[1]:
         st.session_state["pf_client_state"] = st.session_state.get("client_state", "")
         st.session_state["pf_client_postcode"] = st.session_state.get("client_postcode", "")
         st.session_state["pf_client_country"] = st.session_state.get("client_country", "")
+
+    # --- ADD THIS LOGIC HERE, AT THE END OF THE BLOCK ---
+    # Sync client_id with client_tax_id if it exists
+    if st.session_state.get("client_tax_id"):
+        st.session_state["client_id"] = st.session_state["client_tax_id"]
     
     allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")    
     # Names
@@ -2872,6 +2877,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
