@@ -2100,7 +2100,18 @@ with tab_objects[1]:
     selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
 
     # ===== 2. PERFORM ALL LOGIC AND STATE MODIFICATIONS =====
-    
+
+    # Check if the profile has changed. If so, update the default LEDES version.
+    # This prevents the user's manual selection from being overwritten on every rerun.
+    if st.session_state.get("last_selected_env") != selected_env:
+        if selected_env in BILLING_PROFILE_DETAILS:
+            prof = BILLING_PROFILE_DETAILS[selected_env]
+            st.session_state["ledes_version"] = prof.get("ledes_default", "1998B")
+        else:
+            st.session_state["ledes_version"] = "1998B"
+        st.session_state["last_selected_env"] = selected_env
+
+
     # Get base values from the selected profile
     prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
 
@@ -2117,8 +2128,6 @@ with tab_objects[1]:
         st.session_state["allow_override"] = False
     if selected_env in BILLING_PROFILE_DETAILS and not st.session_state["allow_override"]:
         prof = BILLING_PROFILE_DETAILS[selected_env]
-        # Default LEDES version for profile
-        st.session_state["ledes_version"] = prof.get("ledes_default", st.session_state.get("ledes_version", "1998B"))
         # Default invoice currency
         st.session_state["tax_invoice_currency"] = prof.get("invoice_currency", st.session_state.get("tax_invoice_currency", "USD"))
         # Law firm fields
@@ -2157,21 +2166,21 @@ with tab_objects[1]:
         st.session_state["pf_client_state"] = st.session_state.get("client_state", "")
         st.session_state["pf_client_postcode"] = st.session_state.get("client_postcode", "")
         st.session_state["pf_client_country"] = st.session_state.get("client_country", "")
-        
+
         # Sync client_id with client_tax_id if it exists
         if st.session_state.get("client_tax_id"):
             st.session_state["client_id"] = st.session_state["client_tax_id"]
             prof_client_id = st.session_state["client_id"] # Also update the local variable for the widget
 
     # ===== 3. CREATE WIDGETS (now that all state is set) =====
-    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")    
+    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")
     # Names
     c1, c2 = st.columns(2)
     with c1:
         client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
     with c2:
         law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
-    
+
     # IDs (no format restrictions)
     c3, c4 = st.columns(2)
     with c3:
@@ -2185,10 +2194,18 @@ with tab_objects[1]:
     invoice_number_base = st.text_input("Invoice Number (Base):", "INV-MMM-XXXXXX")
 
     LEDES_OPTIONS = ["1998B", "1998BI", "XML 2.1"]
+    # Get the index for the selectbox to ensure it reflects the session state
+    try:
+        current_ledes_version = st.session_state.get("ledes_version", "1998B")
+        version_index = LEDES_OPTIONS.index(current_ledes_version)
+    except ValueError:
+        version_index = 0 # Default to 1998B if the state is somehow invalid
+
     ledes_version = st.selectbox(
         "LEDES Version:",
         LEDES_OPTIONS,
-        key="ledes_version"
+        index=version_index,
+        key="ledes_version" # This key links the widget to the session state
     )
 
     st.markdown("<h3 style='color: #1E1E1E;'>Invoice Dates & Description</h3>", unsafe_allow_html=True)
@@ -2721,3 +2738,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
