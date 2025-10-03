@@ -212,6 +212,8 @@ from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont
 import zipfile
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
 
 
 st.markdown("""
@@ -824,6 +826,97 @@ def _create_ledes_1998bi_content(rows: List[Dict],
         lines.append("|".join(map(str, line)) + "[]")
 
     return "\n".join(lines)
+
+def _create_ledes_xml_2_1_content(
+    rows: List[Dict],
+    bill_start: datetime.date,
+    bill_end: datetime.date,
+    invoice_number: str,
+    matter_number: str,
+    law_firm_name: str,
+    law_firm_id: str,
+    client_name: str,
+    client_id: str,
+    matter_name: str,
+) -> str:
+    """Generate LEDES XML 2.1 content from invoice rows."""
+
+    # Calculate totals
+    fees_total = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows if not r.get("EXPENSE_CODE"))
+    expenses_total = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows if r.get("EXPENSE_CODE"))
+    invoice_total = fees_total + expenses_total
+
+    # Root element
+    ledes_tag = ET.Element("ledes")
+    ledes_tag.set("version", "2.1")
+    
+    # Invoice element
+    invoice_tag = ET.SubElement(ledes_tag, "invoice")
+    invoice_tag.set("inv_dt", bill_end.strftime("%Y-%m-%d"))
+    invoice_tag.set("inv_num", invoice_number)
+    invoice_tag.set("start_dt", bill_start.strftime("%Y-%m-%d"))
+    invoice_tag.set("end_dt", bill_end.strftime("%Y-%m-%d"))
+    invoice_tag.set("cost_typ_cd", "BILL")
+
+    # Firm details
+    firm_tag = ET.SubElement(invoice_tag, "firm")
+    firm_tag.set("firm_id", law_firm_id)
+    firm_tag.set("firm_name", law_firm_name)
+
+    # Client details
+    client_tag = ET.SubElement(invoice_tag, "client")
+    client_tag.set("client_id", client_id)
+    client_tag.set("client_name", client_name)
+
+    # Matter details
+    matter_tag = ET.SubElement(invoice_tag, "matter")
+    matter_tag.set("matter_id", matter_number)
+    matter_tag.set("matter_name", matter_name if matter_name else f"Matter {matter_number}")
+
+    # Segments
+    fees_tag = ET.SubElement(invoice_tag, "fee")
+    expenses_tag = ET.SubElement(invoice_tag, "expense")
+    
+    line_item_counter = 1
+    for row in rows:
+        is_expense = bool(row.get("EXPENSE_CODE"))
+        
+        attrs = {
+            "id": str(line_item_counter),
+            "dt": row["LINE_ITEM_DATE"],
+            "units": f"{float(row['HOURS']):.2f}",
+            "unit_cost": f"{float(row['RATE']):.2f}",
+            "total": f"{float(row['LINE_ITEM_TOTAL']):.2f}",
+        }
+        
+        if is_expense:
+            expense_item_tag = ET.SubElement(expenses_tag, "exp_item")
+            attrs["exp_cd"] = row.get("EXPENSE_CODE", "")
+            expense_item_tag.attrib = attrs
+            desc_tag = ET.SubElement(expense_item_tag, "desc")
+            desc_tag.text = str(row.get("DESCRIPTION", ""))
+        else:
+            fee_item_tag = ET.SubElement(fees_tag, "fee_item")
+            attrs["tk_id"] = row.get("TIMEKEEPER_ID", "")
+            attrs["task_cd"] = row.get("TASK_CODE", "")
+            attrs["activity_cd"] = row.get("ACTIVITY_CODE", "")
+            fee_item_tag.attrib = attrs
+            desc_tag = ET.SubElement(fee_item_tag, "desc")
+            desc_tag.text = str(row.get("DESCRIPTION", ""))
+            
+        line_item_counter += 1
+
+    # Invoice summary
+    summary_tag = ET.SubElement(invoice_tag, "inv_summary")
+    summary_tag.set("fee_total", f"{fees_total:.2f}")
+    summary_tag.set("exp_total", f"{expenses_total:.2f}")
+    summary_tag.set("inv_total", f"{invoice_total:.2f}")
+    
+    # Pretty print the XML
+    rough_string = ET.tostring(ledes_tag, 'utf-8')
+    reparsed = minidom.parseString(rough_string)
+    return reparsed.toprettyxml(indent="  ")
+
 def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, faker_instance: Faker, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
     """Generate fee line items for an invoice."""
     rows = []
@@ -2091,15 +2184,12 @@ with tab_objects[1]:
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
     invoice_number_base = st.text_input("Invoice Number (Base):", "INV-MMM-XXXXXX")
 
-    LEDES_OPTIONS = ["1998B", "1998BI"]
+    LEDES_OPTIONS = ["1998B", "1998BI", "XML 2.1"]
     ledes_version = st.selectbox(
         "LEDES Version:",
         LEDES_OPTIONS,
-        key="ledes_version",
-        help="XML 2.1 export is not implemented yet; please use 1998B or 1998BI."
+        key="ledes_version"
     )
-    if ledes_version == "XML 2.1":
-        st.warning("This is not yet implemented - please use 1998B")
 
     st.markdown("<h3 style='color: #1E1E1E;'>Invoice Dates & Description</h3>", unsafe_allow_html=True)
     today = datetime.date.today()
@@ -2408,8 +2498,8 @@ generate_button = st.button("Generate Invoice(s)", disabled=not is_valid_input)
 
 # Main App Logic
 if generate_button:
-    if ledes_version == "XML 2.1":
-        st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
+    if combine_ledes and ledes_version == "XML 2.1":
+        st.error("Combining multiple invoices into a single file is not supported for the LEDES XML 2.1 format. Please uncheck 'Combine LEDES into single file'.")
         st.stop()
     
     faker = Faker()
@@ -2468,45 +2558,49 @@ if generate_button:
                 current_invoice_number = f"{invoice_number_base}-{i+1}"
                 current_matter_number = matter_number_base
                 
-                is_first = (i == 0) and combine_ledes
+                is_first = (i == 0)
+                
+                # Logic to generate the correct LEDES format content
+                ledes_content_part = None
                 if ledes_version == "1998BIv2":
                     ledes_content_part = _create_ledes_1998biv2_content(
-                        rows,
-                        current_start_date, current_end_date,
-                        current_invoice_number, current_matter_number,
-                        st.session_state.get('tax_matter_name',''),
-                        st.session_state.get('tax_po_number',''),
-                        st.session_state.get('tax_client_matter_id',''),
-                        st.session_state.get('tax_invoice_currency','USD'),
-                        st.session_state.get('tax_rate', 0.19),
-                        is_first_invoice=not combine_ledes or is_first
+                        rows, current_start_date, current_end_date, current_invoice_number, current_matter_number,
+                        st.session_state.get('tax_matter_name',''), st.session_state.get('tax_po_number',''),
+                        st.session_state.get('tax_client_matter_id',''), st.session_state.get('tax_invoice_currency','USD'),
+                        st.session_state.get('tax_rate', 0.19), is_first_invoice=not combine_ledes or is_first
                     )
                 elif ledes_version == "1998BI":
                     ledes_content_part = _create_ledes_1998bi_content(
-                        rows,
-                        current_start_date, current_end_date,
-                        current_invoice_number, current_matter_number,
-                        st.session_state.get('tax_matter_name',''),
-                        st.session_state.get('tax_po_number',''),
-                        st.session_state.get('tax_client_matter_id',''),
-                        st.session_state.get('tax_invoice_currency','USD'),
-                        st.session_state.get('tax_rate', 0.19),
-                        is_first_invoice=not combine_ledes or is_first
+                        rows, current_start_date, current_end_date, current_invoice_number, current_matter_number,
+                        st.session_state.get('tax_matter_name',''), st.session_state.get('tax_po_number',''),
+                        st.session_state.get('tax_client_matter_id',''), st.session_state.get('tax_invoice_currency','USD'),
+                        st.session_state.get('tax_rate', 0.19), is_first_invoice=not combine_ledes or is_first
                     )
-                else:
+                elif ledes_version == "XML 2.1":
+                    ledes_content_part = _create_ledes_xml_2_1_content(
+                        rows, current_start_date, current_end_date, current_invoice_number, current_matter_number,
+                        law_firm_name, law_firm_id, client_name, client_id, st.session_state.get('tax_matter_name','')
+                    )
+                else: # Default to 1998B
                     ledes_content_part = _create_ledes_1998b_content(
-                        rows,
-                        total_amount,
-                        current_start_date, current_end_date,
-                        current_invoice_number, current_matter_number,
-                        is_first_invoice=not combine_ledes or is_first
+                        rows, total_amount, current_start_date, current_end_date,
+                        current_invoice_number, current_matter_number, is_first_invoice=not combine_ledes or is_first
                     )
+                
+                # Handle how the generated content is stored (combined vs individual)
                 if combine_ledes:
                     combined_ledes_content += ledes_content_part + "\n"
                 else:
-                    ledes_filename = (f"LEDES_1998BI_{current_invoice_number}.txt" if ledes_version == "1998BI" else (f"LEDES_1998BIv2_{current_invoice_number}.txt" if ledes_version == "1998BIv2" else f"LEDES_1998B_{current_invoice_number}.txt"))
-                    attachments_list.append((ledes_filename, ledes_content_part.encode('utf-8')))
-                
+                    if ledes_version == "1998BI":
+                        filename = f"LEDES_1998BI_{current_invoice_number}.txt"
+                    elif ledes_version == "1998BIv2":
+                        filename = f"LEDES_1998BIv2_{current_invoice_number}.txt"
+                    elif ledes_version == "XML 2.1":
+                        filename = f"LEDES_XML_2_1_{current_invoice_number}.xml"
+                    else:
+                        filename = f"LEDES_1998B_{current_invoice_number}.txt"
+                    attachments_list.append((filename, ledes_content_part.encode('utf-8')))
+
                 if include_pdf:
                     logo_bytes = None
                     if include_logo:
@@ -2561,6 +2655,7 @@ if generate_button:
                 if filename.endswith(".pdf"): return "application/pdf"
                 if filename.endswith(".png"): return "image/png"
                 if filename.endswith(".zip"): return "application/zip"
+                if filename.endswith(".xml"): return "application/xml"
                 return "application/octet-stream"
 
             if st.session_state.send_email:
