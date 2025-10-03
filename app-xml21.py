@@ -2010,16 +2010,6 @@ with st.sidebar.expander("How do I format the custom line items CSV?"):
     **Note:** Use `{NAME_PLACEHOLDER}` in a description to auto-insert a random name.
     """)
     
-# Pre-calculate the correct LEDES version based on the selected profile
-current_profile_key = st.session_state.get("selected_env", "Onit ELM")
-
-# If the selected profile is "VAT", set its specific LEDES default
-if current_profile_key in BILLING_PROFILE_DETAILS:
-    prof = BILLING_PROFILE_DETAILS[current_profile_key]
-    st.session_state["ledes_version"] = prof.get("ledes_default")
-# For any other profile, reset the LEDES version to the standard default
-else:
-    st.session_state["ledes_version"] = "1998B"
 
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
@@ -2091,26 +2081,33 @@ with tab_objects[0]:
 # ##### CORRECTED INVOICE DETAILS TAB #########################################
 # #############################################################################
 with tab_objects[1]:
-    # ===== 1. GET USER INPUT THAT DRIVES LOGIC =====
     st.markdown("<h3 style='color: #1E1E1E;'>Billing Profiles</h3>", unsafe_allow_html=True)
     env_names = [p[0] for p in BILLING_PROFILES]
     default_env = st.session_state.get("selected_env", "Onit ELM")
     if default_env not in env_names:
         default_env = env_names[0]
-    selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
 
-    # ===== 2. PERFORM ALL LOGIC AND STATE MODIFICATIONS =====
-
-    # Check if the profile has changed. If so, update the default LEDES version.
-    # This prevents the user's manual selection from being overwritten on every rerun.
-    if st.session_state.get("last_selected_env") != selected_env:
+    # This callback function runs ONLY when the selectbox value changes.
+    def on_profile_change():
+        selected_env = st.session_state.selected_env
         if selected_env in BILLING_PROFILE_DETAILS:
             prof = BILLING_PROFILE_DETAILS[selected_env]
-            st.session_state["ledes_version"] = prof.get("ledes_default", "1998B")
+            st.session_state.ledes_version = prof.get("ledes_default", "1998B")
         else:
-            st.session_state["ledes_version"] = "1998B"
-        st.session_state["last_selected_env"] = selected_env
+            st.session_state.ledes_version = "1998B"
 
+    selected_env = st.selectbox(
+        "Environment / Profile",
+        env_names,
+        index=env_names.index(default_env),
+        key="selected_env",
+        on_change=on_profile_change
+    )
+
+    # Initialize the ledes_version in session_state if it doesn't exist at all.
+    # This handles the very first run of the script.
+    if "ledes_version" not in st.session_state:
+        on_profile_change()
 
     # Get base values from the selected profile
     prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
@@ -2128,84 +2125,43 @@ with tab_objects[1]:
         st.session_state["allow_override"] = False
     if selected_env in BILLING_PROFILE_DETAILS and not st.session_state["allow_override"]:
         prof = BILLING_PROFILE_DETAILS[selected_env]
-        # Default invoice currency
         st.session_state["tax_invoice_currency"] = prof.get("invoice_currency", st.session_state.get("tax_invoice_currency", "USD"))
-        # Law firm fields
         lf = prof.get("law_firm", {})
         st.session_state["law_firm_name"] = lf.get("name", st.session_state.get("law_firm_name", ""))
         st.session_state["law_firm_id"] = lf.get("id", st.session_state.get("law_firm_id", ""))
-        st.session_state["lf_address1"] = lf.get("address1", st.session_state.get("lf_address1", ""))
-        st.session_state["lf_address2"] = lf.get("address2", st.session_state.get("lf_address2", ""))
-        st.session_state["lf_city"] = lf.get("city", st.session_state.get("lf_city", ""))
-        st.session_state["lf_state"] = lf.get("state", st.session_state.get("lf_state", ""))
-        st.session_state["lf_postcode"] = lf.get("postcode", st.session_state.get("lf_postcode", ""))
-        st.session_state["lf_country"] = lf.get("country", st.session_state.get("lf_country", ""))
-        # Client fields
         cl = prof.get("client", {})
         st.session_state["client_name"] = cl.get("name", st.session_state.get("client_name", ""))
         st.session_state["client_id"] = cl.get("id", st.session_state.get("client_id", ""))
-        st.session_state["client_tax_id"] = cl.get("tax_id", st.session_state.get("client_tax_id", ""))
-        st.session_state["client_address1"] = cl.get("address1", st.session_state.get("client_address1", ""))
-        st.session_state["client_address2"] = cl.get("address2", st.session_state.get("client_address2", ""))
-        st.session_state["client_city"] = cl.get("city", st.session_state.get("client_city", ""))
-        st.session_state["client_state"] = cl.get("state", st.session_state.get("client_state", ""))
-        st.session_state["client_postcode"] = cl.get("postcode", st.session_state.get("client_postcode", ""))
-        st.session_state["client_country"] = cl.get("country", st.session_state.get("client_country", ""))
-        # Mirror values into the 'pf_*' UI keys so the expanders display them
-        st.session_state["pf_law_firm_id"] = st.session_state.get("law_firm_id", "")
-        st.session_state["pf_lf_address1"] = st.session_state.get("lf_address1", "")
-        st.session_state["pf_lf_address2"] = st.session_state.get("lf_address2", "")
-        st.session_state["pf_lf_city"] = st.session_state.get("lf_city", "")
-        st.session_state["pf_lf_state"] = st.session_state.get("lf_state", "")
-        st.session_state["pf_lf_postcode"] = st.session_state.get("lf_postcode", "")
-        st.session_state["pf_lf_country"] = st.session_state.get("lf_country", "")
-        st.session_state["pf_client_tax_id"] = st.session_state.get("client_tax_id", "")
-        st.session_state["pf_client_address1"] = st.session_state.get("client_address1", "")
-        st.session_state["pf_client_address2"] = st.session_state.get("client_address2", "")
-        st.session_state["pf_client_city"] = st.session_state.get("client_city", "")
-        st.session_state["pf_client_state"] = st.session_state.get("client_state", "")
-        st.session_state["pf_client_postcode"] = st.session_state.get("client_postcode", "")
-        st.session_state["pf_client_country"] = st.session_state.get("client_country", "")
 
-        # Sync client_id with client_tax_id if it exists
-        if st.session_state.get("client_tax_id"):
-            st.session_state["client_id"] = st.session_state["client_tax_id"]
-            prof_client_id = st.session_state["client_id"] # Also update the local variable for the widget
+    allow_override = st.checkbox("Override values for this invoice", value=st.session_state.get("allow_override", False), help="When checked, you can type custom values without changing stored profiles.", key="allow_override")
 
-    # ===== 3. CREATE WIDGETS (now that all state is set) =====
-    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can type custom values without changing stored profiles.", key="allow_override")
-    # Names
     c1, c2 = st.columns(2)
     with c1:
-        client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
+        client_name = st.text_input("Client Name", value=st.session_state.get("client_name", prof_client_name), disabled=not allow_override, key="client_name_input")
     with c2:
-        law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
+        law_firm_name = st.text_input("Law Firm Name", value=st.session_state.get("law_firm_name", prof_law_firm_name), disabled=not allow_override, key="law_firm_name_input")
 
-    # IDs (no format restrictions)
     c3, c4 = st.columns(2)
     with c3:
-        client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
+        client_id = st.text_input("Client ID", value=st.session_state.get("client_id", prof_client_id), disabled=not allow_override, key="client_id_input")
     with c4:
-        law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
+        law_firm_id = st.text_input("Law Firm ID", value=st.session_state.get("law_firm_id", prof_law_firm_id), disabled=not allow_override, key="law_firm_id_input")
 
     st.markdown("<h3 style='color: #1E1E1E;'>Numbers & Version</h3>", unsafe_allow_html=True)
-    # Other invoice details
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
     invoice_number_base = st.text_input("Invoice Number (Base):", "INV-MMM-XXXXXX")
 
     LEDES_OPTIONS = ["1998B", "1998BI", "XML 2.1"]
-    # Get the index for the selectbox to ensure it reflects the session state
     try:
-        current_ledes_version = st.session_state.get("ledes_version", "1998B")
-        version_index = LEDES_OPTIONS.index(current_ledes_version)
-    except ValueError:
-        version_index = 0 # Default to 1998B if the state is somehow invalid
+        version_index = LEDES_OPTIONS.index(st.session_state.ledes_version)
+    except (ValueError, KeyError):
+        version_index = 0
 
     ledes_version = st.selectbox(
         "LEDES Version:",
         LEDES_OPTIONS,
         index=version_index,
-        key="ledes_version" # This key links the widget to the session state
+        key="ledes_version"
     )
 
     st.markdown("<h3 style='color: #1E1E1E;'>Invoice Dates & Description</h3>", unsafe_allow_html=True)
@@ -2738,4 +2694,3 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
-
