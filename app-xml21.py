@@ -835,10 +835,10 @@ def _create_ledes_xml_2_1_content(
     matter_number: str,
     law_firm_id: str,
     client_id: str,
-    client_matter_id: str, # Added for ClientMatterID
+    client_matter_id: str,
     matter_name: str,
-    invoice_currency: str, # Added for currency
-    timekeeper_data: List[Dict] # Added to access full TK details
+    invoice_currency: str,
+    timekeeper_data: List[Dict]
 ) -> str:
     """Generate LEDES XML 2.1 content from invoice rows based on the specified schema."""
 
@@ -926,7 +926,7 @@ def _create_ledes_xml_2_1_content(
     xml_output = "\n".join(reparsed.toprettyxml(indent="    ").split("\n")[1:])
     
     return xml_output
-    
+
 def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, faker_instance: Faker, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
     """Generate fee line items for an invoice."""
     rows = []
@@ -2561,8 +2561,17 @@ if generate_button:
                     )
                 elif ledes_version == "XML 2.1":
                     ledes_content_part = _create_ledes_xml_2_1_content(
-                        rows, current_start_date, current_end_date, current_invoice_number, current_matter_number,
-                        law_firm_name, law_firm_id, client_name, client_id, st.session_state.get('tax_matter_name','')
+                        rows=rows,
+                        bill_start=current_start_date,
+                        bill_end=current_end_date,
+                        invoice_number=current_invoice_number,
+                        matter_number=current_matter_number,
+                        law_firm_id=law_firm_id,
+                        client_id=client_id,
+                        client_matter_id=st.session_state.get('tax_client_matter_id',''),
+                        matter_name=st.session_state.get('tax_matter_name',''),
+                        invoice_currency=st.session_state.get('tax_invoice_currency','USD'),
+                        timekeeper_data=timekeeper_data
                     )
                 else: # Default to 1998B
                     ledes_content_part = _create_ledes_1998b_content(
@@ -2704,4 +2713,3 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
-
