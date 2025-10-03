@@ -833,90 +833,100 @@ def _create_ledes_xml_2_1_content(
     bill_end: datetime.date,
     invoice_number: str,
     matter_number: str,
-    law_firm_name: str,
     law_firm_id: str,
-    client_name: str,
     client_id: str,
+    client_matter_id: str, # Added for ClientMatterID
     matter_name: str,
+    invoice_currency: str, # Added for currency
+    timekeeper_data: List[Dict] # Added to access full TK details
 ) -> str:
-    """Generate LEDES XML 2.1 content from invoice rows."""
+    """Generate LEDES XML 2.1 content from invoice rows based on the specified schema."""
+
+    # Helper to add a sub-element with text content
+    def sub_element(parent, name, text):
+        el = ET.SubElement(parent, name)
+        el.text = str(text)
+        return el
 
     # Calculate totals
     fees_total = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows if not r.get("EXPENSE_CODE"))
     expenses_total = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows if r.get("EXPENSE_CODE"))
     invoice_total = fees_total + expenses_total
 
-    # Root element
-    ledes_tag = ET.Element("ledes")
-    ledes_tag.set("version", "2.1")
-    
-    # Invoice element
-    invoice_tag = ET.SubElement(ledes_tag, "invoice")
-    invoice_tag.set("inv_dt", bill_end.strftime("%Y-%m-%d"))
-    invoice_tag.set("inv_num", invoice_number)
-    invoice_tag.set("start_dt", bill_start.strftime("%Y-%m-%d"))
-    invoice_tag.set("end_dt", bill_end.strftime("%Y-%m-%d"))
-    invoice_tag.set("cost_typ_cd", "BILL")
+    # Root element with namespaces
+    root_attributes = {
+        "xmlns": "http://www.ledes.org/XML/2.1",
+        "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+        "xsi:schemaLocation": "http://www.ledes.org/XML/2.1 LEDES_XML_2_1.xsd"
+    }
+    invoice_tag = ET.Element("Invoice", root_attributes)
 
-    # Firm details
-    firm_tag = ET.SubElement(invoice_tag, "firm")
-    firm_tag.set("firm_id", law_firm_id)
-    firm_tag.set("firm_name", law_firm_name)
+    # 1. InvoiceHeader
+    header_tag = ET.SubElement(invoice_tag, "InvoiceHeader")
+    sub_element(header_tag, "InvoiceNumber", invoice_number)
+    sub_element(header_tag, "InvoiceDate", bill_end.strftime("%Y-%m-%d"))
+    sub_element(header_tag, "LawFirmID", law_firm_id)
+    sub_element(header_tag, "ClientID", client_id)
+    sub_element(header_tag, "InvoiceTotalAmount", f"{invoice_total:.2f}")
+    sub_element(header_tag, "InvoiceCurrency", invoice_currency)
+    sub_element(header_tag, "BillingStartDate", bill_start.strftime("%Y-%m-%d"))
+    sub_element(header_tag, "BillingEndDate", bill_end.strftime("%Y-%m-%d"))
 
-    # Client details
-    client_tag = ET.SubElement(invoice_tag, "client")
-    client_tag.set("client_id", client_id)
-    client_tag.set("client_name", client_name)
+    # 2. Matter
+    matter_tag = ET.SubElement(invoice_tag, "Matter")
+    sub_element(matter_tag, "MatterID", matter_number)
+    sub_element(matter_tag, "ClientMatterID", client_matter_id)
+    sub_element(matter_tag, "MatterName", matter_name)
+    sub_element(matter_tag, "MatterTotalDetailFees", f"{fees_total:.2f}")
+    sub_element(matter_tag, "MatterTotalDetailExp", f"{expenses_total:.2f}")
 
-    # Matter details
-    matter_tag = ET.SubElement(invoice_tag, "matter")
-    matter_tag.set("matter_id", matter_number)
-    matter_tag.set("matter_name", matter_name if matter_name else f"Matter {matter_number}")
-
-    # Segments
-    fees_tag = ET.SubElement(invoice_tag, "fee")
-    expenses_tag = ET.SubElement(invoice_tag, "expense")
-    
-    line_item_counter = 1
-    for row in rows:
+    # 3. LineItems within Matter
+    for i, row in enumerate(rows, 1):
+        line_item_tag = ET.SubElement(matter_tag, "LineItem")
         is_expense = bool(row.get("EXPENSE_CODE"))
         
-        attrs = {
-            "id": str(line_item_counter),
-            "dt": row["LINE_ITEM_DATE"],
-            "units": f"{float(row['HOURS']):.2f}",
-            "unit_cost": f"{float(row['RATE']):.2f}",
-            "total": f"{float(row['LINE_ITEM_TOTAL']):.2f}",
-        }
+        sub_element(line_item_tag, "LineItemNumber", i)
+        sub_element(line_item_tag, "LineItemDate", row["LINE_ITEM_DATE"])
         
         if is_expense:
-            expense_item_tag = ET.SubElement(expenses_tag, "exp_item")
-            attrs["exp_cd"] = row.get("EXPENSE_CODE", "")
-            expense_item_tag.attrib = attrs
-            desc_tag = ET.SubElement(expense_item_tag, "desc")
-            desc_tag.text = str(row.get("DESCRIPTION", ""))
-        else:
-            fee_item_tag = ET.SubElement(fees_tag, "fee_item")
-            attrs["tk_id"] = row.get("TIMEKEEPER_ID", "")
-            attrs["task_cd"] = row.get("TASK_CODE", "")
-            attrs["activity_cd"] = row.get("ACTIVITY_CODE", "")
-            fee_item_tag.attrib = attrs
-            desc_tag = ET.SubElement(fee_item_tag, "desc")
-            desc_tag.text = str(row.get("DESCRIPTION", ""))
+            sub_element(line_item_tag, "LineItemType", "EXPENSE")
+            sub_element(line_item_tag, "ExpenseCode", row.get("EXPENSE_CODE", ""))
+        else: # It's a Fee
+            sub_element(line_item_tag, "LineItemType", "FEE")
             
-        line_item_counter += 1
+            # Find timekeeper details
+            tk_full_name = row.get("TIMEKEEPER_NAME", "")
+            tk_parts = tk_full_name.split()
+            tk_first = tk_parts[0] if tk_parts else ""
+            tk_last = " ".join(tk_parts[1:]) if len(tk_parts) > 1 else ""
 
-    # Invoice summary
-    summary_tag = ET.SubElement(invoice_tag, "inv_summary")
-    summary_tag.set("fee_total", f"{fees_total:.2f}")
-    summary_tag.set("exp_total", f"{expenses_total:.2f}")
-    summary_tag.set("inv_total", f"{invoice_total:.2f}")
-    
+            sub_element(line_item_tag, "TimekeeperID", row.get("TIMEKEEPER_ID", ""))
+            sub_element(line_item_tag, "TimekeeperFirstName", tk_first)
+            sub_element(line_item_tag, "TimekeeperLastName", tk_last)
+            sub_element(line_item_tag, "TimekeeperClassification", row.get("TIMEKEEPER_CLASSIFICATION", ""))
+            sub_element(line_item_tag, "TaskCode", row.get("TASK_CODE", ""))
+            sub_element(line_item_tag, "ActivityCode", row.get("ACTIVITY_CODE", ""))
+
+        sub_element(line_item_tag, "LineItemUnits", f"{float(row['HOURS']):.1f}")
+        sub_element(line_item_tag, "LineItemUnitAmount", f"{float(row['RATE']):.2f}")
+        sub_element(line_item_tag, "LineItemTotal", f"{float(row['LINE_ITEM_TOTAL']):.2f}")
+        sub_element(line_item_tag, "LineItemDescription", row.get("DESCRIPTION", ""))
+
+    # 4. InvoiceSummary
+    summary_tag = ET.SubElement(invoice_tag, "InvoiceSummary")
+    sub_element(summary_tag, "TotalFees", f"{fees_total:.2f}")
+    sub_element(summary_tag, "TotalExpenses", f"{expenses_total:.2f}")
+    sub_element(summary_tag, "TotalTax", "0.00") # As per schema example
+    sub_element(summary_tag, "NetInvoiceTotal", f"{invoice_total:.2f}")
+
     # Pretty print the XML
-    rough_string = ET.tostring(ledes_tag, 'utf-8')
+    rough_string = ET.tostring(invoice_tag, 'utf-8')
     reparsed = minidom.parseString(rough_string)
-    return reparsed.toprettyxml(indent="  ")
-
+    # The toprettyxml method adds an unwanted xml declaration, so we remove it.
+    xml_output = "\n".join(reparsed.toprettyxml(indent="    ").split("\n")[1:])
+    
+    return xml_output
+    
 def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_date: datetime.date, billing_end_date: datetime.date, task_activity_desc: List[Tuple[str, str, str]], major_task_codes: set, max_hours_per_tk_per_day: int, faker_instance: Faker, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
     """Generate fee line items for an invoice."""
     rows = []
@@ -2694,3 +2704,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
