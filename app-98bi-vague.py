@@ -70,12 +70,15 @@ def _enforce_block_billed_limit_df(df, max_blocks:int):
     return df
 
 def _pick_timekeeper_by_class(timekeepers, target_class):
+    import random
     tks = [t for t in (timekeepers or []) if str(t.get("TIMEKEEPER_CLASSIFICATION","")).strip().lower() == str(target_class).strip().lower()]
     if not tks:
         tks = timekeepers or []
     return random.choice(tks) if tks else None
 
 def _generate_fee_lines_from_source_df(df_source, fee_count, timekeeper_data, billing_start_date, billing_end_date, invoice_desc, client_id, law_firm_id, max_hours_per_tk_per_day, faker_instance):
+    import random
+    import datetime
     rows = []
     if df_source is None or df_source.empty or fee_count <= 0:
         return rows
@@ -1063,7 +1066,8 @@ def _generate_invoice_data(
     major_task_codes: set,
     max_hours_per_tk_per_day: int,
     num_block_billed: int,
-    faker_instance: Faker
+    faker_instance: Faker,
+    include_vague_items: bool
 ) -> Tuple[List[Dict], float]:
     """Generate invoice data using ONLY the uploaded CSV:
     - Non-block fees come from rows with Blockbilling=N
@@ -1072,12 +1076,26 @@ def _generate_invoice_data(
     Mandatory items are appended by the caller after this returns.
     """
     rows: List[Dict] = []
+    import random, datetime as _dt
 
     # Get uploaded source
     try:
         df_src = st.session_state.get("custom_fee_df_full") or st.session_state.get("custom_fee_df")
     except Exception:
         df_src = None
+
+    # Split source df into vague and non-vague pools
+    df_non_vague_pool = None
+    df_vague_pool = None
+    if df_src is not None:
+        if "VAGUE" in df_src.columns:
+            is_vague_mask = df_src["VAGUE"].astype(str).str.strip().str.upper() == "Y"
+            df_vague_pool = df_src[is_vague_mask]
+            df_non_vague_pool = df_src[~is_vague_mask]
+        else:
+            # If no VAGUE column, all items are non-vague
+            df_non_vague_pool = df_src
+
 
     # Helper to build a fee row
     def _mk_fee_row(desc: str, tk: Dict, date_str: str, task_code: str, act_code: str, hours: float, block: bool=False) -> Dict:
@@ -1100,10 +1118,9 @@ def _generate_invoice_data(
     delta_days = max(0, (billing_end_date - billing_start_date).days)
 
     # --- Non-block fees (N) ---
-    import random, datetime as _dt
     nb_picks = []
     if fee_count > 0:
-        nb_picks = _select_items_from_source(df_src, want_block=False, k=fee_count) if df_src is not None else []
+        nb_picks = _select_items_from_source(df_non_vague_pool, want_block=False, k=fee_count) if df_non_vague_pool is not None else []
     for item in nb_picks:
         day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
         date_str = day.strftime("%Y-%m-%d")
@@ -1123,7 +1140,7 @@ def _generate_invoice_data(
         pass
     bb_picks = []
     if include_blocks and num_block_billed > 0:
-        bb_picks = _select_items_from_source(df_src, want_block=True, k=num_block_billed) if df_src is not None else []
+        bb_picks = _select_items_from_source(df_non_vague_pool, want_block=True, k=num_block_billed) if df_non_vague_pool is not None else []
     for item in bb_picks[:num_block_billed]:
         day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
         date_str = day.strftime("%Y-%m-%d")
@@ -1134,6 +1151,35 @@ def _generate_invoice_data(
         hours = round(random.uniform(1.0, max(1.0, min(6.0, hours_cap))), 1)
         processed_desc = _process_description(item["DESC"], faker_instance)
         rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=True))
+
+    # --- Vague Line Items ---
+    if include_vague_items and df_vague_pool is not None and not df_vague_pool.empty:
+        num_vague_to_add = random.randint(1, 5)
+        # Convert df to the dict format expected by the loop
+        vague_pool = []
+        for _, r in df_vague_pool.iterrows():
+            vague_pool.append({
+                "TASK_CODE": str(r.get("TASK_CODE","")).strip(),
+                "ACTIVITY_CODE": str(r.get("ACTIVITY_CODE","")).strip(),
+                "DESC": str(r.get("DESCRIPTION","")).strip(),
+                "TK_CLASSIFICATION": str(r.get("TK_CLASSIFICATION","")).strip(),
+            })
+        
+        if len(vague_pool) >= num_vague_to_add:
+            vague_picks = random.sample(vague_pool, num_vague_to_add)
+        else:
+            vague_picks = vague_pool # add all available if less than desired
+
+        for item in vague_picks:
+            day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
+            date_str = day.strftime("%Y-%m-%d")
+            tk = _pick_timekeeper_by_class(timekeeper_data, item.get("TK_CLASSIFICATION"))
+            if not tk: 
+                continue
+            hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
+            hours = round(random.uniform(0.5, max(0.6, min(3.5, hours_cap))), 1)
+            processed_desc = _process_description(item["DESC"], faker_instance)
+            rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
 
     try:
         _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
@@ -2118,6 +2164,7 @@ with tab_objects[1]:
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
+    vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have 'Y' in the VAGUE column.")
 
     multiple_attendees_meeting = st.checkbox(
         "Multiple Attendees at Same Meeting",
@@ -2446,7 +2493,8 @@ if generate_button:
                 rows, total_amount = _generate_invoice_data(
                     fees_to_generate, expenses_to_generate, timekeeper_data, client_id, law_firm_id,
                     current_invoice_desc, current_start_date, current_end_date,
-                    task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, num_block_billed, faker
+                    task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, num_block_billed, faker,
+                    vague_line_items
                 )
 
                 skipped_mandatory_items = []
