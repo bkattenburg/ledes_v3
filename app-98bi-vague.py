@@ -2165,7 +2165,7 @@ with tab_objects[1]:
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
-    vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have 'Y' in the VAGUE column.")
+    vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
 
     multiple_attendees_meeting = st.checkbox(
         "Multiple Attendees at Same Meeting",
@@ -2675,5 +2675,6 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
