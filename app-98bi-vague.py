@@ -7,7 +7,7 @@ def _select_items_from_source(df_src, want_block: bool, k: int):
     if df_src is None or k <= 0:
         return []
     bbcol = None
-    for name in ("Blockbilling","BlockBilling","Blockbilled","BlockBilled"):
+    for name in ("Blockbilling","BLOCKBILLING","Blockbilled","BlockBilled"):
         if name in df_src.columns:
             bbcol = name
             break
@@ -2674,3 +2674,4 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
