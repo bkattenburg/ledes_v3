@@ -1946,8 +1946,8 @@ with st.sidebar.expander('What does the "Multiple Attendees at Same Meeting" che
 with st.sidebar.expander("How do I format the timekeeper CSV?"):
     st.markdown("""
     The CSV requires a header with these exact column names:
-    - `TIMEKeeper_NAME`
-    - `TIMEKeeper_CLASSIFICATION`
+    - `TIMEKEEPER_NAME`
+    - `TIMEKEEPER_CLASSIFICATION`
     - `TIMEKEEPER_ID`
     - `RATE`
     """)
@@ -2676,6 +2676,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
