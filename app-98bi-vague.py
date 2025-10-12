@@ -2170,7 +2170,7 @@ with tab_objects[2]:
     multiple_attendees_meeting = st.checkbox(
         "Multiple Attendees at Same Meeting",
         value=False,
-        help="If checked, create two identical FEE line items for the same meeting: one Partner and one Associate.",
+        help="If checked, create two identical fee line items from 2 different timekeepers for the same meeting.",
         key="multiple_attendees_meeting",
     )
 
@@ -2675,6 +2675,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
