@@ -1914,7 +1914,8 @@ with st.sidebar.expander("Line Items"):
             "Legal Research: Review statutes and regulations"
         ],
         "TK_CLASSIFICATION": ["Associate", "Partner"],
-        "Blockbilling": ["N", "Y"],
+        "BLOCKBILLING": ["N", "Y"],
+        "VAGUE": ["N", "Y"]
     })
     csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
     st.download_button(
@@ -2674,4 +2675,5 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
