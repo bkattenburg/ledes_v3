@@ -1958,7 +1958,7 @@ with st.sidebar.expander("How do I format the custom line items CSV?"):
     - `TASK_CODE`
     - `ACTIVITY_CODE`
     - `DESCRIPTION`
-    - `TK_CLASSIFICATION` (Optional)
+    - `TK_CLASSIFICATION`
     - `BLOCKBILLING` ('Y' or 'N')
     - `VAGUE` ('Y' or 'N')
 
@@ -2676,6 +2676,7 @@ if generate_button:
                             key=f"download_{filename}"
                         )
             status.update(label="Invoice generation complete!", state="complete")
+
 
 
 
