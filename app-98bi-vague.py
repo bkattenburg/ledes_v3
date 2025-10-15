@@ -2455,6 +2455,14 @@ if combine_ledes and num_invoices <= 1:
 st.markdown("---")
 generate_button = st.button("Generate Invoice(s)", disabled=not is_valid_input)
 
+# Final download/email logic
+            def get_mime_type(filename):
+                if filename.endswith(".txt"): return "text/plain"
+                if filename.endswith(".pdf"): return "application/pdf"
+                if filename.endswith(".png"): return "image/png"
+                if filename.endswith(".zip"): return "application/zip"
+                return "application/octet-stream"
+
 # Main App Logic
 if generate_button:
     if ledes_version == "XML 2.1":
@@ -2605,77 +2613,46 @@ if generate_button:
                 else:
                     attachments_list.extend(receipt_files)
 
-            # Final download/email logic
-            def get_mime_type(filename):
-                if filename.endswith(".txt"): return "text/plain"
-                if filename.endswith(".pdf"): return "application/pdf"
-                if filename.endswith(".png"): return "image/png"
-                if filename.endswith(".zip"): return "application/zip"
-                return "application/octet-stream"
+            # This is inside the `if generate_button:` block
+            
+            # After the loop, store all generated files (except combined LEDES) in session state
+            st.session_state.generated_files = attachments_list
+            
+            # Handle combined LEDES separately if needed
+            if combine_ledes:
+                st.session_state.generated_files.insert(0, ("LEDES_Combined.txt", combined_ledes_content.encode('utf-8')))
 
+            # Handle Emailing
             if st.session_state.send_email:
                 subject, body = _customize_email_body(current_matter_number, f"{invoice_number_base}-Combined" if combine_ledes else f"{current_invoice_number}")
                 
-                if combine_ledes:
-                    attachments_to_send = [("LEDES_Combined.txt", combined_ledes_content.encode('utf-8'))]
-                    attachments_to_send.extend(attachments_list) # attachments_list already has PDFs and receipts (zipped or not)
-                    if not _send_email_with_attachment(recipient_email, subject, body, attachments_to_send):
-                        st.subheader("Invoice(s) Failed to Email - Download below:")
-                        for filename, data in attachments_to_send:
-                            st.download_button(label=f"Download {filename}", data=data, file_name=filename, mime=get_mime_type(filename), key=f"download_failed_{filename}")
+                # Use the files stored in session state for the email
+                if not _send_email_with_attachment(recipient_email, subject, body, st.session_state.generated_files):
+                    st.error("Email failed to send. You can download the files below.")
                 else:
-                    if not _send_email_with_attachment(recipient_email, subject, body, attachments_list):
-                        st.subheader("Invoice(s) Failed to Email - Download below:")
-                        for filename, data in attachments_list:
-                            st.download_button(label=f"Download {filename}", data=data, file_name=filename, mime=get_mime_type(filename), key=f"download_failed_{filename}")
-            else:
-                if combine_ledes:
-                    st.subheader("Generated Combined LEDES Invoice")
-                    st.download_button(
-                        label="Download Combined LEDES File",
-                        data=combined_ledes_content.encode('utf-8'),
-                        file_name="LEDES_Combined.txt",
-                        mime="text/plain",
-                        key="download_combined_ledes"
-                    )
-                    other_attachments = attachments_list
-                    if other_attachments:
-                        zip_buf = io.BytesIO()
-                        with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                            for filename, data in other_attachments:
-                                zip_file.writestr(filename, data)
-                        zip_buf.seek(0)
-                        st.download_button(
-                            label="Download All PDFs & Receipts as ZIP",
-                            data=zip_buf.getvalue(),
-                            file_name="invoices_and_receipts.zip",
-                            mime="application/zip",
-                            key="download_pdf_zip"
-                        )
-                elif num_invoices > 1 or (generate_receipts and zip_receipts_enabled):
-                    zip_buf = io.BytesIO()
-                    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                        for filename, data in attachments_list:
-                            zip_file.writestr(filename, data)
-                    zip_buf.seek(0)
-                    st.download_button(
-                        label="Download All Files as ZIP",
-                        data=zip_buf.getvalue(),
-                        file_name="invoices.zip",
-                        mime="application/zip",
-                        key="download_zip"
-                    )
-                else:
-                    st.subheader("Generated Invoice(s)")
-                    for filename, data in attachments_list:
-                        st.download_button(
-                            label=f"Download {filename}",
-                            data=data,
-                            file_name=filename,
-                            mime=get_mime_type(filename),
-                            key=f"download_{filename}"
-                        )
+                    # Clear the files after successful send so buttons don't linger
+                    st.session_state.generated_files = [] 
+            
             status.update(label="Invoice generation complete!", state="complete")
+
+
+# --- New Display Block (place this AFTER the `if generate_button:` block) ---
+# This block runs on every interaction, ensuring the buttons stay visible.
+if "generated_files" in st.session_state and st.session_state.generated_files:
+    st.subheader("Generated Files")
+    # Use columns for a cleaner layout if many files are generated
+    cols = st.columns(3) 
+    col_idx = 0
+    for filename, data in st.session_state.generated_files:
+        with cols[col_idx % 3]:
+            st.download_button(
+                label=f"Download {filename}",
+                data=data,
+                file_name=filename,
+                mime=get_mime_type(filename),
+                key=f"download_{filename}" # Unique key is important
+            )
+        col_idx += 1
 
 
 
