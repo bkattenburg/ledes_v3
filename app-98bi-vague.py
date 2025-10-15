@@ -2456,12 +2456,12 @@ st.markdown("---")
 generate_button = st.button("Generate Invoice(s)", disabled=not is_valid_input)
 
 # Final download/email logic
-            def get_mime_type(filename):
-                if filename.endswith(".txt"): return "text/plain"
-                if filename.endswith(".pdf"): return "application/pdf"
-                if filename.endswith(".png"): return "image/png"
-                if filename.endswith(".zip"): return "application/zip"
-                return "application/octet-stream"
+def get_mime_type(filename):
+    if filename.endswith(".txt"): return "text/plain"
+    if filename.endswith(".pdf"): return "application/pdf"
+    if filename.endswith(".png"): return "image/png"
+    if filename.endswith(".zip"): return "application/zip"
+    return "application/octet-stream"
 
 # Main App Logic
 if generate_button:
@@ -2653,6 +2653,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
