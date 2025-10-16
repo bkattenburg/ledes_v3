@@ -1928,14 +1928,17 @@ with st.sidebar.expander("Line Items"):
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Help & FAQs")
 
-with st.sidebar.expander("Where do I find Client and Vendor IDs if I need to override the preset profiles?"):
-    st.markdown("""
-    Client Names & IDs can be found in the Legal Entities app. Select the client you want, and use the Legal Entity Name and Tax ID values.
-    Vendor Names & IDs can be found in Billing Point. Select Invoices -> Upload LEDES and use the desired Billing Office and Tax# values.
-    """)
+with st.sidebar.expander("Using custom Client and Vendor IDs"):
     client = Image.open("assets/client.png")
     vendor = Image.open("assets/vendor.png")
+    st.markdown("""
+    Where do I find Client and Vendor IDs if I need to override the preset profiles?
+    - Client Names & IDs can be found in the Legal Entities app. Select the client you want, and use the Legal Entity Name and Tax ID values.
+    """)
     st.image(client, caption="Legal Entities - Client Name and ID", use_column_width=True)
+    st.markdown("""
+    - Vendor Names & IDs can be found in Billing Point. Select Invoices -> Upload LEDES and use the desired Billing Office and Tax# values.
+    """)
     st.image(vendor, caption="Billing Point - Vendor Name and ID", use_column_width=True)
 
 with st.sidebar.expander("Where can I find sample files?"):
@@ -2663,6 +2666,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
