@@ -1935,7 +1935,7 @@ with st.sidebar.expander("Where do I find Client and Vendor IDs if I need to ove
     """)
     client = Image.open("assets/client.png")
     vendor = Image.open("assets/vendor.png")
-    st.image(client, caption="Legal Entites - Client Name and ID", use_column_width=True)
+    st.image(client, caption="Legal Entities - Client Name and ID", use_column_width=True)
     st.image(vendor, caption="Billing Point - Vendor Name and ID", use_column_width=True)
 
 with st.sidebar.expander("Where can I find sample files?"):
@@ -2663,6 +2663,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
