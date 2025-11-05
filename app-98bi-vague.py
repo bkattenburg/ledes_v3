@@ -2133,9 +2133,15 @@ with tab_objects[1]:
             st.session_state["client_id"] = st.session_state["client_tax_id"]
             prof_client_id = st.session_state["client_id"] # Also update the local variable for the widget
         if st.session_state.get('selected_env') == "Onit ELM VAT":
-            st.info(
-        "Note: For Onit ELM VAT profiles, please review the LEDES 1998BI section in Help & FAQs. Ensure your matter setup and invoice entries meet the specific requirements for VAT.\n"
-        "See sidebar Help & FAQs for mandatory fields and setup guidance."
+            st.markdown(
+        """
+        **Note:** For Onit ELM VAT profiles, please review the LEDES 1998BI section in Help & FAQs.
+        
+        Ensure your matter setup and invoice entries meet the specific requirements for VAT.
+
+        See sidebar Help & FAQs for mandatory fields and setup guidance.
+        """,
+        unsafe_allow_html=False
     )
 
     # ===== 3. CREATE WIDGETS (now that all state is set) =====
@@ -2673,6 +2679,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
