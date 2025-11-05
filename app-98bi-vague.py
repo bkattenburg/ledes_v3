@@ -2132,6 +2132,11 @@ with tab_objects[1]:
         if st.session_state.get("client_tax_id"):
             st.session_state["client_id"] = st.session_state["client_tax_id"]
             prof_client_id = st.session_state["client_id"] # Also update the local variable for the widget
+        if st.session_state.get('selectedenv') == "Onit ELM VAT":
+            st.info(
+        "Note: For Onit ELM VAT profiles, please review the LEDES 1998BI section in Help & FAQs. Ensure your matter setup and invoice entries meet the specific requirements for VAT.\n"
+        "See sidebar Help & FAQs for mandatory fields and setup guidance."
+    )
 
     # ===== 3. CREATE WIDGETS (now that all state is set) =====
     allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can enter other Client & Vendor IDs without changing stored profiles. See 'Using custom Client and Vendor IDs' in the FAQ for more details", key="allow_override")    
@@ -2668,6 +2673,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
