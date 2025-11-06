@@ -1928,6 +1928,35 @@ with st.sidebar.expander("Line Items"):
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Help & FAQs")
 
+with st.sidebar.expander("LEDES 1998BI - VAT Invoices"):
+    bp = Image.open("assets/BP Error Message.png")
+    good = Image.open("assets/Country Currency Correct.png")
+    bad = Image.open("assets/Country Currency Default.png")
+    matter_good = Image.open("assets/matter_good.png")
+    matter_bad = Image.open("assets/matter_bad.png")
+    st.markdown("""
+    **NOTE**
+    This information is for OnitX only
+    
+    How do I create a matter for LEDES 1998BI (VAT) invoices? 
+    - When creating a new matter, make sure to select 'Onit LLC - Belgium' for the Legal Entity. The default is 'A Onit Inc.' 
+    - When 'Onit LLC - Belgium' is selected as the Legal Entity, the Country and Matter Currency fields change from their default values (United States and United States Dollar).
+    - Make sure to update the Country field to 'Belgium' and the Matter Currency field to 'Euro'.
+    """)
+    st.image(bad, caption="Default Values", use_column_width=True)
+    st.image(good, caption="Updated/Correct Values", use_column_width=True)
+    st.markdown("""
+    - If you forget to change these fields when creating the matter and then try to upload a LEDES 1998BI Invoice, you will receive the following error in BillingPoint:
+    - "Tax Code is not recognized:"
+    """)
+    st.image(bp, caption="Billing Point Error Message", use_column_width=True)
+    st.markdown("""
+    - To fix this error, you will need to update the Legal Entity, Country, and Matter Currency fields within the matter.
+    - Legal Entity should be 'Onit LLC - Belgium', Country should be 'Belgium', and Matter Currency should be 'Euro' 
+    """)
+    st.image(matter_bad, caption="Default Values", use_column_width=True)
+    st.image(matter_good, caption="Updated/Correct Values", use_column_width=True)
+    
 with st.sidebar.expander("Using custom Client and Vendor IDs"):
     client = Image.open("assets/client.png")
     vendor = Image.open("assets/vendor.png")
@@ -2679,6 +2708,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
