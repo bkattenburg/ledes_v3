@@ -1936,9 +1936,9 @@ with st.sidebar.expander("LEDES 1998BI - VAT Invoices - OnitX Only"):
     matter_bad = Image.open("assets/matter_bad.png")
     st.markdown("""   
     How do I create a matter for LEDES 1998BI (VAT) invoices? 
-    - When creating a new matter, make sure to select 'Onit LLC - Belgium' for the Legal Entity. The default is 'A Onit Inc.' 
-    - When 'Onit LLC - Belgium' is selected as the Legal Entity, the Country and Matter Currency fields change from their default values (United States and United States Dollar).
-    - Make sure to update the Country field to 'Belgium' and the Matter Currency field to 'Euro'.
+    - When creating a new matter, make sure to select **'Onit LLC - Belgium'** for the Legal Entity. The default is 'A Onit Inc.' 
+    - When **'Onit LLC - Belgium'** is selected as the Legal Entity, the **Country** and **Matter Currency** fields change from their default values (United States and United States Dollar).
+    - Make sure to update the **Country field to 'Belgium'** and the **Matter Currency field to 'Euro'**.
     """)
     st.image(bad, caption="Default Values", use_column_width=True)
     st.image(good, caption="Updated/Correct Values", use_column_width=True)
@@ -1949,7 +1949,7 @@ with st.sidebar.expander("LEDES 1998BI - VAT Invoices - OnitX Only"):
     st.image(bp, caption="Billing Point Error Message", use_column_width=True)
     st.markdown("""
     - To fix this error, you will need to update the Legal Entity, Country, and Matter Currency fields within the matter.
-    - Legal Entity should be 'Onit LLC - Belgium', Country should be 'Belgium', and Matter Currency should be 'Euro' 
+    - Legal Entity should be **'Onit LLC - Belgium'**, Country should be **'Belgium'**, and Matter Currency should be **'Euro'** 
     """)
     st.image(matter_bad, caption="Default Values", use_column_width=True)
     st.image(matter_good, caption="Updated/Correct Values", use_column_width=True)
@@ -2705,6 +2705,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
