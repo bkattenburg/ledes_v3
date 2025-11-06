@@ -1928,7 +1928,7 @@ with st.sidebar.expander("Line Items"):
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Help & FAQs")
 
-with st.sidebar.expander("LEDES 1998BI - VAT Invoices - OnitX Only"):
+with st.sidebar.expander("LEDES 1998BI - Matter Setup - OnitX Only"):
     bp = Image.open("assets/BP Error Message.png")
     good = Image.open("assets/Country Currency Correct.png")
     bad = Image.open("assets/Country Currency Default.png")
@@ -2161,11 +2161,11 @@ with tab_objects[1]:
         if st.session_state.get('selected_env') == "Onit ELM VAT":
             st.markdown(
         """
-        **Note:** For Onit ELM VAT profiles, please review the LEDES 1998BI section in Help & FAQs.
+        **Note:** Please review the **LEDES 1998BI - Matter Setup** section in Help & FAQs.
         
-        Ensure your matter setup and invoice entries meet the specific requirements for VAT.
+        This provides details on how to properly create a matter to allow VAT invoices to be submitted through BillingPoint.
 
-        See sidebar Help & FAQs for mandatory fields and setup guidance.
+        It also provides information on the most common error when trying to submit a VAT Invoice against a matter not properly set up.
         """,
         unsafe_allow_html=False
     )
@@ -2705,6 +2705,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
