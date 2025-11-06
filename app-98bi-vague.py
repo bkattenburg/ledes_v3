@@ -1928,16 +1928,13 @@ with st.sidebar.expander("Line Items"):
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Help & FAQs")
 
-with st.sidebar.expander("LEDES 1998BI - VAT Invoices"):
+with st.sidebar.expander("LEDES 1998BI - VAT Invoices - OnitX Only"):
     bp = Image.open("assets/BP Error Message.png")
     good = Image.open("assets/Country Currency Correct.png")
     bad = Image.open("assets/Country Currency Default.png")
     matter_good = Image.open("assets/matter_good.png")
     matter_bad = Image.open("assets/matter_bad.png")
-    st.markdown("""
-    **NOTE**
-    This information is for OnitX only
-    
+    st.markdown("""   
     How do I create a matter for LEDES 1998BI (VAT) invoices? 
     - When creating a new matter, make sure to select 'Onit LLC - Belgium' for the Legal Entity. The default is 'A Onit Inc.' 
     - When 'Onit LLC - Belgium' is selected as the Legal Entity, the Country and Matter Currency fields change from their default values (United States and United States Dollar).
@@ -2708,6 +2705,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
