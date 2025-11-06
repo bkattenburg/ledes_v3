@@ -246,8 +246,8 @@ def apply_preset():
 # Billing Profiles Configuration
 # ===============================
 # Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
-BILLING_PROFILES = [("Onit ELM",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
-    ("Onit ELM VAT", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
+BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
+    ("OnitX VAT", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
     ("SimpleLegal", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
     ("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
@@ -255,7 +255,7 @@ BILLING_PROFILES = [("Onit ELM",    "A Onit Inc.",   "02-4388252", "Nelson & Mur
 
 # Extended profile details (addresses, tax ids, defaults)
 BILLING_PROFILE_DETAILS = {
-    "Onit ELM VAT": {
+    "OnitX VAT": {
         "ledes_default": "1998BI",
         "invoice_currency": "EUR",
         # Law Firm details (Belgium)
@@ -1879,15 +1879,15 @@ def read_file_for_download(path):
 st.sidebar.markdown("## Downloads")
 
 with st.sidebar.expander("Timekeeper Downloads"):
-    # Onit ELM Timekeepers
+    # OnitX Timekeepers
     onit_tk_data = read_file_for_download("assets/onit_elm_tk.csv")
     if onit_tk_data:
-        st.download_button("Onit ELM", onit_tk_data, "onit_elm_tk.csv", "text/csv")
+        st.download_button("OnitX", onit_tk_data, "onit_elm_tk.csv", "text/csv")
 
-    # Onit ELM Timekeepers - VAT
+    # OnitX Timekeepers - VAT
     onit_vat_tk_data = read_file_for_download("assets/onit_vat_tk.csv")
     if onit_vat_tk_data:
-        st.download_button("Onit ELM - VAT", onit_vat_tk_data, "onit_vat_tk.csv", "text/csv")
+        st.download_button("OnitX - VAT", onit_vat_tk_data, "onit_vat_tk.csv", "text/csv")
 
     # SimpleLegal Timekeepers
     sl_tk_data = read_file_for_download("assets/simplelegal_tk.csv")
@@ -2007,7 +2007,7 @@ with st.sidebar.expander("How do I format the custom line items CSV?"):
     """)
     
 # Pre-calculate the correct LEDES version based on the selected profile
-current_profile_key = st.session_state.get("selected_env", "Onit ELM")
+current_profile_key = st.session_state.get("selected_env", "OnitX")
 
 # If the selected profile is "VAT", set its specific LEDES default
 if current_profile_key in BILLING_PROFILE_DETAILS:
@@ -2090,7 +2090,7 @@ with tab_objects[1]:
     # ===== 1. GET USER INPUT THAT DRIVES LOGIC =====
     st.markdown("<h3 style='color: #1E1E1E;'>Billing Profiles</h3>", unsafe_allow_html=True)
     env_names = [p[0] for p in BILLING_PROFILES]
-    default_env = st.session_state.get("selected_env", "Onit ELM")
+    default_env = st.session_state.get("selected_env", "OnitX")
     if default_env not in env_names:
         default_env = env_names[0]
     selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
@@ -2158,7 +2158,7 @@ with tab_objects[1]:
         if st.session_state.get("client_tax_id"):
             st.session_state["client_id"] = st.session_state["client_tax_id"]
             prof_client_id = st.session_state["client_id"] # Also update the local variable for the widget
-        if st.session_state.get('selected_env') == "Onit ELM VAT":
+        if st.session_state.get('selected_env') == "OnitX VAT":
             st.markdown(
         """
         **Note:** Please review the **LEDES 1998BI - Matter Setup** section in Help & FAQs.
@@ -2705,6 +2705,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
