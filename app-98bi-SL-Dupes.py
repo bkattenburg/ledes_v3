@@ -2256,24 +2256,24 @@ with tab_objects[2]:
     )
 
      # --- SimpleLegal-only duplicate line item options ---
-        sl_dup_this_invoice = False
-        sl_dup_historic_invoice = False
-        if st.session_state.get("selected_env") == "SimpleLegal":
-            sl_dup_this_invoice = st.checkbox(
-                "SL Duplicate Line Items - This Invoice",
-                value=False,
-                help="Duplicate one fee line item within the current invoice for SimpleLegal Duplicate Line Item Demo.",
-                key="sl_dup_this_invoice",
-            )
-            sl_dup_historic_invoice = st.checkbox(
-                "SL Duplicate Line Items - Historic Invoice",
-                value=False,
-                help="(Placeholder) Will later duplicate a fee line from a historic invoice.",
-                key="sl_dup_historic_invoice",
-            )
-    
-            if sl_dup_historic_invoice:
-                st.info("This will be in Step 2")
+    sl_dup_this_invoice = False
+    sl_dup_historic_invoice = False
+    if st.session_state.get("selected_env") == "SimpleLegal":
+        sl_dup_this_invoice = st.checkbox(
+            "SL Duplicate Line Items - This Invoice",
+            value=False,
+            help="Duplicate one fee line item within the current invoice for SimpleLegal Duplicate Line Item Demo.",
+            key="sl_dup_this_invoice",
+        )
+        sl_dup_historic_invoice = st.checkbox(
+            "SL Duplicate Line Items - Historic Invoice",
+            value=False,
+            help="(Placeholder) Will later duplicate a fee line from a historic invoice.",
+            key="sl_dup_historic_invoice",
+        )
+
+        if sl_dup_historic_invoice:
+            st.info("This will be in Step 2")
                 
     # In the "Fees & Expenses" tab, before the sliders
     st.selectbox(
@@ -2753,6 +2753,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
