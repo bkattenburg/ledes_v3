@@ -1196,6 +1196,34 @@ def _generate_invoice_data(
             law_firm_id,
             invoice_desc
         )
+
+# --- SimpleLegal: duplicate one fee line within this invoice, if requested ---
+    try:
+        _selected_env = st.session_state.get("selected_env", "")
+    except Exception:
+        _selected_env = ""
+    try:
+        _sl_dup_this = bool(st.session_state.get("sl_dup_this_invoice", False))
+    except Exception:
+        _sl_dup_this = False
+
+    if _selected_env == "SimpleLegal" and _sl_dup_this:
+        # Only consider fee rows (no EXPENSE_CODE)
+        fee_rows = [r for r in rows if not str(r.get("EXPENSE_CODE", "")).strip()]
+        if fee_rows:
+            import random as _rand, copy as _copy
+            original = _rand.choice(fee_rows)
+            dup = _copy.deepcopy(original)
+
+            # The only field that may differ is DESCRIPTION
+            orig_desc = str(original.get("DESCRIPTION", "") or "")
+            if orig_desc:
+                dup["DESCRIPTION"] = f"{orig_desc} (Duplicate SL Test)"
+            else:
+                dup["DESCRIPTION"] = "Duplicate of prior fee line for SimpleLegal test"
+
+            # All other fields stay identical
+            rows.append(dup)
     
     # --- Expenses (unchanged) ---
     if expense_count > 0:
@@ -2227,6 +2255,26 @@ with tab_objects[2]:
         key="multiple_attendees_meeting",
     )
 
+     # --- SimpleLegal-only duplicate line item options ---
+        sl_dup_this_invoice = False
+        sl_dup_historic_invoice = False
+        if st.session_state.get("selected_env") == "SimpleLegal":
+            sl_dup_this_invoice = st.checkbox(
+                "SL Duplicate Line Items - This Invoice",
+                value=False,
+                help="Duplicate one fee line item within the current invoice for SimpleLegal Duplicate Line Item Demo.",
+                key="sl_dup_this_invoice",
+            )
+            sl_dup_historic_invoice = st.checkbox(
+                "SL Duplicate Line Items - Historic Invoice",
+                value=False,
+                help="(Placeholder) Will later duplicate a fee line from a historic invoice.",
+                key="sl_dup_historic_invoice",
+            )
+    
+            if sl_dup_historic_invoice:
+                st.info("This will be in Step 2")
+                
     # In the "Fees & Expenses" tab, before the sliders
     st.selectbox(
         "Invoice Size Presets",
@@ -2705,6 +2753,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
