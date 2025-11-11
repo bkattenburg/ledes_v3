@@ -1228,19 +1228,59 @@ def _generate_invoice_data(
         # Only consider fee rows (no EXPENSE_CODE)
         fee_rows = [r for r in rows if not str(r.get("EXPENSE_CODE", "")).strip()]
         if fee_rows:
-            import random as _rand, copy as _copy
+            import random as _rand
             original = _rand.choice(fee_rows)
-            dup = _copy.deepcopy(original)
+            dup = dict(original)  # shallow copy is fine, everything is flat
 
-            # The only field that may differ is DESCRIPTION
-            orig_desc = str(original.get("DESCRIPTION", "") or "")
-            if orig_desc:
-                dup["DESCRIPTION"] = f"{orig_desc} (Duplicate SL Test)"
-            else:
-                dup["DESCRIPTION"] = "Duplicate of prior fee line for SimpleLegal test"
+            # Build a completely different description (not derived from the original)
+            alt_desc_candidates = [
+                "Review and analysis of discovery responses and case status.",
+                "Telephone conference with client regarding litigation strategy and next steps.",
+                "Draft and revise correspondence to opposing counsel regarding scheduling.",
+                "Legal research regarding jurisdictional and procedural issues.",
+                "Prepare internal case update memorandum for client team."
+            ]
+            new_desc_template = _rand.choice(alt_desc_candidates)
 
-            # All other fields stay identical
+            # Run it through the same placeholder/date processor so it matches the rest of the app
+            dup["DESCRIPTION"] = _process_description(new_desc_template, faker_instance)
+
+            # All other fields (date, TK, TASK_CODE, ACTIVITY_CODE, HOURS, RATE, totals, etc.) remain identical
             rows.append(dup)
+
+    # --- Expenses (unchanged) ---
+    if expense_count > 0:
+        try:
+            rows.extend(
+                _generate_expenses(
+                    expense_count,
+                    billing_start_date,
+                    billing_end_date,
+                    client_id,
+                    law_firm_id,
+                    invoice_desc,
+                )
+            )
+        except Exception:
+            # Fallback: no expenses on failure
+            pass
+
+    # --- Expenses (unchanged) ---
+    if expense_count > 0:
+        try:
+            rows.extend(
+                _generate_expenses(
+                    expense_count,
+                    billing_start_date,
+                    billing_end_date,
+                    client_id,
+                    law_firm_id,
+                    invoice_desc,
+                )
+            )
+        except Exception:
+            # Fallback: no expenses on failure
+            pass
 
     # --- Expenses (unchanged) ---
     if expense_count > 0:
@@ -2787,6 +2827,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
