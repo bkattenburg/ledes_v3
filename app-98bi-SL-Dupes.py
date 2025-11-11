@@ -1198,7 +1198,7 @@ def _generate_invoice_data(
         )
 
 # --- SimpleLegal: duplicate one fee line within this invoice, if requested ---
-        try:
+    try:
         _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
     except Exception:
         _multi_flag = False
@@ -2787,6 +2787,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
