@@ -1198,6 +1198,23 @@ def _generate_invoice_data(
         )
 
 # --- SimpleLegal: duplicate one fee line within this invoice, if requested ---
+        try:
+        _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
+    except Exception:
+        _multi_flag = False
+    
+    if _multi_flag:
+        rows = _append_two_attendee_meeting_rows(
+            rows,
+            timekeeper_data,
+            billing_start_date,
+            faker_instance,
+            client_id,
+            law_firm_id,
+            invoice_desc
+        )
+
+    # --- SimpleLegal: duplicate one fee line within this invoice, if requested ---
     try:
         _selected_env = st.session_state.get("selected_env", "")
     except Exception:
@@ -1224,6 +1241,23 @@ def _generate_invoice_data(
 
             # All other fields stay identical
             rows.append(dup)
+
+    # --- Expenses (unchanged) ---
+    if expense_count > 0:
+        try:
+            rows.extend(
+                _generate_expenses(
+                    expense_count,
+                    billing_start_date,
+                    billing_end_date,
+                    client_id,
+                    law_firm_id,
+                    invoice_desc,
+                )
+            )
+        except Exception:
+            # Fallback: no expenses on failure
+            pass
     
     # --- Expenses (unchanged) ---
     if expense_count > 0:
@@ -2753,6 +2787,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
