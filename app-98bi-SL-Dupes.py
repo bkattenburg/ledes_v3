@@ -1248,6 +1248,82 @@ def _generate_invoice_data(
             # All other fields (date, TK, TASK_CODE, ACTIVITY_CODE, HOURS, RATE, totals, etc.) remain identical
             rows.append(dup)
 
+    # --- SimpleLegal: duplicate one fee line from a HISTORIC invoice CSV ---
+    try:
+        _sl_dup_hist = bool(st.session_state.get("sl_dup_historic_invoice", False))
+    except Exception:
+        _sl_dup_hist = False
+
+    if _selected_env == "SimpleLegal" and _sl_dup_hist:
+        import random as _rand
+        df_fee = st.session_state.get("historic_invoice_fee_df")
+        if df_fee is None:
+            df_fee = st.session_state.get("historic_invoice_df")
+
+        if df_fee is not None and len(df_fee) > 0:
+            idx = _rand.randint(0, len(df_fee) - 1)
+            row_hist = df_fee.iloc[idx]
+
+            # Values from historic CSV, with safe fallbacks
+            desc = str(row_hist.get("DESCRIPTION", "") or "").strip()
+            task_code = str(row_hist.get("TASK_CODE", "") or "").strip()
+            act_code = str(row_hist.get("ACTIVITY_CODE", "") or "").strip()
+
+            try:
+                hours_val = float(str(row_hist.get("HOURS", "0") or "0"))
+            except Exception:
+                hours_val = 1.0
+            try:
+                rate_val = float(str(row_hist.get("RATE", "0") or "0"))
+            except Exception:
+                rate_val = 0.0
+
+            # Use historic LINE_ITEM_DATE if present, otherwise current billing_start_date
+            if "LINE_ITEM_DATE" in df_fee.columns:
+                date_raw = str(row_hist.get("LINE_ITEM_DATE", "") or "").strip()
+                date_str = date_raw if date_raw else billing_start_date.strftime("%Y-%m-%d")
+            else:
+                date_str = billing_start_date.strftime("%Y-%m-%d")
+
+            # Try to match a timekeeper from current CSV by ID or NAME
+            tk = None
+            tk_hist_id = str(row_hist.get("TIMEKEEPER_ID", "") or "").strip()
+            tk_hist_name = str(row_hist.get("TIMEKEEPER_NAME", "") or "").strip()
+
+            if tk_hist_id:
+                for t in (timekeeper_data or []):
+                    if str(t.get("TIMEKEEPER_ID", "")).strip() == tk_hist_id:
+                        tk = t
+                        break
+            if tk is None and tk_hist_name:
+                for t in (timekeeper_data or []):
+                    if str(t.get("TIMEKEEPER_NAME", "")).strip() == tk_hist_name:
+                        tk = t
+                        break
+            if tk is None and timekeeper_data:
+                tk = timekeeper_data[0]
+
+            if tk:
+                fee_row = _mk_fee_row(
+                    desc or "Historic invoice duplication test",
+                    tk,
+                    date_str,
+                    task_code,
+                    act_code,
+                    hours_val,
+                    block=False
+                )
+
+                # Override RATE / TOTAL if historic CSV had them
+                if rate_val:
+                    fee_row["RATE"] = rate_val
+                    fee_row["LINE_ITEM_TOTAL"] = round(fee_row["HOURS"] * fee_row["RATE"], 2)
+
+                # Optional debug tag
+                fee_row["_source"] = "historic_invoice_csv"
+
+                rows.append(fee_row)
+
     # --- Expenses (unchanged) ---
     if expense_count > 0:
         try:
@@ -2319,8 +2395,18 @@ with tab_objects[1]:
 
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
-    spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
-    vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
+
+    # --- Core fee/expense toggles ---
+    spend_agent = st.checkbox(
+        "Spend Agent",
+        value=False,
+        help="Ensures selected mandatory line items are included; configure below."
+    )
+    vague_line_items = st.checkbox(
+        "Vague Line Items",
+        value=False,
+        help="Randomly include 1 to 5 line items that have vague line item descriptions."
+    )
 
     multiple_attendees_meeting = st.checkbox(
         "Multiple Attendees at Same Meeting",
@@ -2329,25 +2415,95 @@ with tab_objects[2]:
         key="multiple_attendees_meeting",
     )
 
-     # --- SimpleLegal-only duplicate line item options ---
-    sl_dup_this_invoice = False
-    sl_dup_historic_invoice = False
-    if st.session_state.get("selected_env") == "SimpleLegal":
+    # --- SimpleLegal-only duplicate line item options + Historic upload ---
+    selected_env = st.session_state.get("selected_env", "")
+    if selected_env == "SimpleLegal":
+        st.markdown("#### SimpleLegal Duplicate Line Items")
+
         sl_dup_this_invoice = st.checkbox(
-            "SL Duplicate Line Items - This Invoice",
+            "SL Dup Line Items - This Invoice",
             value=False,
-            help="Duplicate one fee line item within the current invoice for SimpleLegal Duplicate Line Item Demo.",
             key="sl_dup_this_invoice",
+            help="Duplicate one fee line item within the current invoice for SimpleLegal testing.",
         )
         sl_dup_historic_invoice = st.checkbox(
-            "SL Duplicate Line Items - Historic Invoice",
+            "SL Dup Line Items - Historic Invoice",
             value=False,
-            help="(Placeholder) Will later duplicate a fee line from a historic invoice.",
             key="sl_dup_historic_invoice",
+            help="Duplicate a fee line item from a historic LEDES CSV.",
         )
 
         if sl_dup_historic_invoice:
+            # Your original message requirement
             st.info("This will be in Step 2")
+
+            # Upload *right under* the Historic checkbox
+            hist_file = st.file_uploader(
+                "Upload Historic LEDES CSV (1998B-style export)",
+                type="csv",
+                key="historic_ledes_csv",
+                help="Upload a CSV export of a prior LEDES invoice. We'll pull one fee line from it."
+            )
+
+            if hist_file is not None:
+                try:
+                    df_hist = pd.read_csv(hist_file, dtype=str)
+                    st.session_state["historic_invoice_df"] = df_hist
+
+                    # Try to narrow down to F(ee) rows if that column exists
+                    df_fee = df_hist.copy()
+                    if "EXP/FEE/INV_ADJ_TYPE" in df_fee.columns:
+                        mask_fee = (
+                            df_fee["EXP/FEE/INV_ADJ_TYPE"]
+                            .astype(str)
+                            .str.strip()
+                            .str.upper()
+                            .str.startswith("F")
+                        )
+                        if mask_fee.any():
+                            df_fee = df_fee[mask_fee]
+
+                    st.session_state["historic_invoice_fee_df"] = df_fee
+
+                    # Small preview so you can see what you uploaded
+                    preview_cols = [
+                        c for c in [
+                            "INVOICE_NUMBER",
+                            "CLIENT_MATTER_ID",
+                            "LINE_ITEM_NUMBER",
+                            "LINE_ITEM_DATE",
+                            "TASK_CODE",
+                            "ACTIVITY_CODE",
+                            "TIMEKEEPER_ID",
+                            "TIMEKEEPER_NAME",
+                            "DESCRIPTION",
+                            "HOURS",
+                            "RATE",
+                            "EXP/FEE/INV_ADJ_TYPE",
+                        ]
+                        if c in df_fee.columns
+                    ]
+                    st.markdown("**Historic Fee Lines Preview (first 10 rows)**")
+                    if preview_cols:
+                        st.dataframe(df_fee[preview_cols].head(10), use_container_width=True)
+                    else:
+                        st.dataframe(df_fee.head(10), use_container_width=True)
+
+                except Exception as e:
+                    st.error(f"Could not read historic CSV: {e}")
+            else:
+                st.caption("Upload a historic LEDES CSV to enable duplication from a prior invoice.")
+
+    # In the "Fees & Expenses" tab, before the sliders
+    st.selectbox(
+        "Invoice Size Presets",
+        options=list(PRESETS.keys()),
+        key="invoice_preset",
+        on_change=apply_preset,
+        help="Select a preset to quickly adjust the number of fee and expense lines below."
+    )
+    # ... rest of your fee/expense sliders & settings ...
+
                 
     # In the "Fees & Expenses" tab, before the sliders
     st.selectbox(
@@ -2827,6 +2983,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
