@@ -2493,18 +2493,7 @@ with tab_objects[2]:
                     st.error(f"Could not read historic CSV: {e}")
             else:
                 st.caption("Upload a historic LEDES CSV to enable duplication from a prior invoice.")
-
-    # In the "Fees & Expenses" tab, before the sliders
-    st.selectbox(
-        "Invoice Size Presets",
-        options=list(PRESETS.keys()),
-        key="invoice_preset",
-        on_change=apply_preset,
-        help="Select a preset to quickly adjust the number of fee and expense lines below."
-    )
-    # ... rest of your fee/expense sliders & settings ...
-
-                
+               
     # In the "Fees & Expenses" tab, before the sliders
     st.selectbox(
         "Invoice Size Presets",
@@ -2983,6 +2972,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
