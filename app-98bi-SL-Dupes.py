@@ -2435,7 +2435,7 @@ with tab_objects[2]:
 
         if sl_dup_historic_invoice:
             # Your original message requirement
-            st.info("This will be in Step 2")
+            #st.info("This will be in Step 2")
 
             # Upload *right under* the Historic checkbox
             hist_file = st.file_uploader(
@@ -2972,6 +2972,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
