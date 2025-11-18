@@ -2547,13 +2547,13 @@ with tab_objects[2]:
         )
 
         if sl_dup_historic_invoice:
-    import pandas as pd
-    hist_file = st.file_uploader(
-        "Upload Historic LEDES CSV (1998B-style export)",
-        type="csv",
-        key="historic_ledes_csv",
-        help="Upload a CSV export of a prior LEDES invoice."
-    )
+            import pandas as pd
+            hist_file = st.file_uploader(
+                "Upload Historic LEDES CSV (1998B-style export)",
+                type="csv",
+                key="historic_ledes_csv",
+                help="Upload a CSV export of a prior LEDES invoice."
+        )
 
     if hist_file is not None:
         try:
@@ -3060,6 +3060,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
