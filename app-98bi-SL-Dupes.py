@@ -2391,58 +2391,72 @@ with tab_objects[2]:
     )
 
     # --- SimpleLegal-only duplicate line item options + Historic upload ---
-    selected_env = st.session_state.get("selected_env", "")
-    if selected_env == "SimpleLegal":
-        st.markdown("#### SimpleLegal Duplicate Line Items")
+    # ... inside Fees & Expenses tab ...
+selected_env = st.session_state.get("selected_env", "")
+if selected_env == "SimpleLegal":
+    st.markdown("#### SimpleLegal Duplicate Line Items")
 
-        sl_dup_this_invoice = st.checkbox(
-            "SL Dup Line Items - This Invoice",
-            value=False,
-            key="sl_dup_this_invoice",
-            help="Duplicate one fee line item within the current invoice for SimpleLegal testing.",
+    sl_dup_this_invoice = st.checkbox(
+        "SL Dup Line Items - This Invoice",
+        value=False,
+        key="sl_dup_this_invoice",
+    )
+    sl_dup_historic_invoice = st.checkbox(
+        "SL Dup Line Items - Historic Invoice",
+        value=False,
+        key="sl_dup_historic_invoice",
+    )
+
+    # Always start with a clean local var (prevents NameError)
+    hist_file = None
+
+    if sl_dup_historic_invoice:
+        import pandas as pd  # or import once at top of file
+
+        # (Optional) short note
+        # st.info("Upload a historic LEDES CSV to duplicate one line into this invoice.")
+
+        # Uploader and handler LIVE INSIDE this block
+        hist_file = st.file_uploader(
+            "Upload Historic LEDES CSV (1998B-style export)",
+            type="csv",
+            key="historic_ledes_csv",
+            help="We will copy total, currency, worked date, TK name + rate, type (IF/F/E), task/activity/expense codes."
         )
-        sl_dup_historic_invoice = st.checkbox(
-            "SL Dup Line Items - Historic Invoice",
-            value=False,
-            key="sl_dup_historic_invoice",
-            help="Duplicate a fee line item from a historic LEDES CSV.",
-        )
 
-        if sl_dup_historic_invoice:
-            import pandas as pd
-            hist_file = st.file_uploader(
-                "Upload Historic LEDES CSV (1998B-style export)",
-                type="csv",
-                key="historic_ledes_csv",
-                help="Upload a CSV export of a prior LEDES invoice."
-        )
+        if hist_file is not None:
+            try:
+                df_hist = pd.read_csv(hist_file, dtype=str)
+                # Optional: normalize LEDES-style names
+                if "_normalize_historic_columns" in globals():
+                    df_hist = _normalize_historic_columns(df_hist)
 
-    if hist_file is not None:
-        try:
-            df_hist = pd.read_csv(hist_file, dtype=str)
-            df_hist = _normalize_historic_columns(df_hist)
+                # Store full DF
+                st.session_state["historic_invoice_df"] = df_hist
 
-            # Optional fee filter: keep IF/F/E as-is; later logic will branch on type
-            df_fee = df_hist.copy()
-            st.session_state["historic_invoice_df"] = df_hist
-            st.session_state["historic_invoice_fee_df"] = df_fee  # (we’ll pick by type later)
+                # No fee-only filter now; we branch by type (IF/F/E) later in generation
+                st.session_state["historic_invoice_fee_df"] = df_hist
 
-            st.success(f"Loaded {len(df_hist)} historic line items.")
-            preview_cols = [c for c in [
-                "EXP/FEE/INV_ADJ_TYPE",
-                "LINE_ITEM_DATE",
-                "TASK_CODE","ACTIVITY_CODE","EXPENSE_CODE",
-                "TIMEKEEPER_NAME","TIMEKEEPER_RATE",
-                "LINE_ITEM_TOTAL","LINE_ITEM_BILLED_TOTAL_CURRENCY"
-            ] if c in df_fee.columns]
-            if preview_cols:
-                st.dataframe(df_fee[preview_cols].head(10), use_container_width=True)
-            else:
-                st.dataframe(df_fee.head(10), use_container_width=True)
-        except Exception as e:
-            st.error(f"Could not read historic CSV: {e}")
+                # Small preview
+                preview_cols = [c for c in [
+                    "EXP/FEE/INV_ADJ_TYPE",
+                    "LINE_ITEM_DATE",
+                    "TASK_CODE","ACTIVITY_CODE","EXPENSE_CODE",
+                    "TIMEKEEPER_NAME","TIMEKEEPER_RATE",
+                    "LINE_ITEM_TOTAL","LINE_ITEM_BILLED_TOTAL_CURRENCY"
+                ] if c in df_hist.columns]
+                st.markdown("**Historic Lines Preview (first 10)**")
+                st.dataframe((df_hist[preview_cols] if preview_cols else df_hist).head(10), use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Could not read historic CSV: {e}")
+        else:
+            st.caption("Upload a CSV to enable historic duplication.")
+
     else:
-        st.caption("Upload a historic LEDES CSV to enable duplication from a prior invoice.")
+        # Checkbox OFF → clear related session state (prevents stale data)
+        st.session_state.pop("historic_invoice_df", None)
+        st.session_state.pop("historic_invoice_fee_df", None)
                
     # In the "Fees & Expenses" tab, before the sliders
     st.selectbox(
@@ -2922,6 +2936,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
