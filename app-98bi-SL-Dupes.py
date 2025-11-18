@@ -2444,25 +2444,25 @@ with tab_objects[2]:
 
     # --- SimpleLegal-only duplicate line item options + Historic upload ---
     # ... inside Fees & Expenses tab ...
-        if timekeeper_data is None:
-            st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
-            fees = 0
-            expenses = 0
-        else:
-            max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
-            st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
-            
-            # Initialize the fee slider's state if it doesn't exist
-            if "fee_slider" not in st.session_state:
-                st.session_state.fee_slider = PRESETS["Custom"]["fees"]
-            
-            fees = st.number_input(
-                "Number of Fee Line Items",
-                min_value=0,
-                max_value=max_fees,
-                key="fee_slider",
-            )
-            st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
+    if timekeeper_data is None:
+        st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
+        fees = 0
+        expenses = 0
+    else:
+        max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
+        st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
+        
+        # Initialize the fee slider's state if it doesn't exist
+        if "fee_slider" not in st.session_state:
+            st.session_state.fee_slider = PRESETS["Custom"]["fees"]
+        
+        fees = st.number_input(
+            "Number of Fee Line Items",
+            min_value=0,
+            max_value=max_fees,
+            key="fee_slider",
+        )
+        st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
             
             # ---- CORRECTED AND CONSOLIDATED MANDATORY ITEMS LOGIC ----
             
@@ -2859,4 +2859,5 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
