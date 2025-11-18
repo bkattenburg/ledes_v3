@@ -216,6 +216,35 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont, Image
 import zipfile
 
+def _normalize_historic_columns(df: pd.DataFrame) -> pd.DataFrame:
+    # Accept LEDES1998B-style names and map to simpler keys we’ll use downstream.
+    rename_map = {
+        # Descriptions are *not* used to clone, but normalizing is harmless
+        "LINE_ITEM_DESCRIPTION": "DESCRIPTION",
+
+        # Worked date
+        "LINE_ITEM_WORKED_DATE": "LINE_ITEM_DATE",
+
+        # Codes
+        "LINE_ITEM_TASK_CODE": "TASK_CODE",
+        "LINE_ITEM_ACTIVITY_CODE": "ACTIVITY_CODE",
+        "LINE_ITEM_EXPENSE_CODE": "EXPENSE_CODE",
+
+        # Money
+        "LINE_ITEM_UNIT_COST": "TIMEKEEPER_RATE",
+        "LINE_ITEM_BILLED_TOTAL": "LINE_ITEM_TOTAL",
+        "BILLED_TOTAL": "LINE_ITEM_TOTAL",
+        "AMOUNT": "LINE_ITEM_TOTAL",
+        "CURRENCY_CODE": "LINE_ITEM_BILLED_TOTAL_CURRENCY",
+        "INVOICE_CURRENCY_CODE": "LINE_ITEM_BILLED_TOTAL_CURRENCY",
+
+        # Type
+        "LINE_ITEM_TYPE": "EXP/FEE/INV_ADJ_TYPE",  # e.g., IF / F / E
+    }
+    present = {k: v for k, v in rename_map.items() if k in df.columns and v not in df.columns}
+    if present:
+        df = df.rename(columns=present)
+    return df
 
 st.markdown("""
     <style>
@@ -1248,79 +1277,163 @@ def _generate_invoice_data(
             # All other fields (date, TK, TASK_CODE, ACTIVITY_CODE, HOURS, RATE, totals, etc.) remain identical
             rows.append(dup)
 
-    # --- SimpleLegal: duplicate one fee line from a HISTORIC invoice CSV ---
+    # --- SimpleLegal: clone ONE line from a HISTORIC invoice CSV using specific fields only ---
+try:
+    _sl_dup_hist = bool(st.session_state.get("sl_dup_historic_invoice", False))
+except Exception:
+    _sl_dup_hist = False
+
+if _selected_env == "SimpleLegal" and _sl_dup_hist:
+    import random as _rand
+
+    df_hist = st.session_state.get("historic_invoice_fee_df") or st.session_state.get("historic_invoice_df")
+    has_rows = False
     try:
-        _sl_dup_hist = bool(st.session_state.get("sl_dup_historic_invoice", False))
+        has_rows = (df_hist is not None) and (len(df_hist) > 0)
     except Exception:
-        _sl_dup_hist = False
+        pass
 
-    if _selected_env == "SimpleLegal" and _sl_dup_hist:
-        import random as _rand
-        df_fee = st.session_state.get("historic_invoice_fee_df")
-        if df_fee is None:
-            df_fee = st.session_state.get("historic_invoice_df")
-
-        if df_fee is not None and len(df_fee) > 0:
-            idx = _rand.randint(0, len(df_fee) - 1)
-            row_hist = df_fee.iloc[idx]
-
-            # Values from historic CSV, with safe fallbacks
-            desc = str(row_hist.get("DESCRIPTION", "") or "").strip()
-            task_code = str(row_hist.get("TASK_CODE", "") or "").strip()
-            act_code = str(row_hist.get("ACTIVITY_CODE", "") or "").strip()
-
-            try:
-                hours_val = float(str(row_hist.get("HOURS", "0") or "0"))
-            except Exception:
-                hours_val = 1.0
-            try:
-                rate_val = float(str(row_hist.get("RATE", "0") or "0"))
-            except Exception:
-                rate_val = 0.0
-
-            # Use historic LINE_ITEM_DATE if present, otherwise current billing_start_date
-            if "LINE_ITEM_DATE" in df_fee.columns:
-                date_raw = str(row_hist.get("LINE_ITEM_DATE", "") or "").strip()
-                date_str = date_raw if date_raw else billing_start_date.strftime("%Y-%m-%d")
+    if has_rows:
+        # Pick a row (random or use your stored index logic if you added it)
+        try:
+            mode = st.session_state.get("historic_select_mode", "Random fee line")
+            if mode == "Pick by row number" and "historic_row_idx" in st.session_state:
+                idx = int(st.session_state["historic_row_idx"])
+                if idx < 0 or idx >= len(df_hist): idx = 0
             else:
-                date_str = billing_start_date.strftime("%Y-%m-%d")
+                idx = _rand.randint(0, len(df_hist) - 1)
+        except Exception:
+            idx = 0
 
-            # Try to match a timekeeper from current CSV by ID or NAME
-            tk = None
-            tk_hist_id = str(row_hist.get("TIMEKEEPER_ID", "") or "").strip()
-            tk_hist_name = str(row_hist.get("TIMEKEEPER_NAME", "") or "").strip()
+        h = df_hist.iloc[idx]
 
-            if tk_hist_id:
-                for t in (timekeeper_data or []):
-                    if str(t.get("TIMEKEEPER_ID", "")).strip() == tk_hist_id:
-                        tk = t
-                        break
-            if tk is None and tk_hist_name:
-                for t in (timekeeper_data or []):
-                    if str(t.get("TIMEKEEPER_NAME", "")).strip() == tk_hist_name:
-                        tk = t
-                        break
-            if tk is None and timekeeper_data:
-                tk = timekeeper_data[0]
+        # --- Pull the required fields (with safe fallbacks) ---
+        li_type   = (str(h.get("EXP/FEE/INV_ADJ_TYPE", "") or "").strip().upper())  # IF / F / E
+        tk_name   = str(h.get("TIMEKEEPER_NAME", "") or "").strip()
+        # Prefer explicit TIMEKEEPER_RATE; fallback to RATE/UNIT_COST
+        try:
+            tk_rate = float(str(h.get("TIMEKEEPER_RATE", h.get("RATE", h.get("LINE_ITEM_UNIT_COST", "0"))) or "0"))
+        except Exception:
+            tk_rate = 0.0
 
-            if tk:
+        # Total & currency
+        try:
+            billed_total = float(str(h.get("LINE_ITEM_TOTAL", "0") or "0"))
+        except Exception:
+            billed_total = 0.0
+        currency = str(h.get("LINE_ITEM_BILLED_TOTAL_CURRENCY", "") or "").strip()
+
+        # Worked date
+        line_item_date = str(h.get("LINE_ITEM_DATE", "") or "").strip()
+        if not line_item_date:
+            line_item_date = billing_start_date.strftime("%Y-%m-%d")
+
+        # Codes (optional)
+        task_code    = str(h.get("TASK_CODE", "") or "").strip() or str(h.get("LINE_ITEM_TASK_CODE", "") or "").strip()
+        activity_code= str(h.get("ACTIVITY_CODE", "") or "").strip() or str(h.get("LINE_ITEM_ACTIVITY_CODE", "") or "").strip()
+        expense_code = str(h.get("EXPENSE_CODE", "") or "").strip() or str(h.get("LINE_ITEM_EXPENSE_CODE", "") or "").strip()
+
+        # --- Match current timekeeper by NAME (fallback to first) ---
+        tk_match = None
+        if tk_name:
+            for t in (timekeeper_data or []):
+                if str(t.get("TIMEKEEPER_NAME", "")).strip() == tk_name:
+                    tk_match = t
+                    break
+        if tk_match is None and timekeeper_data:
+            tk_match = timekeeper_data[0]
+
+        if tk_match:
+            # Fresh, non-matching description (you can customize these)
+            alt_desc_candidates = [
+                "Review and update case workstream.",
+                "Draft email and correspondence to stakeholders.",
+                "Conduct legal research and summarize findings.",
+                "Prepare internal status memo and action items.",
+                "Analyze materials and outline follow-ups."
+            ]
+            new_desc = _process_description(_rand.choice(alt_desc_candidates), faker_instance)
+
+            if li_type in ("F", "IF"):  # treat IF like a fee
+                # Compute hours from total/rate to preserve math
+                if tk_rate > 0:
+                    hours = round(billed_total / tk_rate, 4)
+                else:
+                    hours = 0.0  # cannot compute without a rate
+
                 fee_row = _mk_fee_row(
-                    desc or "Historic invoice duplication test",
-                    tk,
-                    date_str,
+                    new_desc,
+                    tk_match,
+                    line_item_date,
                     task_code,
-                    act_code,
-                    hours_val,
+                    activity_code,
+                    hours,
                     block=False
                 )
+                # Override rate & totals from historic
+                fee_row["RATE"] = float(tk_rate)
+                fee_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(tk_rate), 2)
 
-                # Override RATE / TOTAL if historic CSV had them
-                if rate_val:
-                    fee_row["RATE"] = rate_val
-                    fee_row["LINE_ITEM_TOTAL"] = round(fee_row["HOURS"] * fee_row["RATE"], 2)
+                # Tag type, currency, and optional expense code if present (kept blank for fee)
+                fee_row["EXP/FEE/INV_ADJ_TYPE"] = li_type
+                if currency:
+                    fee_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
+                if expense_code:
+                    fee_row["EXPENSE_CODE"] = expense_code  # harmless even if fee
 
-                # Optional debug tag
-                fee_row["_source"] = "historic_invoice_csv"
+                rows.append(fee_row)
+
+            elif li_type == "E":
+                # Build an EXPENSE line.
+                # If you have a helper like _mk_expense_row(desc, date, code, amount) use it.
+                # Otherwise, mimic your row shape so the exporter treats it as an expense:
+                # Create a 1 x amount line so total == billed_total.
+                hours = 1.0
+                rate  = billed_total
+
+                exp_row = _mk_fee_row(  # reuse shape/keys, then mark as expense
+                    new_desc,
+                    tk_match,
+                    line_item_date,
+                    task_code,
+                    activity_code,
+                    hours,
+                    block=False
+                )
+                exp_row["RATE"] = float(rate)
+                exp_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(rate), 2)
+
+                # Mark as EXPENSE so downstream logic recognizes it
+                exp_row["EXPENSE_CODE"] = expense_code or "E000"  # default harmless code
+                exp_row["EXP/FEE/INV_ADJ_TYPE"] = "E"
+
+                if currency:
+                    exp_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
+
+                rows.append(exp_row)
+            else:
+                # Unknown type -> default to fee behavior
+                if tk_rate > 0:
+                    hours = round(billed_total / tk_rate, 4)
+                else:
+                    hours = 0.0
+
+                fee_row = _mk_fee_row(
+                    new_desc,
+                    tk_match,
+                    line_item_date,
+                    task_code,
+                    activity_code,
+                    hours,
+                    block=False
+                )
+                fee_row["RATE"] = float(tk_rate)
+                fee_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(tk_rate), 2)
+                fee_row["EXP/FEE/INV_ADJ_TYPE"] = "F"
+                if currency:
+                    fee_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
+                if expense_code:
+                    fee_row["EXPENSE_CODE"] = expense_code
 
                 rows.append(fee_row)
 
@@ -2434,65 +2547,40 @@ with tab_objects[2]:
         )
 
         if sl_dup_historic_invoice:
-            # Your original message requirement
-            #st.info("This will be in Step 2")
+    import pandas as pd
+    hist_file = st.file_uploader(
+        "Upload Historic LEDES CSV (1998B-style export)",
+        type="csv",
+        key="historic_ledes_csv",
+        help="Upload a CSV export of a prior LEDES invoice."
+    )
 
-            # Upload *right under* the Historic checkbox
-            hist_file = st.file_uploader(
-                "Upload Historic LEDES CSV (1998B-style export)",
-                type="csv",
-                key="historic_ledes_csv",
-                help="Upload a CSV export of a prior LEDES invoice. We'll pull one fee line from it."
-            )
+    if hist_file is not None:
+        try:
+            df_hist = pd.read_csv(hist_file, dtype=str)
+            df_hist = _normalize_historic_columns(df_hist)
 
-            if hist_file is not None:
-                try:
-                    df_hist = pd.read_csv(hist_file, dtype=str)
-                    st.session_state["historic_invoice_df"] = df_hist
+            # Optional fee filter: keep IF/F/E as-is; later logic will branch on type
+            df_fee = df_hist.copy()
+            st.session_state["historic_invoice_df"] = df_hist
+            st.session_state["historic_invoice_fee_df"] = df_fee  # (we’ll pick by type later)
 
-                    # Try to narrow down to F(ee) rows if that column exists
-                    df_fee = df_hist.copy()
-                    if "EXP/FEE/INV_ADJ_TYPE" in df_fee.columns:
-                        mask_fee = (
-                            df_fee["EXP/FEE/INV_ADJ_TYPE"]
-                            .astype(str)
-                            .str.strip()
-                            .str.upper()
-                            .str.startswith("F")
-                        )
-                        if mask_fee.any():
-                            df_fee = df_fee[mask_fee]
-
-                    st.session_state["historic_invoice_fee_df"] = df_fee
-
-                    # Small preview so you can see what you uploaded
-                    preview_cols = [
-                        c for c in [
-                            "INVOICE_NUMBER",
-                            "CLIENT_MATTER_ID",
-                            "LINE_ITEM_NUMBER",
-                            "LINE_ITEM_DATE",
-                            "TASK_CODE",
-                            "ACTIVITY_CODE",
-                            "TIMEKEEPER_ID",
-                            "TIMEKEEPER_NAME",
-                            "DESCRIPTION",
-                            "HOURS",
-                            "RATE",
-                            "EXP/FEE/INV_ADJ_TYPE",
-                        ]
-                        if c in df_fee.columns
-                    ]
-                    st.markdown("**Historic Fee Lines Preview (first 10 rows)**")
-                    if preview_cols:
-                        st.dataframe(df_fee[preview_cols].head(10), use_container_width=True)
-                    else:
-                        st.dataframe(df_fee.head(10), use_container_width=True)
-
-                except Exception as e:
-                    st.error(f"Could not read historic CSV: {e}")
+            st.success(f"Loaded {len(df_hist)} historic line items.")
+            preview_cols = [c for c in [
+                "EXP/FEE/INV_ADJ_TYPE",
+                "LINE_ITEM_DATE",
+                "TASK_CODE","ACTIVITY_CODE","EXPENSE_CODE",
+                "TIMEKEEPER_NAME","TIMEKEEPER_RATE",
+                "LINE_ITEM_TOTAL","LINE_ITEM_BILLED_TOTAL_CURRENCY"
+            ] if c in df_fee.columns]
+            if preview_cols:
+                st.dataframe(df_fee[preview_cols].head(10), use_container_width=True)
             else:
-                st.caption("Upload a historic LEDES CSV to enable duplication from a prior invoice.")
+                st.dataframe(df_fee.head(10), use_container_width=True)
+        except Exception as e:
+            st.error(f"Could not read historic CSV: {e}")
+    else:
+        st.caption("Upload a historic LEDES CSV to enable duplication from a prior invoice.")
                
     # In the "Fees & Expenses" tab, before the sliders
     st.selectbox(
@@ -2972,6 +3060,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
