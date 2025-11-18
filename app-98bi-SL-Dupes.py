@@ -1,6 +1,5 @@
 import streamlit as st
 
-
 # --- Source selector helper ---
 def _select_items_from_source(df_src, want_block: bool, k: int):
     import random
@@ -189,7 +188,6 @@ def _safe_checkbox(label, **kwargs):
 st.checkbox = _safe_checkbox
 # -----------------------------------------------------------------------------
 
-
 # Central boolean for sending email
 st.session_state.setdefault("send_email", False)
 
@@ -281,7 +279,6 @@ BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdoc
     ("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
 
-
 # Extended profile details (addresses, tax ids, defaults)
 BILLING_PROFILE_DETAILS = {
     "OnitX VAT": {
@@ -319,7 +316,6 @@ def get_profile(env: str):
             return (p[1], p[2], p[3], p[4])
     p = BILLING_PROFILES[0]
     return (p[1], p[2], p[3], p[4])
-
 
 # --- Logging Setup ---
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -441,8 +437,6 @@ def _find_timekeeper_by_classification(timekeepers, classification: str):
     candidates.sort(key=lambda tk: str(tk.get("TIMEKEEPER_NAME", "")).lower())
     return candidates[0]
 
-
-
 def _get_timekeepers():
     """Return timekeepers list from session or empty list if none loaded."""
     return st.session_state.get("timekeeper_data") or []
@@ -523,7 +517,6 @@ def _load_timekeepers(uploaded_file: Optional[Any]) -> Optional[List[Dict]]:
         logging.error(f"Timekeeper load error: {e}")
         return None
 
-
 def _load_custom_task_activity_data(uploaded_file: Optional[Any]) -> Optional[List[Tuple[str, str, str]]]:
     """Load custom task/activity data from CSV."""
     if uploaded_file is None:
@@ -552,7 +545,6 @@ def _load_custom_task_activity_data(uploaded_file: Optional[Any]) -> Optional[Li
         st.error(f"Error loading custom tasks file: {e}")
         logging.error(f"Custom tasks load error: {e}")
         return None
-
 
 def _create_ledes_line_1998b(row: Dict, line_no: int, inv_total: float, bill_start: datetime.date, bill_end: datetime.date, invoice_number: str, matter_number: str) -> List[str]:
     """Create a single LEDES 1998B line."""
@@ -710,7 +702,6 @@ def _create_ledes_1998biv2_content(rows: List[Dict],
         if line:
             lines.append("|".join(map(str, line)) + "[]")
     return "\n".join(lines)
-
 
 def _create_ledes_1998bi_content(rows: List[Dict],
                                  bill_start: datetime.date, bill_end: datetime.date,
@@ -920,7 +911,6 @@ def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_da
         })
     return rows
 
-
 def _generate_expenses(expense_count: int, billing_start_date: datetime.date, billing_end_date: datetime.date, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
     """Generate expense line items for an invoice with realistic amounts."""
     rows: List[Dict] = []
@@ -943,7 +933,6 @@ def _generate_expenses(expense_count: int, billing_start_date: datetime.date, bi
         tel_min, tel_max = float(tel_rng[0]), float(tel_rng[1])
     except Exception:
         tel_min, tel_max = 5.0, 15.0
-
 
     # Always include some Copying (E101)
     e101_actual_count = random.randint(1, min(3, expense_count))
@@ -1124,7 +1113,6 @@ def _generate_invoice_data(
         else:
             # If no VAGUE column, all items are non-vague
             df_non_vague_pool = df_src
-
 
     # Helper to build a fee row
     def _mk_fee_row(desc: str, tk: Dict, date_str: str, task_code: str, act_code: str, hours: float, block: bool=False) -> Dict:
@@ -1495,7 +1483,6 @@ def _get_logo_bytes(uploaded_logo: Optional[Any], law_firm_id: str, use_custom: 
     buf.seek(0)
     return buf.getvalue()
 
-
 # #############################################################################
 # ##### PDF CREATION FUNCTION WITH REQUESTED CHANGES ##########################
 # #############################################################################
@@ -1675,7 +1662,6 @@ def _create_pdf_invoice(
     else:
         fees_total = df['LINE_ITEM_TOTAL'].sum()
         expenses_total = 0.0
-
 
     elements.append(Spacer(1, 0.2 * inch))
 
@@ -2016,7 +2002,6 @@ st.checkbox(
     key="send_email_checkbox_output",
     on_change=update_send_email
 )
-
 
 # --- Sidebar Reorganization ---
 
@@ -2459,76 +2444,24 @@ with tab_objects[2]:
 
     # --- SimpleLegal-only duplicate line item options + Historic upload ---
     # ... inside Fees & Expenses tab ...
-    if timekeeper_data is None:
-        st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
-        fees = 0
-        expenses = 0
-    else:
-        max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
-        st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
-        
-        # Initialize the fee slider's state if it doesn't exist
-        if "fee_slider" not in st.session_state:
-            st.session_state.fee_slider = PRESETS["Custom"]["fees"]
-        
-        fees = st.number_input(
-            "Number of Fee Line Items",
-            min_value=0,
-            max_value=max_fees,
-            key="fee_slider",
-        )
-        st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
-        with st.expander("Adjust Expense Amounts", expanded=False):
-            st.number_input(
-                "Local Travel (E109) mileage rate ($/mile)",
-                min_value=0.20, max_value=2.00, value=0.65, step=0.01,
-                key="mileage_rate_e109",
-                help="Used to calculate E109 totals as miles × rate. Miles are stored in the HOURS column."
+        if timekeeper_data is None:
+            st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
+            fees = 0
+            expenses = 0
+        else:
+            max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
+            st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
+            
+            # Initialize the fee slider's state if it doesn't exist
+            if "fee_slider" not in st.session_state:
+                st.session_state.fee_slider = PRESETS["Custom"]["fees"]
+            
+            fees = st.number_input(
+                "Number of Fee Line Items",
+                min_value=0,
+                max_value=max_fees,
+                key="fee_slider",
             )
-            st.slider(
-                "Out-of-town Travel (E110) amount range ($)",
-                min_value=10.0, max_value=7500.0, value=(100.0, 800.0), step=10.0,
-                key="travel_range_e110",
-                help="Random amount for each E110 line will be drawn from this range."
-            )
-            st.slider(
-                "Telephone (E105) amount range ($)",
-                min_value=1.0, max_value=50.0, value=(5.0, 15.0), step=1.0,
-                key="telephone_range_e105",
-                help="Random amount for each E105 line will be drawn from this range."
-            )
-     
-            # 1. Determine the default rate based on the selected LEDES version
-            if st.session_state.get("ledes_version") == "1998BI":
-                default_copy_rate = 0.10
-            else:
-                default_copy_rate = 0.24
-        
-            # 2. Use the variable as the slider's default value
-            st.number_input(
-                "Photocopies (E101) per-page rate ($)",
-                min_value=0.04,
-                max_value=1.50,
-                value=default_copy_rate, 
-                step=0.01,
-                key="copying_rate_e101",
-                help="Per-page rate used for E101 Photocopy expenses."
-            )
-        st.caption("Number of expense line items to generate")
-        
-        # Initialize the expense slider's state if it doesn't exist
-        if "expense_slider" not in st.session_state:
-            st.session_state.expense_slider = PRESETS["Custom"]["expenses"]
-        
-        expenses = st.number_input(
-            "Number of Expense Line Items",
-            min_value=0,
-            max_value=50,
-            key="expense_slider",
-        )
-        max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
-        
-        if spend_agent:
             st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
             
             # ---- CORRECTED AND CONSOLIDATED MANDATORY ITEMS LOGIC ----
@@ -2603,7 +2536,6 @@ with tab_objects[2]:
 
         else:
             selected_items = []
-
 
 output_tab_index = tabs.index("Output")
 with tab_objects[output_tab_index]:
@@ -2910,7 +2842,6 @@ if generate_button:
             
             status.update(label="Invoice generation complete!", state="complete")
 
-
 # --- New Display Block (place this AFTER the `if generate_button:` block) ---
 # This block runs on every interaction, ensuring the buttons stay visible.
 if "generated_files" in st.session_state and st.session_state.generated_files:
@@ -2928,5 +2859,4 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
-
 
