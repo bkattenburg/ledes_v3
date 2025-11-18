@@ -2170,6 +2170,80 @@ if current_profile_key in BILLING_PROFILE_DETAILS:
 else:
     st.session_state["ledes_version"] = "1998B"
 
+def render_fees_expenses_controls():
+    # --- SimpleLegal-only duplicate line item options + Historic upload ---
+    selected_env = st.session_state.get("selected_env", "")
+    if selected_env == "SimpleLegal":
+        st.markdown("#### SimpleLegal Duplicate Line Items")
+
+        st.checkbox(
+            "SL Dup Line Items - This Invoice",
+            value=bool(st.session_state.get("sl_dup_this_invoice", False)),
+            key="sl_dup_this_invoice",
+            help="Duplicate one fee line item within the current invoice for SimpleLegal testing.",
+        )
+        st.checkbox(
+            "SL Dup Line Items - Historic Invoice",
+            value=bool(st.session_state.get("sl_dup_historic_invoice", False)),
+            key="sl_dup_historic_invoice",
+            help="Duplicate a line item from a historic LEDES CSV.",
+        )
+
+        if st.session_state.get("sl_dup_historic_invoice", False):
+            import pandas as pd
+            hist_file = st.file_uploader(
+                "Upload Historic LEDES CSV (1998B-style export)",
+                type="csv",
+                key="historic_ledes_csv",
+                help="We will copy total, currency, worked date, TK name + rate, type (IF/F/E), and codes."
+            )
+            if hist_file is not None:
+                try:
+                    df_hist = pd.read_csv(hist_file, dtype=str)
+                    if "_normalize_historic_columns" in globals():
+                        df_hist = _normalize_historic_columns(df_hist)
+
+                    st.session_state["historic_invoice_df"] = df_hist
+                    st.session_state["historic_invoice_fee_df"] = df_hist  # we branch on IF/F/E later
+
+                    preview_cols = [c for c in [
+                        "EXP/FEE/INV_ADJ_TYPE",
+                        "LINE_ITEM_DATE",
+                        "TASK_CODE","ACTIVITY_CODE","EXPENSE_CODE",
+                        "TIMEKEEPER_NAME","TIMEKEEPER_RATE",
+                        "LINE_ITEM_TOTAL","LINE_ITEM_BILLED_TOTAL_CURRENCY"
+                    ] if c in df_hist.columns]
+                    st.markdown("**Historic Lines Preview (first 10)**")
+                    st.dataframe((df_hist[preview_cols] if preview_cols else df_hist).head(10), use_container_width=True)
+                except Exception as e:
+                    st.error(f"Could not read historic CSV: {e}")
+            else:
+                st.caption("Upload a CSV to enable historic duplication.")
+        else:
+            # Checkbox OFF → clear stored data to avoid stale usage
+            st.session_state.pop("historic_invoice_df", None)
+            st.session_state.pop("historic_invoice_fee_df", None)
+
+    # --- Preset and fee/expense sliders belong to Fees & Expenses only ---
+    st.selectbox(
+        "Invoice Size Presets",
+        options=list(PRESETS.keys()),
+        key="invoice_preset",
+        on_change=apply_preset,
+        help="Select a preset to quickly adjust the number of fee and expense lines below."
+    )
+
+    # Expense Settings
+    st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
+    with st.expander("Adjust Expense Amounts", expanded=False):
+        st.number_input(
+            "Local Travel (E109) mileage rate ($/mile)",
+            min_value=0.20, max_value=2.00, value=0.65, step=0.01,
+            key="mileage_rate_e109",
+            help="Used to calculate E109 totals as miles × rate. Miles are stored in the HOURS column."
+        )
+        # ... your other expense controls ...
+
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
 # Insert Tax Fields tab before Output when LEDES 1998BIv2 is selected
@@ -2371,24 +2445,17 @@ with tab_objects[1]:
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
 
-    # --- Core fee/expense toggles ---
-    spend_agent = st.checkbox(
-        "Spend Agent",
-        value=False,
-        help="Ensures selected mandatory line items are included; configure below."
-    )
-    vague_line_items = st.checkbox(
-        "Vague Line Items",
-        value=False,
-        help="Randomly include 1 to 5 line items that have vague line item descriptions."
-    )
-
+    # Core toggles you want on this tab
+    spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
+    vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague descriptions.")
     multiple_attendees_meeting = st.checkbox(
-        "Multiple Attendees at Same Meeting",
-        value=False,
-        help="If checked, create two identical fee line items from 2 different timekeepers for the same meeting.",
+        "Multiple Attendees at Same Meeting", value=False,
+        help="Create two identical fee line items from 2 different timekeepers for the same meeting.",
         key="multiple_attendees_meeting",
     )
+
+    # >>> The only place these render <<<
+    render_fees_expenses_controls()
 
     # --- SimpleLegal-only duplicate line item options + Historic upload ---
     # ... inside Fees & Expenses tab ...
@@ -2936,6 +3003,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
