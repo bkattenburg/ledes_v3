@@ -1497,7 +1497,7 @@ if _selected_env == "SimpleLegal" and _sl_dup_hist:
             pass
 
     total_amount = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows)
-    return rows, total_amount
+        return rows, total_amount
 
 def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> Tuple[List[Dict], List[str]]:
     """Ensure mandatory line items are included and return a list of any skipped items."""
@@ -3060,6 +3060,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
