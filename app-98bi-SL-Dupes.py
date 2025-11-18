@@ -2459,225 +2459,225 @@ with tab_objects[2]:
 
     # --- SimpleLegal-only duplicate line item options + Historic upload ---
     # ... inside Fees & Expenses tab ...
-selected_env = st.session_state.get("selected_env", "")
-if selected_env == "SimpleLegal":
-    st.markdown("#### SimpleLegal Duplicate Line Items")
 
-    sl_dup_this_invoice = st.checkbox(
-        "SL Dup Line Items - This Invoice",
-        value=False,
-        key="sl_dup_this_invoice",
-    )
-    sl_dup_historic_invoice = st.checkbox(
-        "SL Dup Line Items - Historic Invoice",
-        value=False,
-        key="sl_dup_historic_invoice",
-    )
 
-    # Always start with a clean local var (prevents NameError)
-    hist_file = None
 
-    if sl_dup_historic_invoice:
-        import pandas as pd  # or import once at top of file
 
-        # (Optional) short note
-        # st.info("Upload a historic LEDES CSV to duplicate one line into this invoice.")
 
-        # Uploader and handler LIVE INSIDE this block
-        hist_file = st.file_uploader(
-            "Upload Historic LEDES CSV (1998B-style export)",
-            type="csv",
-            key="historic_ledes_csv",
-            help="We will copy total, currency, worked date, TK name + rate, type (IF/F/E), task/activity/expense codes."
-        )
 
-        if hist_file is not None:
-            try:
-                df_hist = pd.read_csv(hist_file, dtype=str)
-                # Optional: normalize LEDES-style names
-                if "_normalize_historic_columns" in globals():
-                    df_hist = _normalize_historic_columns(df_hist)
 
-                # Store full DF
-                st.session_state["historic_invoice_df"] = df_hist
 
-                # No fee-only filter now; we branch by type (IF/F/E) later in generation
-                st.session_state["historic_invoice_fee_df"] = df_hist
 
-                # Small preview
-                preview_cols = [c for c in [
-                    "EXP/FEE/INV_ADJ_TYPE",
-                    "LINE_ITEM_DATE",
-                    "TASK_CODE","ACTIVITY_CODE","EXPENSE_CODE",
-                    "TIMEKEEPER_NAME","TIMEKEEPER_RATE",
-                    "LINE_ITEM_TOTAL","LINE_ITEM_BILLED_TOTAL_CURRENCY"
-                ] if c in df_hist.columns]
-                st.markdown("**Historic Lines Preview (first 10)**")
-                st.dataframe((df_hist[preview_cols] if preview_cols else df_hist).head(10), use_container_width=True)
 
-            except Exception as e:
-                st.error(f"Could not read historic CSV: {e}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        if timekeeper_data is None:
+            st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
+            fees = 0
+            expenses = 0
         else:
-            st.caption("Upload a CSV to enable historic duplication.")
+            max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
+            st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
+            
+            # Initialize the fee slider's state if it doesn't exist
+            if "fee_slider" not in st.session_state:
+                st.session_state.fee_slider = PRESETS["Custom"]["fees"]
+            
+            fees = st.number_input(
+                "Number of Fee Line Items",
+                min_value=0,
+                max_value=max_fees,
+                key="fee_slider",
+            )
+            st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
+            with st.expander("Adjust Expense Amounts", expanded=False):
+                st.number_input(
+                    "Local Travel (E109) mileage rate ($/mile)",
+                    min_value=0.20, max_value=2.00, value=0.65, step=0.01,
+                    key="mileage_rate_e109",
+                    help="Used to calculate E109 totals as miles × rate. Miles are stored in the HOURS column."
+                )
+                st.slider(
+                    "Out-of-town Travel (E110) amount range ($)",
+                    min_value=10.0, max_value=7500.0, value=(100.0, 800.0), step=10.0,
+                    key="travel_range_e110",
+                    help="Random amount for each E110 line will be drawn from this range."
+                )
+                st.slider(
+                    "Telephone (E105) amount range ($)",
+                    min_value=1.0, max_value=50.0, value=(5.0, 15.0), step=1.0,
+                    key="telephone_range_e105",
+                    help="Random amount for each E105 line will be drawn from this range."
+                )
+         
+                # 1. Determine the default rate based on the selected LEDES version
+                if st.session_state.get("ledes_version") == "1998BI":
+                    default_copy_rate = 0.10
+                else:
+                    default_copy_rate = 0.24
+            
+                # 2. Use the variable as the slider's default value
+                st.number_input(
+                    "Photocopies (E101) per-page rate ($)",
+                    min_value=0.04,
+                    max_value=1.50,
+                    value=default_copy_rate, 
+                    step=0.01,
+                    key="copying_rate_e101",
+                    help="Per-page rate used for E101 Photocopy expenses."
+                )
+            st.caption("Number of expense line items to generate")
+            
+            # Initialize the expense slider's state if it doesn't exist
+            if "expense_slider" not in st.session_state:
+                st.session_state.expense_slider = PRESETS["Custom"]["expenses"]
+            
+            expenses = st.number_input(
+                "Number of Expense Line Items",
+                min_value=0,
+                max_value=50,
+                key="expense_slider",
+            )
+        max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
+        
+        if spend_agent:
+            st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
+            
+            # ---- CORRECTED AND CONSOLIDATED MANDATORY ITEMS LOGIC ----
+            
+            # Base list of all possible items
+            all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
 
-    else:
-        # Checkbox OFF → clear related session state (prevents stale data)
-        st.session_state.pop("historic_invoice_df", None)
-        st.session_state.pop("historic_invoice_fee_df", None)
-               
-    # In the "Fees & Expenses" tab, before the sliders
-    st.selectbox(
-        "Invoice Size Presets",
-        options=list(PRESETS.keys()),
-        key="invoice_preset",
-        on_change=apply_preset,
-        help="Select a preset to quickly adjust the number of fee and expense lines below."
-    )
-    
-    if timekeeper_data is None:
-        st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
-        fees = 0
-        expenses = 0
-    else:
-        max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
-        st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
-        
-        # Initialize the fee slider's state if it doesn't exist
-        if "fee_slider" not in st.session_state:
-            st.session_state.fee_slider = PRESETS["Custom"]["fees"]
-        
-        fees = st.number_input(
-            "Number of Fee Line Items",
-            min_value=0,
-            max_value=max_fees,
-            key="fee_slider",
-        )
-        st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
-        with st.expander("Adjust Expense Amounts", expanded=False):
-            st.number_input(
-                "Local Travel (E109) mileage rate ($/mile)",
-                min_value=0.20, max_value=2.00, value=0.65, step=0.01,
-                key="mileage_rate_e109",
-                help="Used to calculate E109 totals as miles × rate. Miles are stored in the HOURS column."
-            )
-            st.slider(
-                "Out-of-town Travel (E110) amount range ($)",
-                min_value=10.0, max_value=7500.0, value=(100.0, 800.0), step=10.0,
-                key="travel_range_e110",
-                help="Random amount for each E110 line will be drawn from this range."
-            )
-            st.slider(
-                "Telephone (E105) amount range ($)",
-                min_value=1.0, max_value=50.0, value=(5.0, 15.0), step=1.0,
-                key="telephone_range_e105",
-                help="Random amount for each E105 line will be drawn from this range."
-            )
-     
-            # 1. Determine the default rate based on the selected LEDES version
-            if st.session_state.get("ledes_version") == "1998BI":
-                default_copy_rate = 0.10
-            else:
-                default_copy_rate = 0.24
-        
-            # 2. Use the variable as the slider's default value
-            st.number_input(
-                "Photocopies (E101) per-page rate ($)",
-                min_value=0.04,
-                max_value=1.50,
-                value=default_copy_rate, 
-                step=0.01,
-                key="copying_rate_e101",
-                help="Per-page rate used for E101 Photocopy expenses."
-            )
-        st.caption("Number of expense line items to generate")
-        
-        # Initialize the expense slider's state if it doesn't exist
-        if "expense_slider" not in st.session_state:
-            st.session_state.expense_slider = PRESETS["Custom"]["expenses"]
-        
-        expenses = st.number_input(
-            "Number of Expense Line Items",
-            min_value=0,
-            max_value=50,
-            key="expense_slider",
-        )
-    max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
-    
-    if spend_agent:
-        st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-        
-        # ---- CORRECTED AND CONSOLIDATED MANDATORY ITEMS LOGIC ----
-        
-        # Base list of all possible items
-        all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
-
-        # Determine the items available for selection based on the environment
-        if st.session_state.get("selected_env") == 'SimpleLegal':
-            available_items = [
-                name for name, details in CONFIG['MANDATORY_ITEMS'].items()
-                if details.get('is_expense') and details.get('expense_code') == 'E110'
-            ]
-            st.info("For the 'SimpleLegal' profile, only E110 mandatory expenses are available.")
-        else:
-            available_items = all_items
-
-        # Determine the default selected items
-        saved_selection = st.session_state.get("mandatory_items_default")
-        if saved_selection is not None:
-            # Use last selection if saved, but only include items currently available
-            default_selection = [item for item in saved_selection if item in available_items]
-        else:
-            # Otherwise, determine initial defaults based on environment.
+            # Determine the items available for selection based on the environment
             if st.session_state.get("selected_env") == 'SimpleLegal':
-                # For SimpleLegal, all available items are selected by default.
-                default_selection = list(available_items)
+                available_items = [
+                    name for name, details in CONFIG['MANDATORY_ITEMS'].items()
+                    if details.get('is_expense') and details.get('expense_code') == 'E110'
+                ]
+                st.info("For the 'SimpleLegal' profile, only E110 mandatory expenses are available.")
             else:
-                # For other environments, default to all items
-                default_selection = list(available_items)
-        
-        # Special rule for 'Unity': ensure 'Partner: Paralegal Task' is pre-selected if available.
-        if st.session_state.get("selected_env") == "Unity":
-            pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
-            if pp_key and pp_key not in default_selection:
-                default_selection.append(pp_key)
-        
-        # Render the multiselect widget
-        selected_items = st.multiselect(
-            "Select Mandatory Items to Include",
-            options=available_items,
-            default=default_selection,
-            key="mandatory_items_multiselect",
-        )
+                available_items = all_items
 
-        # Persist the user's selection so it survives reruns.
-        st.session_state["mandatory_items_default"] = list(selected_items)
-        
-        # Conditional UI for Airfare Details
-        if 'Airfare E110' in selected_items:
-            st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
-            ac1, ac2 = st.columns(2)
-            with ac1:
-                st.text_input("Airline", key="airfare_airline", value="United Airlines")
-                st.text_input("Departure City", key="airfare_departure_city", value="Newark")
-                st.checkbox("Roundtrip", key="airfare_roundtrip", value=True)
-            with ac2:
-                st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
-                st.text_input("Arrival City", key="airfare_arrival_city", value="Los Angeles")
-                st.number_input("Amount", min_value=0.0, value=450.75, step=0.01, key="airfare_amount", help="This amount will be used for the airfare line item total.")
-            st.selectbox(
-                "Fare Class",
-                options=["First", "Business", "Premium Economy", "Economy/Coach"],
-                key="airfare_fare_class",
-                help="Select the standard airline fare class (e.g., First, Business, Coach). This will be added to the line item description."
+            # Determine the default selected items
+            saved_selection = st.session_state.get("mandatory_items_default")
+            if saved_selection is not None:
+                # Use last selection if saved, but only include items currently available
+                default_selection = [item for item in saved_selection if item in available_items]
+            else:
+                # Otherwise, determine initial defaults based on environment.
+                if st.session_state.get("selected_env") == 'SimpleLegal':
+                    # For SimpleLegal, all available items are selected by default.
+                    default_selection = list(available_items)
+                else:
+                    # For other environments, default to all items
+                    default_selection = list(available_items)
+            
+            # Special rule for 'Unity': ensure 'Partner: Paralegal Task' is pre-selected if available.
+            if st.session_state.get("selected_env") == "Unity":
+                pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
+                if pp_key and pp_key not in default_selection:
+                    default_selection.append(pp_key)
+            
+            # Render the multiselect widget
+            selected_items = st.multiselect(
+                "Select Mandatory Items to Include",
+                options=available_items,
+                default=default_selection,
+                key="mandatory_items_multiselect",
             )
-        
-        # Conditional UI for Uber Details
-        if 'Uber E110' in selected_items:
-            st.markdown("<h4 style='color: #1E1E1E;'>Uber E110 Details</h4>", unsafe_allow_html=True)
-            st.number_input("Ride Amount", min_value=0.0, value=25.50, step=0.01, key="uber_amount", help="This amount will be used for the Uber ride line item total.")
 
-    else:
-        selected_items = []
+            # Persist the user's selection so it survives reruns.
+            st.session_state["mandatory_items_default"] = list(selected_items)
+            
+            # Conditional UI for Airfare Details
+            if 'Airfare E110' in selected_items:
+                st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
+                ac1, ac2 = st.columns(2)
+                with ac1:
+                    st.text_input("Airline", key="airfare_airline", value="United Airlines")
+                    st.text_input("Departure City", key="airfare_departure_city", value="Newark")
+                    st.checkbox("Roundtrip", key="airfare_roundtrip", value=True)
+                with ac2:
+                    st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
+                    st.text_input("Arrival City", key="airfare_arrival_city", value="Los Angeles")
+                    st.number_input("Amount", min_value=0.0, value=450.75, step=0.01, key="airfare_amount", help="This amount will be used for the airfare line item total.")
+                st.selectbox(
+                    "Fare Class",
+                    options=["First", "Business", "Premium Economy", "Economy/Coach"],
+                    key="airfare_fare_class",
+                    help="Select the standard airline fare class (e.g., First, Business, Coach). This will be added to the line item description."
+                )
+            
+            # Conditional UI for Uber Details
+            if 'Uber E110' in selected_items:
+                st.markdown("<h4 style='color: #1E1E1E;'>Uber E110 Details</h4>", unsafe_allow_html=True)
+                st.number_input("Ride Amount", min_value=0.0, value=25.50, step=0.01, key="uber_amount", help="This amount will be used for the Uber ride line item total.")
+
+        else:
+            selected_items = []
 
 
 output_tab_index = tabs.index("Output")
@@ -3003,44 +3003,3 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
