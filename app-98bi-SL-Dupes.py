@@ -2459,81 +2459,6 @@ with tab_objects[2]:
 
     # --- SimpleLegal-only duplicate line item options + Historic upload ---
     # ... inside Fees & Expenses tab ...
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
         if timekeeper_data is None:
             st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
             fees = 0
@@ -3003,3 +2928,4 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
