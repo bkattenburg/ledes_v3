@@ -2466,73 +2466,73 @@ with tab_objects[2]:
             
             # ---- CORRECTED AND CONSOLIDATED MANDATORY ITEMS LOGIC ----
             
-            # Base list of all possible items
-            all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
+        # Base list of all possible items
+        all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
 
-            # Determine the items available for selection based on the environment
+        # Determine the items available for selection based on the environment
+        if st.session_state.get("selected_env") == 'SimpleLegal':
+            available_items = [
+                name for name, details in CONFIG['MANDATORY_ITEMS'].items()
+                if details.get('is_expense') and details.get('expense_code') == 'E110'
+            ]
+            st.info("For the 'SimpleLegal' profile, only E110 mandatory expenses are available.")
+        else:
+            available_items = all_items
+
+        # Determine the default selected items
+        saved_selection = st.session_state.get("mandatory_items_default")
+        if saved_selection is not None:
+            # Use last selection if saved, but only include items currently available
+            default_selection = [item for item in saved_selection if item in available_items]
+        else:
+            # Otherwise, determine initial defaults based on environment.
             if st.session_state.get("selected_env") == 'SimpleLegal':
-                available_items = [
-                    name for name, details in CONFIG['MANDATORY_ITEMS'].items()
-                    if details.get('is_expense') and details.get('expense_code') == 'E110'
-                ]
-                st.info("For the 'SimpleLegal' profile, only E110 mandatory expenses are available.")
+                # For SimpleLegal, all available items are selected by default.
+                default_selection = list(available_items)
             else:
-                available_items = all_items
+                # For other environments, default to all items
+                default_selection = list(available_items)
+        
+        # Special rule for 'Unity': ensure 'Partner: Paralegal Task' is pre-selected if available.
+        if st.session_state.get("selected_env") == "Unity":
+            pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
+            if pp_key and pp_key not in default_selection:
+                default_selection.append(pp_key)
+        
+        # Render the multiselect widget
+        selected_items = st.multiselect(
+            "Select Mandatory Items to Include",
+            options=available_items,
+            default=default_selection,
+            key="mandatory_items_multiselect",
+        )
 
-            # Determine the default selected items
-            saved_selection = st.session_state.get("mandatory_items_default")
-            if saved_selection is not None:
-                # Use last selection if saved, but only include items currently available
-                default_selection = [item for item in saved_selection if item in available_items]
-            else:
-                # Otherwise, determine initial defaults based on environment.
-                if st.session_state.get("selected_env") == 'SimpleLegal':
-                    # For SimpleLegal, all available items are selected by default.
-                    default_selection = list(available_items)
-                else:
-                    # For other environments, default to all items
-                    default_selection = list(available_items)
-            
-            # Special rule for 'Unity': ensure 'Partner: Paralegal Task' is pre-selected if available.
-            if st.session_state.get("selected_env") == "Unity":
-                pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
-                if pp_key and pp_key not in default_selection:
-                    default_selection.append(pp_key)
-            
-            # Render the multiselect widget
-            selected_items = st.multiselect(
-                "Select Mandatory Items to Include",
-                options=available_items,
-                default=default_selection,
-                key="mandatory_items_multiselect",
+        # Persist the user's selection so it survives reruns.
+        st.session_state["mandatory_items_default"] = list(selected_items)
+        
+        # Conditional UI for Airfare Details
+        if 'Airfare E110' in selected_items:
+            st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
+            ac1, ac2 = st.columns(2)
+            with ac1:
+                st.text_input("Airline", key="airfare_airline", value="United Airlines")
+                st.text_input("Departure City", key="airfare_departure_city", value="Newark")
+                st.checkbox("Roundtrip", key="airfare_roundtrip", value=True)
+            with ac2:
+                st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
+                st.text_input("Arrival City", key="airfare_arrival_city", value="Los Angeles")
+                st.number_input("Amount", min_value=0.0, value=450.75, step=0.01, key="airfare_amount", help="This amount will be used for the airfare line item total.")
+            st.selectbox(
+                "Fare Class",
+                options=["First", "Business", "Premium Economy", "Economy/Coach"],
+                key="airfare_fare_class",
+                help="Select the standard airline fare class (e.g., First, Business, Coach). This will be added to the line item description."
             )
-
-            # Persist the user's selection so it survives reruns.
-            st.session_state["mandatory_items_default"] = list(selected_items)
-            
-            # Conditional UI for Airfare Details
-            if 'Airfare E110' in selected_items:
-                st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
-                ac1, ac2 = st.columns(2)
-                with ac1:
-                    st.text_input("Airline", key="airfare_airline", value="United Airlines")
-                    st.text_input("Departure City", key="airfare_departure_city", value="Newark")
-                    st.checkbox("Roundtrip", key="airfare_roundtrip", value=True)
-                with ac2:
-                    st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
-                    st.text_input("Arrival City", key="airfare_arrival_city", value="Los Angeles")
-                    st.number_input("Amount", min_value=0.0, value=450.75, step=0.01, key="airfare_amount", help="This amount will be used for the airfare line item total.")
-                st.selectbox(
-                    "Fare Class",
-                    options=["First", "Business", "Premium Economy", "Economy/Coach"],
-                    key="airfare_fare_class",
-                    help="Select the standard airline fare class (e.g., First, Business, Coach). This will be added to the line item description."
-                )
-            
-            # Conditional UI for Uber Details
-            if 'Uber E110' in selected_items:
-                st.markdown("<h4 style='color: #1E1E1E;'>Uber E110 Details</h4>", unsafe_allow_html=True)
-                st.number_input("Ride Amount", min_value=0.0, value=25.50, step=0.01, key="uber_amount", help="This amount will be used for the Uber ride line item total.")
+        
+        # Conditional UI for Uber Details
+        if 'Uber E110' in selected_items:
+            st.markdown("<h4 style='color: #1E1E1E;'>Uber E110 Details</h4>", unsafe_allow_html=True)
+            st.number_input("Ride Amount", min_value=0.0, value=25.50, step=0.01, key="uber_amount", help="This amount will be used for the Uber ride line item total.")
 
         else:
             selected_items = []
@@ -2859,5 +2859,6 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
