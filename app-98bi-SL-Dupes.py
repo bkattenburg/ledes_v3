@@ -1072,123 +1072,74 @@ def _append_two_attendee_meeting_rows(rows, timekeeper_data, billing_start_date,
     return rows
 
 if st.session_state.pop("__do_generate__", False):
-def _generate_invoice_data(
-    fee_count: int,
-    expense_count: int,
-    timekeeper_data: List[Dict],
-    client_id: str,
-    law_firm_id: str,
-    invoice_desc: str,
-    billing_start_date: datetime.date,
-    billing_end_date: datetime.date,
-    task_activity_desc: List[Tuple[str, str, str]],
-    major_task_codes: set,
-    max_hours_per_tk_per_day: int,
-    num_block_billed: int,
-    faker_instance: Faker,
-    include_vague_items: bool
-) -> Tuple[List[Dict], float]:
-    """Generate invoice data using ONLY the uploaded CSV:
-    - Non-block fees come from rows with Blockbilling=N
-    - Block-billed fees come from rows with Blockbilling=Y (no synthetic building)
-    - Expenses are generated as before
-    Mandatory items are appended by the caller after this returns.
-    """
-    rows: List[Dict] = []
-    import random, datetime as _dt
+    def _generate_invoice_data(
+        fee_count: int,
+        expense_count: int,
+        timekeeper_data: List[Dict],
+        client_id: str,
+        law_firm_id: str,
+        invoice_desc: str,
+        billing_start_date: datetime.date,
+        billing_end_date: datetime.date,
+        task_activity_desc: List[Tuple[str, str, str]],
+        major_task_codes: set,
+        max_hours_per_tk_per_day: int,
+        num_block_billed: int,
+        faker_instance: Faker,
+        include_vague_items: bool
+    ) -> Tuple[List[Dict], float]:
+        """Generate invoice data using ONLY the uploaded CSV:
+        - Non-block fees come from rows with Blockbilling=N
+        - Block-billed fees come from rows with Blockbilling=Y (no synthetic building)
+        - Expenses are generated as before
+        Mandatory items are appended by the caller after this returns.
+        """
+        rows: List[Dict] = []
+        import random, datetime as _dt
+    
+        # Get uploaded source
+        try:
+            df_src = st.session_state.get("custom_fee_df_full") or st.session_state.get("custom_fee_df")
+        except Exception:
+            df_src = None
 
-    # Get uploaded source
-    try:
-        df_src = st.session_state.get("custom_fee_df_full") or st.session_state.get("custom_fee_df")
-    except Exception:
-        df_src = None
-
-    # Split source df into vague and non-vague pools
-    df_non_vague_pool = None
-    df_vague_pool = None
-    if df_src is not None:
-        if "VAGUE" in df_src.columns:
-            is_vague_mask = df_src["VAGUE"].astype(str).str.strip().str.upper() == "Y"
-            df_vague_pool = df_src[is_vague_mask]
-            df_non_vague_pool = df_src[~is_vague_mask]
-        else:
-            # If no VAGUE column, all items are non-vague
-            df_non_vague_pool = df_src
-
-    # Helper to build a fee row
-    def _mk_fee_row(desc: str, tk: Dict, date_str: str, task_code: str, act_code: str, hours: float, block: bool=False) -> Dict:
-        rate = float(tk.get("RATE", 0.0))
-        row = {
-            "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-            "LINE_ITEM_DATE": date_str, "TIMEKEEPER_NAME": tk.get("TIMEKEEPER_NAME",""),
-            "TIMEKEEPER_CLASSIFICATION": tk.get("TIMEKEEPER_CLASSIFICATION",""), "TIMEKEEPER_ID": tk.get("TIMEKEEPER_ID",""),
-            "TASK_CODE": task_code, "ACTIVITY_CODE": act_code, "EXPENSE_CODE": "",
-            "DESCRIPTION": desc,
-            "HOURS": float(round(hours, 2)), "RATE": rate
-        }
-        row["LINE_ITEM_TOTAL"] = round(float(row["HOURS"]) * rate, 2)
-        if block:
-            row["_is_block_billed_from_source"] = True
-            row["_is_block_billed"] = True
-        return row
-
-    # Time window
-    delta_days = max(0, (billing_end_date - billing_start_date).days)
-
-    # --- Non-block fees (N) ---
-    nb_picks = []
-    if fee_count > 0:
-        nb_picks = _select_items_from_source(df_non_vague_pool, want_block=False, k=fee_count) if df_non_vague_pool is not None else []
-    for item in nb_picks:
-        day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
-        date_str = day.strftime("%Y-%m-%d")
-        tk = _pick_timekeeper_by_class(timekeeper_data, item.get("TK_CLASSIFICATION"))
-        if not tk: 
-            continue
-        hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
-        hours = round(random.uniform(0.5, max(0.6, min(3.5, hours_cap))), 1)
-        processed_desc = _process_description(item["DESC"], faker_instance)
-        rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
-
-    # --- Block-billed fees (Y) ---
-    include_blocks = True
-    try:
-        include_blocks = bool(st.session_state.get("include_block_billed", True))
-    except Exception:
-        pass
-    bb_picks = []
-    if include_blocks and num_block_billed > 0:
-        bb_picks = _select_items_from_source(df_non_vague_pool, want_block=True, k=num_block_billed) if df_non_vague_pool is not None else []
-    for item in bb_picks[:num_block_billed]:
-        day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
-        date_str = day.strftime("%Y-%m-%d")
-        tk = _pick_timekeeper_by_class(timekeeper_data, item.get("TK_CLASSIFICATION"))
-        if not tk: 
-            continue
-        hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
-        hours = round(random.uniform(1.0, max(1.0, min(6.0, hours_cap))), 1)
-        processed_desc = _process_description(item["DESC"], faker_instance)
-        rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=True))
-
-    # --- Vague Line Items ---
-    if include_vague_items and df_vague_pool is not None and not df_vague_pool.empty:
-        num_vague_to_add = random.randint(1, 5)
-        # Convert df to the dict format expected by the loop
-        vague_pool = []
-        for _, r in df_vague_pool.iterrows():
-            vague_pool.append({
-                "TASK_CODE": str(r.get("TASK_CODE","")).strip(),
-                "ACTIVITY_CODE": str(r.get("ACTIVITY_CODE","")).strip(),
-                "DESC": str(r.get("DESCRIPTION","")).strip(),
-                "TK_CLASSIFICATION": str(r.get("TK_CLASSIFICATION","")).strip(),
-            })
-        
-        if len(vague_pool) >= num_vague_to_add:
-            vague_picks = random.sample(vague_pool, num_vague_to_add)
-        else:
-            vague_picks = vague_pool # add all available if less than desired
-
-        for item in vague_picks:
+        # Split source df into vague and non-vague pools
+        df_non_vague_pool = None
+        df_vague_pool = None
+        if df_src is not None:
+            if "VAGUE" in df_src.columns:
+                is_vague_mask = df_src["VAGUE"].astype(str).str.strip().str.upper() == "Y"
+                df_vague_pool = df_src[is_vague_mask]
+                df_non_vague_pool = df_src[~is_vague_mask]
+            else:
+                # If no VAGUE column, all items are non-vague
+                df_non_vague_pool = df_src
+    
+        # Helper to build a fee row
+        def _mk_fee_row(desc: str, tk: Dict, date_str: str, task_code: str, act_code: str, hours: float, block: bool=False) -> Dict:
+            rate = float(tk.get("RATE", 0.0))
+            row = {
+                "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                "LINE_ITEM_DATE": date_str, "TIMEKEEPER_NAME": tk.get("TIMEKEEPER_NAME",""),
+                "TIMEKEEPER_CLASSIFICATION": tk.get("TIMEKEEPER_CLASSIFICATION",""), "TIMEKEEPER_ID": tk.get("TIMEKEEPER_ID",""),
+                "TASK_CODE": task_code, "ACTIVITY_CODE": act_code, "EXPENSE_CODE": "",
+                "DESCRIPTION": desc,
+                "HOURS": float(round(hours, 2)), "RATE": rate
+            }
+            row["LINE_ITEM_TOTAL"] = round(float(row["HOURS"]) * rate, 2)
+            if block:
+                row["_is_block_billed_from_source"] = True
+                row["_is_block_billed"] = True
+            return row
+    
+        # Time window
+        delta_days = max(0, (billing_end_date - billing_start_date).days)
+    
+        # --- Non-block fees (N) ---
+        nb_picks = []
+        if fee_count > 0:
+            nb_picks = _select_items_from_source(df_non_vague_pool, want_block=False, k=fee_count) if df_non_vague_pool is not None else []
+        for item in nb_picks:
             day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
             date_str = day.strftime("%Y-%m-%d")
             tk = _pick_timekeeper_by_class(timekeeper_data, item.get("TK_CLASSIFICATION"))
@@ -1198,157 +1149,206 @@ def _generate_invoice_data(
             hours = round(random.uniform(0.5, max(0.6, min(3.5, hours_cap))), 1)
             processed_desc = _process_description(item["DESC"], faker_instance)
             rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
-
-        # --- Multiple attendees (existing logic) ---
-    try:
-        _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
-    except Exception:
-        _multi_flag = False
-
-    if _multi_flag:
-        rows = _append_two_attendee_meeting_rows(
-            rows,
-            timekeeper_data,
-            billing_start_date,
-            faker_instance,
-            client_id,
-            law_firm_id,
-            invoice_desc
-        )
-
-    # --- SimpleLegal: duplicate one fee line within THIS invoice (fresh DESCRIPTION) ---
-    try:
-        _selected_env = st.session_state.get("selected_env", "")
-    except Exception:
-        _selected_env = ""
-    try:
-        _sl_dup_this = bool(st.session_state.get("sl_dup_this_invoice", False))
-    except Exception:
-        _sl_dup_this = False
-
-    if _selected_env == "SimpleLegal" and _sl_dup_this:
-        fee_rows = [r for r in rows if not str(r.get("EXPENSE_CODE", "")).strip()]
-        if fee_rows:
-            import random as _rand
-            original = _rand.choice(fee_rows)
-            dup = dict(original)
-            alt_desc_candidates = [
-                "Review and analysis of discovery responses and case status.",
-                "Telephone conference with client regarding litigation strategy and next steps.",
-                "Draft and revise correspondence to opposing counsel regarding scheduling.",
-                "Legal research regarding jurisdictional and procedural issues.",
-                "Prepare internal case update memorandum for client team."
-            ]
-            dup["DESCRIPTION"] = _process_description(_rand.choice(alt_desc_candidates), faker_instance)
-            rows.append(dup)
-
-    # --- SimpleLegal: clone ONE line from a HISTORIC invoice CSV using specific fields only ---
-    try:
-        _sl_dup_hist = bool(st.session_state.get("sl_dup_historic_invoice", False))
-    except Exception:
-        _sl_dup_hist = False
-
-    if _selected_env == "SimpleLegal" and _sl_dup_hist:
-        import random as _rand
-        df_hist = st.session_state.get("historic_invoice_fee_df") or st.session_state.get("historic_invoice_df")
-        has_rows = bool(df_hist is not None and len(df_hist) > 0)
-        if has_rows:
-            try:
-                mode = st.session_state.get("historic_select_mode", "Random fee line")
-                if mode == "Pick by row number" and "historic_row_idx" in st.session_state:
-                    idx = int(st.session_state["historic_row_idx"])
-                    if idx < 0 or idx >= len(df_hist):
-                        idx = 0
-                else:
-                    idx = _rand.randint(0, len(df_hist) - 1)
-            except Exception:
-                idx = 0
-
-            h = df_hist.iloc[idx]
-            li_type = str(h.get("EXP/FEE/INV_ADJ_TYPE", "") or "").strip().upper()   # IF / F / E
-            tk_name = str(h.get("TIMEKEEPER_NAME", "") or "").strip()
-            try:
-                tk_rate = float(str(h.get("TIMEKEEPER_RATE", h.get("RATE", h.get("LINE_ITEM_UNIT_COST", "0"))) or "0"))
-            except Exception:
-                tk_rate = 0.0
-            try:
-                billed_total = float(str(h.get("LINE_ITEM_TOTAL", "0") or "0"))
-            except Exception:
-                billed_total = 0.0
-            currency = str(h.get("LINE_ITEM_BILLED_TOTAL_CURRENCY", "") or "").strip()
-            line_item_date = str(h.get("LINE_ITEM_DATE", "") or "").strip() or billing_start_date.strftime("%Y-%m-%d")
-            task_code = (str(h.get("TASK_CODE", "") or "").strip() 
-                         or str(h.get("LINE_ITEM_TASK_CODE", "") or "").strip())
-            activity_code = (str(h.get("ACTIVITY_CODE", "") or "").strip() 
-                             or str(h.get("LINE_ITEM_ACTIVITY_CODE", "") or "").strip())
-            expense_code = (str(h.get("EXPENSE_CODE", "") or "").strip() 
-                            or str(h.get("LINE_ITEM_EXPENSE_CODE", "") or "").strip())
-
-            # match current TK by name; fallback to first
-            tk_match = None
-            if tk_name:
-                for t in (timekeeper_data or []):
-                    if str(t.get("TIMEKEEPER_NAME", "")).strip() == tk_name:
-                        tk_match = t
-                        break
-            if tk_match is None and timekeeper_data:
-                tk_match = timekeeper_data[0]
-
-            if tk_match:
-                alt_desc_candidates = [
-                    "Review and update case workstream.",
-                    "Draft email and correspondence to stakeholders.",
-                    "Conduct legal research and summarize findings.",
-                    "Prepare internal status memo and action items.",
-                    "Analyze materials and outline follow-ups."
-                ]
-                new_desc = _process_description(_rand.choice(alt_desc_candidates), faker_instance)
-
-                if li_type in ("F", "IF"):
-                    hours = round(billed_total / tk_rate, 4) if tk_rate > 0 else 0.0
-                    fee_row = _mk_fee_row(new_desc, tk_match, line_item_date, task_code, activity_code, hours, block=False)
-                    fee_row["RATE"] = float(tk_rate)
-                    fee_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(tk_rate), 2)
-                    fee_row["EXP/FEE/INV_ADJ_TYPE"] = li_type
-                    if currency:
-                        fee_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
-                    if expense_code:
-                        fee_row["EXPENSE_CODE"] = expense_code
-                    rows.append(fee_row)
-                elif li_type == "E":
-                    hours = 1.0
-                    rate = billed_total
-                    exp_row = _mk_fee_row(new_desc, tk_match, line_item_date, task_code, activity_code, hours, block=False)
-                    exp_row["RATE"] = float(rate)
-                    exp_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(rate), 2)
-                    exp_row["EXPENSE_CODE"] = expense_code or "E000"
-                    exp_row["EXP/FEE/INV_ADJ_TYPE"] = "E"
-                    if currency:
-                        exp_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
-                    rows.append(exp_row)
-                else:
-                    hours = round(billed_total / tk_rate, 4) if tk_rate > 0 else 0.0
-                    fee_row = _mk_fee_row(new_desc, tk_match, line_item_date, task_code, activity_code, hours, block=False)
-                    fee_row["RATE"] = float(tk_rate)
-                    fee_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(tk_rate), 2)
-                    fee_row["EXP/FEE/INV_ADJ_TYPE"] = "F"
-                    if currency:
-                        fee_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
-                    if expense_code:
-                        fee_row["EXPENSE_CODE"] = expense_code
-                    rows.append(fee_row)
-
-    # --- Expenses (single call) ---
-    if expense_count > 0:
+    
+        # --- Block-billed fees (Y) ---
+        include_blocks = True
         try:
-            rows.extend(_generate_expenses(
-                expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc
-            ))
+            include_blocks = bool(st.session_state.get("include_block_billed", True))
         except Exception:
             pass
-
-    total_amount = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows)
-    return rows, total_amount
+        bb_picks = []
+        if include_blocks and num_block_billed > 0:
+            bb_picks = _select_items_from_source(df_non_vague_pool, want_block=True, k=num_block_billed) if df_non_vague_pool is not None else []
+        for item in bb_picks[:num_block_billed]:
+            day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
+            date_str = day.strftime("%Y-%m-%d")
+            tk = _pick_timekeeper_by_class(timekeeper_data, item.get("TK_CLASSIFICATION"))
+            if not tk: 
+                continue
+            hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
+            hours = round(random.uniform(1.0, max(1.0, min(6.0, hours_cap))), 1)
+            processed_desc = _process_description(item["DESC"], faker_instance)
+            rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=True))
+    
+        # --- Vague Line Items ---
+        if include_vague_items and df_vague_pool is not None and not df_vague_pool.empty:
+            num_vague_to_add = random.randint(1, 5)
+            # Convert df to the dict format expected by the loop
+            vague_pool = []
+            for _, r in df_vague_pool.iterrows():
+                vague_pool.append({
+                    "TASK_CODE": str(r.get("TASK_CODE","")).strip(),
+                    "ACTIVITY_CODE": str(r.get("ACTIVITY_CODE","")).strip(),
+                    "DESC": str(r.get("DESCRIPTION","")).strip(),
+                    "TK_CLASSIFICATION": str(r.get("TK_CLASSIFICATION","")).strip(),
+                })
+            
+            if len(vague_pool) >= num_vague_to_add:
+                vague_picks = random.sample(vague_pool, num_vague_to_add)
+            else:
+                vague_picks = vague_pool # add all available if less than desired
+    
+            for item in vague_picks:
+                day = billing_start_date + _dt.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
+                date_str = day.strftime("%Y-%m-%d")
+                tk = _pick_timekeeper_by_class(timekeeper_data, item.get("TK_CLASSIFICATION"))
+                if not tk: 
+                    continue
+                hours_cap = float(max_hours_per_tk_per_day) if max_hours_per_tk_per_day else 6.0
+                hours = round(random.uniform(0.5, max(0.6, min(3.5, hours_cap))), 1)
+                processed_desc = _process_description(item["DESC"], faker_instance)
+                rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
+    
+            # --- Multiple attendees (existing logic) ---
+        try:
+            _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
+        except Exception:
+            _multi_flag = False
+    
+        if _multi_flag:
+            rows = _append_two_attendee_meeting_rows(
+                rows,
+                timekeeper_data,
+                billing_start_date,
+                faker_instance,
+                client_id,
+                law_firm_id,
+                invoice_desc
+            )
+    
+        # --- SimpleLegal: duplicate one fee line within THIS invoice (fresh DESCRIPTION) ---
+        try:
+            _selected_env = st.session_state.get("selected_env", "")
+        except Exception:
+            _selected_env = ""
+        try:
+            _sl_dup_this = bool(st.session_state.get("sl_dup_this_invoice", False))
+        except Exception:
+            _sl_dup_this = False
+    
+        if _selected_env == "SimpleLegal" and _sl_dup_this:
+            fee_rows = [r for r in rows if not str(r.get("EXPENSE_CODE", "")).strip()]
+            if fee_rows:
+                import random as _rand
+                original = _rand.choice(fee_rows)
+                dup = dict(original)
+                alt_desc_candidates = [
+                    "Review and analysis of discovery responses and case status.",
+                    "Telephone conference with client regarding litigation strategy and next steps.",
+                    "Draft and revise correspondence to opposing counsel regarding scheduling.",
+                    "Legal research regarding jurisdictional and procedural issues.",
+                    "Prepare internal case update memorandum for client team."
+                ]
+                dup["DESCRIPTION"] = _process_description(_rand.choice(alt_desc_candidates), faker_instance)
+                rows.append(dup)
+    
+        # --- SimpleLegal: clone ONE line from a HISTORIC invoice CSV using specific fields only ---
+        try:
+            _sl_dup_hist = bool(st.session_state.get("sl_dup_historic_invoice", False))
+        except Exception:
+            _sl_dup_hist = False
+    
+        if _selected_env == "SimpleLegal" and _sl_dup_hist:
+            import random as _rand
+            df_hist = st.session_state.get("historic_invoice_fee_df") or st.session_state.get("historic_invoice_df")
+            has_rows = bool(df_hist is not None and len(df_hist) > 0)
+            if has_rows:
+                try:
+                    mode = st.session_state.get("historic_select_mode", "Random fee line")
+                    if mode == "Pick by row number" and "historic_row_idx" in st.session_state:
+                        idx = int(st.session_state["historic_row_idx"])
+                        if idx < 0 or idx >= len(df_hist):
+                            idx = 0
+                    else:
+                        idx = _rand.randint(0, len(df_hist) - 1)
+                except Exception:
+                    idx = 0
+    
+                h = df_hist.iloc[idx]
+                li_type = str(h.get("EXP/FEE/INV_ADJ_TYPE", "") or "").strip().upper()   # IF / F / E
+                tk_name = str(h.get("TIMEKEEPER_NAME", "") or "").strip()
+                try:
+                    tk_rate = float(str(h.get("TIMEKEEPER_RATE", h.get("RATE", h.get("LINE_ITEM_UNIT_COST", "0"))) or "0"))
+                except Exception:
+                    tk_rate = 0.0
+                try:
+                    billed_total = float(str(h.get("LINE_ITEM_TOTAL", "0") or "0"))
+                except Exception:
+                    billed_total = 0.0
+                currency = str(h.get("LINE_ITEM_BILLED_TOTAL_CURRENCY", "") or "").strip()
+                line_item_date = str(h.get("LINE_ITEM_DATE", "") or "").strip() or billing_start_date.strftime("%Y-%m-%d")
+                task_code = (str(h.get("TASK_CODE", "") or "").strip() 
+                             or str(h.get("LINE_ITEM_TASK_CODE", "") or "").strip())
+                activity_code = (str(h.get("ACTIVITY_CODE", "") or "").strip() 
+                                 or str(h.get("LINE_ITEM_ACTIVITY_CODE", "") or "").strip())
+                expense_code = (str(h.get("EXPENSE_CODE", "") or "").strip() 
+                                or str(h.get("LINE_ITEM_EXPENSE_CODE", "") or "").strip())
+    
+                # match current TK by name; fallback to first
+                tk_match = None
+                if tk_name:
+                    for t in (timekeeper_data or []):
+                        if str(t.get("TIMEKEEPER_NAME", "")).strip() == tk_name:
+                            tk_match = t
+                            break
+                if tk_match is None and timekeeper_data:
+                    tk_match = timekeeper_data[0]
+    
+                if tk_match:
+                    alt_desc_candidates = [
+                        "Review and update case workstream.",
+                        "Draft email and correspondence to stakeholders.",
+                        "Conduct legal research and summarize findings.",
+                        "Prepare internal status memo and action items.",
+                        "Analyze materials and outline follow-ups."
+                    ]
+                    new_desc = _process_description(_rand.choice(alt_desc_candidates), faker_instance)
+    
+                    if li_type in ("F", "IF"):
+                        hours = round(billed_total / tk_rate, 4) if tk_rate > 0 else 0.0
+                        fee_row = _mk_fee_row(new_desc, tk_match, line_item_date, task_code, activity_code, hours, block=False)
+                        fee_row["RATE"] = float(tk_rate)
+                        fee_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(tk_rate), 2)
+                        fee_row["EXP/FEE/INV_ADJ_TYPE"] = li_type
+                        if currency:
+                            fee_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
+                        if expense_code:
+                            fee_row["EXPENSE_CODE"] = expense_code
+                        rows.append(fee_row)
+                    elif li_type == "E":
+                        hours = 1.0
+                        rate = billed_total
+                        exp_row = _mk_fee_row(new_desc, tk_match, line_item_date, task_code, activity_code, hours, block=False)
+                        exp_row["RATE"] = float(rate)
+                        exp_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(rate), 2)
+                        exp_row["EXPENSE_CODE"] = expense_code or "E000"
+                        exp_row["EXP/FEE/INV_ADJ_TYPE"] = "E"
+                        if currency:
+                            exp_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
+                        rows.append(exp_row)
+                    else:
+                        hours = round(billed_total / tk_rate, 4) if tk_rate > 0 else 0.0
+                        fee_row = _mk_fee_row(new_desc, tk_match, line_item_date, task_code, activity_code, hours, block=False)
+                        fee_row["RATE"] = float(tk_rate)
+                        fee_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(tk_rate), 2)
+                        fee_row["EXP/FEE/INV_ADJ_TYPE"] = "F"
+                        if currency:
+                            fee_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
+                        if expense_code:
+                            fee_row["EXPENSE_CODE"] = expense_code
+                        rows.append(fee_row)
+    
+        # --- Expenses (single call) ---
+        if expense_count > 0:
+            try:
+                rows.extend(_generate_expenses(
+                    expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc
+                ))
+            except Exception:
+                pass
+    
+        total_amount = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows)
+        return rows, total_amount
 
 def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> Tuple[List[Dict], List[str]]:
     """Ensure mandatory line items are included and return a list of any skipped items."""
@@ -2872,6 +2872,7 @@ if tax_tab_index is not None:
             key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
