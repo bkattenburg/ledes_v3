@@ -985,6 +985,7 @@ def _generate_expenses(expense_count: int, billing_start_date: datetime.date, bi
             hours = 1
             rate = round(random.uniform(15.0, 150.0), 2)
             line_item_total = rate
+        else:
             hours = random.randint(1, 5)
             rate = round(random.uniform(10.0, 150.0), 2)
             line_item_total = round(hours * rate, 2)
@@ -1070,7 +1071,6 @@ def _append_two_attendee_meeting_rows(rows, timekeeper_data, billing_start_date,
     rows.extend([rp, ra])
     return rows
 
-max_daily_hours = int(st.session_state.get('max_daily_hours', 6))
 def _generate_invoice_data(
     fee_count: int,
     expense_count: int,
@@ -1940,12 +1940,10 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
     img_buffer = io.BytesIO()
     img.save(img_buffer, format="PNG")
     img_buffer.seek(0)
-filename = (st.session_state.get('last_output_file') or st.session_state.get('last_output_txt') or '')
-filename = (st.session_state.get('last_output_file') or st.session_state.get('last_output_txt') or '')
 
-pass  # sanitized stray line (was using exp_code/line_item_date)
-# sanitized stray line (was using img_buffer)
-# sanitized stray line (unindent not expected previously)
+    filename = f"Receipt_{exp_code}_{line_item_date.strftime('%Y%m%d')}.png"
+    return filename, img_buffer
+def _customize_email_body(matter_number: str, invoice_number: str) -> Tuple[str, str]:
     """Customize email subject and body with matter and invoice number."""
     subject = st.session_state.get("email_subject", f"LEDES Invoice for {matter_number} (Invoice #{invoice_number})")
     body = st.session_state.get("email_body", f"Please find the attached invoice files for matter {matter_number}.\n\nBest regards,\nYour Law Firm")
@@ -2449,11 +2447,11 @@ with tab_objects[2]:
     expenses = int(st.session_state.get('expense_slider', PRESETS['Custom']['expenses']))
     # --- SimpleLegal-only duplicate line item options + Historic upload ---
     # ... inside Fees & Expenses tab ...
-if timekeeper_data is None:
+    if timekeeper_data is None:
             st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
             fees = 0
             expenses = 0
-        else:
+    else:
             max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
             st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
             
@@ -2542,7 +2540,7 @@ if timekeeper_data is None:
 
 
     output_tab_index = tabs.index("Output")
-with tab_objects[output_tab_index]:
+    with tab_objects[output_tab_index]:
         st.markdown("<h3 style='color: #1E1E1E;'>Output</h3>", unsafe_allow_html=True)
         include_block_billed = st.checkbox("Include Block Billed Line Items", value=True)
         num_block_billed = 0
@@ -2559,59 +2557,50 @@ with tab_objects[output_tab_index]:
         logo_height = None
     
         if include_pdf:
-            pass
-        include_logo = st.checkbox("Include Logo in PDF", value=True, help="Uncheck to exclude logo from PDF header, using only law firm text.")
+            include_logo = st.checkbox("Include Logo in PDF", value=True, help="Uncheck to exclude logo from PDF header, using only law firm text.")
     
         generate_multiple = st.checkbox("Generate Multiple Invoices", help="Create more than one invoice.")
         num_invoices = 1
         multiple_periods = False
         if generate_multiple:
-            pass
-        combine_ledes = st.checkbox("Combine LEDES into single file", help="If checked, all generated LEDES invoices will be combined into a single file with one header.")
-        multiple_periods = st.checkbox("Multiple Billing Periods", help="Backfills one invoice per prior month from the given end date, newest to oldest.")
-        if multiple_periods:
-            num_periods = st.number_input("How Many Billing Periods:", min_value=2, max_value=6, value=2, step=1, help="Number of month-long periods to create (overrides Number of Invoices).")
-            num_invoices = num_periods
+            combine_ledes = st.checkbox("Combine LEDES into single file", help="If checked, all generated LEDES invoices will be combined into a single file with one header.")
+            multiple_periods = st.checkbox("Multiple Billing Periods", help="Backfills one invoice per prior month from the given end date, newest to oldest.")
+            if multiple_periods:
+                num_periods = st.number_input("How Many Billing Periods:", min_value=2, max_value=6, value=2, step=1, help="Number of month-long periods to create (overrides Number of Invoices).")
+                num_invoices = num_periods
+            else:
+                num_invoices = st.number_input("Number of Invoices to Create:", min_value=1, value=1, step=1, help="Creates N invoices. When 'Multiple Billing Periods' is enabled, one invoice per period.")
         else:
-            num_invoices = st.number_input("Number of Invoices to Create:", min_value=1, value=1, step=1, help="Creates N invoices. When 'Multiple Billing Periods' is enabled, one invoice per period.")
-pass  # satisfy expected expression here
-pass
-        combine_ledes = False
+            combine_ledes = False
 
         generate_receipts = st.checkbox("Generate Sample Receipts for Expenses?", value=False)
         zip_receipts = False
         if generate_receipts:
-            pass
-        zip_receipts = st.checkbox("Zip Receipts", value=True, key="zip_receipts", help="Combine all generated receipt images into a single ZIP file.")
+            zip_receipts = st.checkbox("Zip Receipts", value=True, key="zip_receipts", help="Combine all generated receipt images into a single ZIP file.")
 
         # Email Configuration Tab (only created if send_email is True)
         if st.session_state.send_email:
-            pass
-        email_tab_index = len(tabs) - 1
+            email_tab_index = len(tabs) - 1
         with tab_objects[email_tab_index]:
-            pass
-        st.markdown("<h2 style='color: #1E1E1E;'>Email Configuration</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='color: #1E1E1E;'>Email Configuration</h2>", unsafe_allow_html=True)
         recipient_email = st.text_input("Recipient Email Address:")
         try:
             sender_email = st.secrets.email.email_from
             st.caption(f"Sender Email will be from: {st.secrets.get('email', {}).get('username', 'N/A')}")
         except AttributeError:
             st.caption("Sender Email: Not configured (check secrets.toml)")
-        st.text_input("Email Subject Template:", value=f"LEDES Invoice for {matter_number_base} (Invoice #{{invoice_number}})", key="email_subject")
-        st.text_area("Email Body Template:", value=f"Please find the attached invoice files for matter {{matter_number}}.\n\nBest regards,\nYour Law Firm", height=150, key="email_body")
-pass  # satisfy expected expression here
-pass
-        recipient_email = ""
+            st.text_input("Email Subject Template:", value=f"LEDES Invoice for {matter_number_base} (Invoice #{{invoice_number}})", key="email_subject")
+            st.text_area("Email Body Template:", value=f"Please find the attached invoice files for matter {{matter_number}}.\n\nBest regards,\nYour Law Firm", height=150, key="email_body")
+        else:
+            recipient_email = ""
 
         # Validation Logic
 
         # --- Tax Fields Tab (only if 1998BIv2 selected) ---
         if "Tax Fields" in tabs:
-            pass
-        tax_tab_index = tabs.index("Tax Fields")
+            tax_tab_index = tabs.index("Tax Fields")
         with tab_objects[tax_tab_index]:
-            pass
-        st.markdown("<h2 style='color: #1E1E1E;'>Tax Fields</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='color: #1E1E1E;'>Tax Fields</h2>", unsafe_allow_html=True)
         st.session_state.setdefault("tax_matter_name", "")
         st.session_state.setdefault("tax_po_number", "")
         st.session_state.setdefault("tax_client_matter_id", "")
@@ -2645,59 +2634,48 @@ pass
 
         is_valid_input = True
         if timekeeper_data is None:
-            pass
-        st.error("Please upload a valid timekeeper CSV file.")
+            st.error("Please upload a valid timekeeper CSV file.")
         is_valid_input = False
         if billing_start_date >= billing_end_date:
-            pass
-        st.error("Billing start date must be before end date.")
+            st.error("Billing start date must be before end date.")
         is_valid_input = False
         if st.session_state.send_email and not recipient_email:
-            pass
-        st.error("Please provide a recipient email address.")
+            st.error("Please provide a recipient email address.")
         is_valid_input = False
         if not invoice_number_base or not matter_number_base:
-            pass
-        st.error("Invoice Number and Matter Number cannot be empty.")
+            st.error("Invoice Number and Matter Number cannot be empty.")
         is_valid_input = False
 
         # --- 1998BIv2 validation ---
         if st.session_state.get("ledes_version") == "1998BIv2":
-            pass
-        if not st.session_state.get("tax_matter_name", "").strip():
-            pass
-        st.error("Matter Name is required for LEDES 1998BIv2.")
+            if not st.session_state.get("tax_matter_name", "").strip():
+                st.error("Matter Name is required for LEDES 1998BIv2.")
         is_valid_input = False
         if st.session_state.get("tax_invoice_currency", "USD") not in ["USD","AUD","CAD","GBP","EUR"]:
-            pass
-        st.error("Invoice Currency must be one of USD, AUD, CAD, GBP, EUR.")
+            st.error("Invoice Currency must be one of USD, AUD, CAD, GBP, EUR.")
         is_valid_input = False
         if st.session_state.get("tax_rate", 0.19) < 0:
-            pass
-        st.error("Tax Rate must be zero or positive.")
+            st.error("Tax Rate must be zero or positive.")
         is_valid_input = False
 
         if combine_ledes and num_invoices <= 1:
-            pass
-        st.error("Cannot combine LEDES file if only one invoice is being generated.")
+            st.error("Cannot combine LEDES file if only one invoice is being generated.")
         is_valid_input = False
         st.markdown("---")
         generate_button = st.button("Generate Invoice(s)", disabled=not is_valid_input)
 
         # Final download/email logic
         def get_mime_type(filename):
-        if filename.endswith(".txt"): return "text/plain"
-        if filename.endswith(".pdf"): return "application/pdf"
-        if filename.endswith(".png"): return "image/png"
-        if filename.endswith(".zip"): return "application/zip"
-        return "application/octet-stream"
+            if filename.endswith(".txt"): return "text/plain"
+            if filename.endswith(".pdf"): return "application/pdf"
+            if filename.endswith(".png"): return "image/png"
+            if filename.endswith(".zip"): return "application/zip"
+            return "application/octet-stream"
 
         # Main App Logic
         if generate_button:
-            pass
-        if ledes_version == "XML 2.1":
-            pass
-        st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
+            if ledes_version == "XML 2.1":
+                st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
         st.stop()
     
         faker = Faker()
@@ -2705,11 +2683,9 @@ pass
         num_invoices = int(num_invoices)
     
         if multiple_periods and len(descriptions) != num_invoices:
-            pass
-        st.warning(f"You have selected to generate {num_invoices} invoices, but provided {len(descriptions)} descriptions. Please provide one description per period.")
-pass  # satisfy expected expression here
-pass
-        attachments_list = []
+            st.warning(f"You have selected to generate {num_invoices} invoices, but provided {len(descriptions)} descriptions. Please provide one description per period.")
+        else:
+            attachments_list = []
         receipt_files = []
         combined_ledes_content = ""
         zip_receipts_enabled = st.session_state.get('zip_receipts', False) if generate_receipts else False
@@ -2733,7 +2709,7 @@ pass
                 fees_to_generate = max(0, fees - num_mandatory_fees)
                 expenses_to_generate = max(0, expenses - num_mandatory_expenses)
 
-max_daily_hours = int(st.session_state.get('max_daily_hours', 6))
+                max_daily_hours = int(st.session_state.get('max_daily_hours', 6))
                 rows, total_amount = _generate_invoice_data(
                     fees_to_generate, expenses_to_generate, timekeeper_data, client_id, law_firm_id,
                     current_invoice_desc, current_start_date, current_end_date,
@@ -2872,15 +2848,13 @@ max_daily_hours = int(st.session_state.get('max_daily_hours', 6))
         # --- New Display Block (place this AFTER the `if generate_button:` block) ---
         # This block runs on every interaction, ensuring the buttons stay visible.
         if "generated_files" in st.session_state and st.session_state.generated_files:
-            pass
-        st.subheader("Generated Files")
+            st.subheader("Generated Files")
         # Use columns for a cleaner layout if many files are generated
         cols = st.columns(3) 
         col_idx = 0
         for filename, data in st.session_state.generated_files:
-            pass
-        with cols[col_idx % 3]:
-            st.download_button(
+            with cols[col_idx % 3]:
+                st.download_button(
                 label=f"Download {filename}",
                 data=data,
                 file_name=filename,
@@ -2888,3 +2862,4 @@ max_daily_hours = int(st.session_state.get('max_daily_hours', 6))
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
