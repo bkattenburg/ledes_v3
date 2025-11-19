@@ -2581,24 +2581,27 @@ with tab_objects[output_tab_index]:
     # Email Configuration Tab (only created if send_email is True)
     if st.session_state.send_email:
         email_tab_index = len(tabs) - 1
+email_tab_index = (len(tabs) - 1) if st.session_state.get('send_email', False) else None
+if email_tab_index is not None:
+        # Email Configuration Tab (only render if Send Email is ON)
+    email_tab_index = (len(tabs) - 1) if st.session_state.get("send_email", False) else None
+if email_tab_index is not None:
     with tab_objects[email_tab_index]:
         st.markdown("<h2 style='color: #1E1E1E;'>Email Configuration</h2>", unsafe_allow_html=True)
-    recipient_email = st.text_input("Recipient Email Address:")
-    try:
-        sender_email = st.secrets.email.email_from
-        st.caption(f"Sender Email will be from: {st.secrets.get('email', {}).get('username', 'N/A')}")
-    except AttributeError:
-        st.caption("Sender Email: Not configured (check secrets.toml)")
-        st.text_input("Email Subject Template:", value=f"LEDES Invoice for {matter_number_base} (Invoice #{{invoice_number}})", key="email_subject")
-        st.text_area("Email Body Template:", value=f"Please find the attached invoice files for matter {{matter_number}}.\n\nBest regards,\nYour Law Firm", height=150, key="email_body")
-    else:
-        recipient_email = ""
 
-    # Validation Logic
+        recipient_email = st.text_input("Recipient Email Address:", key="recipient_email")
+        subject_line    = st.text_input("Email Subject:", value="LEDES Invoice", key="email_subject")
+        body_text       = st.text_area("Email Body:", height=150, key="email_body", value="Please find the attached invoice(s).")
 
-    # --- Tax Fields Tab (only if 1998BIv2 selected) ---
-    if "Tax Fields" in tabs:
-        tax_tab_index = tabs.index("Tax Fields")
+        st.markdown("---")
+        st.caption("Attachments will be added automatically after generation.")
+
+
+        # Validation Logic
+
+        # --- Tax Fields Tab (only if 1998BIv2 selected) ---
+        if "Tax Fields" in tabs:
+            tax_tab_index = tabs.index("Tax Fields")
     with tab_objects[tax_tab_index]:
         st.markdown("<h2 style='color: #1E1E1E;'>Tax Fields</h2>", unsafe_allow_html=True)
     st.session_state.setdefault("tax_matter_name", "")
