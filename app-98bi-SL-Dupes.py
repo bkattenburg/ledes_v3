@@ -1071,6 +1071,7 @@ def _append_two_attendee_meeting_rows(rows, timekeeper_data, billing_start_date,
     rows.extend([rp, ra])
     return rows
 
+if st.session_state.pop("__do_generate__", False):
 def _generate_invoice_data(
     fee_count: int,
     expense_count: int,
@@ -2541,6 +2542,12 @@ with tab_objects[2]:
 
 output_tab_index = tabs.index("Output")
 with tab_objects[output_tab_index]:
+    st.markdown("<h2 style='color: #1E1E1E;'>Output</h2>", unsafe_allow_html=True)
+
+    # Always show a visible Generate button on the Output tab
+    gen_clicked = st.button("Generate Invoices", key="btn_generate_invoices")
+    if gen_clicked:
+        st.session_state["__do_generate__"] = True    
     st.markdown("<h3 style='color: #1E1E1E;'>Output</h3>", unsafe_allow_html=True)
     include_block_billed = st.checkbox("Include Block Billed Line Items", value=True)
     num_block_billed = 0
@@ -2865,5 +2872,6 @@ if tax_tab_index is not None:
             key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
