@@ -1,5 +1,6 @@
 import streamlit as st
 
+
 # --- Source selector helper ---
 def _select_items_from_source(df_src, want_block: bool, k: int):
     import random
@@ -188,6 +189,7 @@ def _safe_checkbox(label, **kwargs):
 st.checkbox = _safe_checkbox
 # -----------------------------------------------------------------------------
 
+
 # Central boolean for sending email
 st.session_state.setdefault("send_email", False)
 
@@ -214,35 +216,6 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont, Image
 import zipfile
 
-def _normalize_historic_columns(df: pd.DataFrame) -> pd.DataFrame:
-    # Accept LEDES1998B-style names and map to simpler keys we’ll use downstream.
-    rename_map = {
-        # Descriptions are *not* used to clone, but normalizing is harmless
-        "LINE_ITEM_DESCRIPTION": "DESCRIPTION",
-
-        # Worked date
-        "LINE_ITEM_WORKED_DATE": "LINE_ITEM_DATE",
-
-        # Codes
-        "LINE_ITEM_TASK_CODE": "TASK_CODE",
-        "LINE_ITEM_ACTIVITY_CODE": "ACTIVITY_CODE",
-        "LINE_ITEM_EXPENSE_CODE": "EXPENSE_CODE",
-
-        # Money
-        "LINE_ITEM_UNIT_COST": "TIMEKEEPER_RATE",
-        "LINE_ITEM_BILLED_TOTAL": "LINE_ITEM_TOTAL",
-        "BILLED_TOTAL": "LINE_ITEM_TOTAL",
-        "AMOUNT": "LINE_ITEM_TOTAL",
-        "CURRENCY_CODE": "LINE_ITEM_BILLED_TOTAL_CURRENCY",
-        "INVOICE_CURRENCY_CODE": "LINE_ITEM_BILLED_TOTAL_CURRENCY",
-
-        # Type
-        "LINE_ITEM_TYPE": "EXP/FEE/INV_ADJ_TYPE",  # e.g., IF / F / E
-    }
-    present = {k: v for k, v in rename_map.items() if k in df.columns and v not in df.columns}
-    if present:
-        df = df.rename(columns=present)
-    return df
 
 st.markdown("""
     <style>
@@ -278,6 +251,7 @@ BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdoc
     ("SimpleLegal", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
     ("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
+
 
 # Extended profile details (addresses, tax ids, defaults)
 BILLING_PROFILE_DETAILS = {
@@ -316,6 +290,7 @@ def get_profile(env: str):
             return (p[1], p[2], p[3], p[4])
     p = BILLING_PROFILES[0]
     return (p[1], p[2], p[3], p[4])
+
 
 # --- Logging Setup ---
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -437,6 +412,8 @@ def _find_timekeeper_by_classification(timekeepers, classification: str):
     candidates.sort(key=lambda tk: str(tk.get("TIMEKEEPER_NAME", "")).lower())
     return candidates[0]
 
+
+
 def _get_timekeepers():
     """Return timekeepers list from session or empty list if none loaded."""
     return st.session_state.get("timekeeper_data") or []
@@ -517,6 +494,7 @@ def _load_timekeepers(uploaded_file: Optional[Any]) -> Optional[List[Dict]]:
         logging.error(f"Timekeeper load error: {e}")
         return None
 
+
 def _load_custom_task_activity_data(uploaded_file: Optional[Any]) -> Optional[List[Tuple[str, str, str]]]:
     """Load custom task/activity data from CSV."""
     if uploaded_file is None:
@@ -545,6 +523,7 @@ def _load_custom_task_activity_data(uploaded_file: Optional[Any]) -> Optional[Li
         st.error(f"Error loading custom tasks file: {e}")
         logging.error(f"Custom tasks load error: {e}")
         return None
+
 
 def _create_ledes_line_1998b(row: Dict, line_no: int, inv_total: float, bill_start: datetime.date, bill_end: datetime.date, invoice_number: str, matter_number: str) -> List[str]:
     """Create a single LEDES 1998B line."""
@@ -702,6 +681,7 @@ def _create_ledes_1998biv2_content(rows: List[Dict],
         if line:
             lines.append("|".join(map(str, line)) + "[]")
     return "\n".join(lines)
+
 
 def _create_ledes_1998bi_content(rows: List[Dict],
                                  bill_start: datetime.date, bill_end: datetime.date,
@@ -911,6 +891,7 @@ def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_da
         })
     return rows
 
+
 def _generate_expenses(expense_count: int, billing_start_date: datetime.date, billing_end_date: datetime.date, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
     """Generate expense line items for an invoice with realistic amounts."""
     rows: List[Dict] = []
@@ -933,6 +914,7 @@ def _generate_expenses(expense_count: int, billing_start_date: datetime.date, bi
         tel_min, tel_max = float(tel_rng[0]), float(tel_rng[1])
     except Exception:
         tel_min, tel_max = 5.0, 15.0
+
 
     # Always include some Copying (E101)
     e101_actual_count = random.randint(1, min(3, expense_count))
@@ -1114,6 +1096,7 @@ def _generate_invoice_data(
             # If no VAGUE column, all items are non-vague
             df_non_vague_pool = df_src
 
+
     # Helper to build a fee row
     def _mk_fee_row(desc: str, tk: Dict, date_str: str, task_code: str, act_code: str, hours: float, block: bool=False) -> Dict:
         rate = float(tk.get("RATE", 0.0))
@@ -1198,12 +1181,11 @@ def _generate_invoice_data(
             processed_desc = _process_description(item["DESC"], faker_instance)
             rows.append(_mk_fee_row(processed_desc, tk, date_str, item["TASK_CODE"], item["ACTIVITY_CODE"], hours, block=False))
 
-        # --- Multiple attendees (existing logic) ---
     try:
         _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
     except Exception:
         _multi_flag = False
-
+    
     if _multi_flag:
         rows = _append_two_attendee_meeting_rows(
             rows,
@@ -1215,7 +1197,24 @@ def _generate_invoice_data(
             invoice_desc
         )
 
-    # --- SimpleLegal: duplicate one fee line within THIS invoice (fresh DESCRIPTION) ---
+# --- SimpleLegal: duplicate one fee line within this invoice, if requested ---
+    try:
+        _multi_flag = bool(st.session_state.get("multiple_attendees_meeting", False))
+    except Exception:
+        _multi_flag = False
+    
+    if _multi_flag:
+        rows = _append_two_attendee_meeting_rows(
+            rows,
+            timekeeper_data,
+            billing_start_date,
+            faker_instance,
+            client_id,
+            law_firm_id,
+            invoice_desc
+        )
+
+    # --- SimpleLegal: duplicate one fee line within this invoice, if requested ---
     try:
         _selected_env = st.session_state.get("selected_env", "")
     except Exception:
@@ -1226,11 +1225,14 @@ def _generate_invoice_data(
         _sl_dup_this = False
 
     if _selected_env == "SimpleLegal" and _sl_dup_this:
+        # Only consider fee rows (no EXPENSE_CODE)
         fee_rows = [r for r in rows if not str(r.get("EXPENSE_CODE", "")).strip()]
         if fee_rows:
             import random as _rand
             original = _rand.choice(fee_rows)
-            dup = dict(original)
+            dup = dict(original)  # shallow copy is fine, everything is flat
+
+            # Build a completely different description (not derived from the original)
             alt_desc_candidates = [
                 "Review and analysis of discovery responses and case status.",
                 "Telephone conference with client regarding litigation strategy and next steps.",
@@ -1238,10 +1240,15 @@ def _generate_invoice_data(
                 "Legal research regarding jurisdictional and procedural issues.",
                 "Prepare internal case update memorandum for client team."
             ]
-            dup["DESCRIPTION"] = _process_description(_rand.choice(alt_desc_candidates), faker_instance)
+            new_desc_template = _rand.choice(alt_desc_candidates)
+
+            # Run it through the same placeholder/date processor so it matches the rest of the app
+            dup["DESCRIPTION"] = _process_description(new_desc_template, faker_instance)
+
+            # All other fields (date, TK, TASK_CODE, ACTIVITY_CODE, HOURS, RATE, totals, etc.) remain identical
             rows.append(dup)
 
-    # --- SimpleLegal: clone ONE line from a HISTORIC invoice CSV using specific fields only ---
+    # --- SimpleLegal: duplicate one fee line from a HISTORIC invoice CSV ---
     try:
         _sl_dup_hist = bool(st.session_state.get("sl_dup_historic_invoice", False))
     except Exception:
@@ -1249,101 +1256,131 @@ def _generate_invoice_data(
 
     if _selected_env == "SimpleLegal" and _sl_dup_hist:
         import random as _rand
-        df_hist = st.session_state.get("historic_invoice_fee_df") or st.session_state.get("historic_invoice_df")
-        has_rows = bool(df_hist is not None and len(df_hist) > 0)
-        if has_rows:
-            try:
-                mode = st.session_state.get("historic_select_mode", "Random fee line")
-                if mode == "Pick by row number" and "historic_row_idx" in st.session_state:
-                    idx = int(st.session_state["historic_row_idx"])
-                    if idx < 0 or idx >= len(df_hist):
-                        idx = 0
-                else:
-                    idx = _rand.randint(0, len(df_hist) - 1)
-            except Exception:
-                idx = 0
+        df_fee = st.session_state.get("historic_invoice_fee_df")
+        if df_fee is None:
+            df_fee = st.session_state.get("historic_invoice_df")
 
-            h = df_hist.iloc[idx]
-            li_type = str(h.get("EXP/FEE/INV_ADJ_TYPE", "") or "").strip().upper()   # IF / F / E
-            tk_name = str(h.get("TIMEKEEPER_NAME", "") or "").strip()
-            try:
-                tk_rate = float(str(h.get("TIMEKEEPER_RATE", h.get("RATE", h.get("LINE_ITEM_UNIT_COST", "0"))) or "0"))
-            except Exception:
-                tk_rate = 0.0
-            try:
-                billed_total = float(str(h.get("LINE_ITEM_TOTAL", "0") or "0"))
-            except Exception:
-                billed_total = 0.0
-            currency = str(h.get("LINE_ITEM_BILLED_TOTAL_CURRENCY", "") or "").strip()
-            line_item_date = str(h.get("LINE_ITEM_DATE", "") or "").strip() or billing_start_date.strftime("%Y-%m-%d")
-            task_code = (str(h.get("TASK_CODE", "") or "").strip() 
-                         or str(h.get("LINE_ITEM_TASK_CODE", "") or "").strip())
-            activity_code = (str(h.get("ACTIVITY_CODE", "") or "").strip() 
-                             or str(h.get("LINE_ITEM_ACTIVITY_CODE", "") or "").strip())
-            expense_code = (str(h.get("EXPENSE_CODE", "") or "").strip() 
-                            or str(h.get("LINE_ITEM_EXPENSE_CODE", "") or "").strip())
+        if df_fee is not None and len(df_fee) > 0:
+            idx = _rand.randint(0, len(df_fee) - 1)
+            row_hist = df_fee.iloc[idx]
 
-            # match current TK by name; fallback to first
-            tk_match = None
-            if tk_name:
+            # Values from historic CSV, with safe fallbacks
+            desc = str(row_hist.get("DESCRIPTION", "") or "").strip()
+            task_code = str(row_hist.get("TASK_CODE", "") or "").strip()
+            act_code = str(row_hist.get("ACTIVITY_CODE", "") or "").strip()
+
+            try:
+                hours_val = float(str(row_hist.get("HOURS", "0") or "0"))
+            except Exception:
+                hours_val = 1.0
+            try:
+                rate_val = float(str(row_hist.get("RATE", "0") or "0"))
+            except Exception:
+                rate_val = 0.0
+
+            # Use historic LINE_ITEM_DATE if present, otherwise current billing_start_date
+            if "LINE_ITEM_DATE" in df_fee.columns:
+                date_raw = str(row_hist.get("LINE_ITEM_DATE", "") or "").strip()
+                date_str = date_raw if date_raw else billing_start_date.strftime("%Y-%m-%d")
+            else:
+                date_str = billing_start_date.strftime("%Y-%m-%d")
+
+            # Try to match a timekeeper from current CSV by ID or NAME
+            tk = None
+            tk_hist_id = str(row_hist.get("TIMEKEEPER_ID", "") or "").strip()
+            tk_hist_name = str(row_hist.get("TIMEKEEPER_NAME", "") or "").strip()
+
+            if tk_hist_id:
                 for t in (timekeeper_data or []):
-                    if str(t.get("TIMEKEEPER_NAME", "")).strip() == tk_name:
-                        tk_match = t
+                    if str(t.get("TIMEKEEPER_ID", "")).strip() == tk_hist_id:
+                        tk = t
                         break
-            if tk_match is None and timekeeper_data:
-                tk_match = timekeeper_data[0]
+            if tk is None and tk_hist_name:
+                for t in (timekeeper_data or []):
+                    if str(t.get("TIMEKEEPER_NAME", "")).strip() == tk_hist_name:
+                        tk = t
+                        break
+            if tk is None and timekeeper_data:
+                tk = timekeeper_data[0]
 
-            if tk_match:
-                alt_desc_candidates = [
-                    "Review and update case workstream.",
-                    "Draft email and correspondence to stakeholders.",
-                    "Conduct legal research and summarize findings.",
-                    "Prepare internal status memo and action items.",
-                    "Analyze materials and outline follow-ups."
-                ]
-                new_desc = _process_description(_rand.choice(alt_desc_candidates), faker_instance)
+            if tk:
+                fee_row = _mk_fee_row(
+                    desc or "Historic invoice duplication test",
+                    tk,
+                    date_str,
+                    task_code,
+                    act_code,
+                    hours_val,
+                    block=False
+                )
 
-                if li_type in ("F", "IF"):
-                    hours = round(billed_total / tk_rate, 4) if tk_rate > 0 else 0.0
-                    fee_row = _mk_fee_row(new_desc, tk_match, line_item_date, task_code, activity_code, hours, block=False)
-                    fee_row["RATE"] = float(tk_rate)
-                    fee_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(tk_rate), 2)
-                    fee_row["EXP/FEE/INV_ADJ_TYPE"] = li_type
-                    if currency:
-                        fee_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
-                    if expense_code:
-                        fee_row["EXPENSE_CODE"] = expense_code
-                    rows.append(fee_row)
-                elif li_type == "E":
-                    hours = 1.0
-                    rate = billed_total
-                    exp_row = _mk_fee_row(new_desc, tk_match, line_item_date, task_code, activity_code, hours, block=False)
-                    exp_row["RATE"] = float(rate)
-                    exp_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(rate), 2)
-                    exp_row["EXPENSE_CODE"] = expense_code or "E000"
-                    exp_row["EXP/FEE/INV_ADJ_TYPE"] = "E"
-                    if currency:
-                        exp_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
-                    rows.append(exp_row)
-                else:
-                    hours = round(billed_total / tk_rate, 4) if tk_rate > 0 else 0.0
-                    fee_row = _mk_fee_row(new_desc, tk_match, line_item_date, task_code, activity_code, hours, block=False)
-                    fee_row["RATE"] = float(tk_rate)
-                    fee_row["LINE_ITEM_TOTAL"] = round(float(hours) * float(tk_rate), 2)
-                    fee_row["EXP/FEE/INV_ADJ_TYPE"] = "F"
-                    if currency:
-                        fee_row["LINE_ITEM_BILLED_TOTAL_CURRENCY"] = currency
-                    if expense_code:
-                        fee_row["EXPENSE_CODE"] = expense_code
-                    rows.append(fee_row)
+                # Override RATE / TOTAL if historic CSV had them
+                if rate_val:
+                    fee_row["RATE"] = rate_val
+                    fee_row["LINE_ITEM_TOTAL"] = round(fee_row["HOURS"] * fee_row["RATE"], 2)
 
-    # --- Expenses (single call) ---
+                # Optional debug tag
+                fee_row["_source"] = "historic_invoice_csv"
+
+                rows.append(fee_row)
+
+    # --- Expenses (unchanged) ---
     if expense_count > 0:
         try:
-            rows.extend(_generate_expenses(
-                expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc
-            ))
+            rows.extend(
+                _generate_expenses(
+                    expense_count,
+                    billing_start_date,
+                    billing_end_date,
+                    client_id,
+                    law_firm_id,
+                    invoice_desc,
+                )
+            )
         except Exception:
+            # Fallback: no expenses on failure
+            pass
+
+    # --- Expenses (unchanged) ---
+    if expense_count > 0:
+        try:
+            rows.extend(
+                _generate_expenses(
+                    expense_count,
+                    billing_start_date,
+                    billing_end_date,
+                    client_id,
+                    law_firm_id,
+                    invoice_desc,
+                )
+            )
+        except Exception:
+            # Fallback: no expenses on failure
+            pass
+
+    # --- Expenses (unchanged) ---
+    if expense_count > 0:
+        try:
+            rows.extend(
+                _generate_expenses(
+                    expense_count,
+                    billing_start_date,
+                    billing_end_date,
+                    client_id,
+                    law_firm_id,
+                    invoice_desc,
+                )
+            )
+        except Exception:
+            # Fallback: no expenses on failure
+            pass
+    
+    # --- Expenses (unchanged) ---
+    if expense_count > 0:
+        try:
+            rows.extend(_generate_expenses(expense_count, billing_start_date, billing_end_date, client_id, law_firm_id, invoice_desc))
+        except Exception:
+            # Fallback: no expenses on failure
             pass
 
     total_amount = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows)
@@ -1482,6 +1519,7 @@ def _get_logo_bytes(uploaded_logo: Optional[Any], law_firm_id: str, use_custom: 
     img.save(buf, format="PNG")
     buf.seek(0)
     return buf.getvalue()
+
 
 # #############################################################################
 # ##### PDF CREATION FUNCTION WITH REQUESTED CHANGES ##########################
@@ -1662,6 +1700,7 @@ def _create_pdf_invoice(
     else:
         fees_total = df['LINE_ITEM_TOTAL'].sum()
         expenses_total = 0.0
+
 
     elements.append(Spacer(1, 0.2 * inch))
 
@@ -2003,6 +2042,7 @@ st.checkbox(
     on_change=update_send_email
 )
 
+
 # --- Sidebar Reorganization ---
 
 # Helper function to read file data for buttons
@@ -2154,80 +2194,6 @@ if current_profile_key in BILLING_PROFILE_DETAILS:
 # For any other profile, reset the LEDES version to the standard default
 else:
     st.session_state["ledes_version"] = "1998B"
-
-def render_fees_expenses_controls():
-    # --- SimpleLegal-only duplicate line item options + Historic upload ---
-    selected_env = st.session_state.get("selected_env", "")
-    if selected_env == "SimpleLegal":
-        st.markdown("#### SimpleLegal Duplicate Line Items")
-
-        st.checkbox(
-            "SL Dup Line Items - This Invoice",
-            value=bool(st.session_state.get("sl_dup_this_invoice", False)),
-            key="sl_dup_this_invoice",
-            help="Duplicate one fee line item within the current invoice for SimpleLegal testing.",
-        )
-        st.checkbox(
-            "SL Dup Line Items - Historic Invoice",
-            value=bool(st.session_state.get("sl_dup_historic_invoice", False)),
-            key="sl_dup_historic_invoice",
-            help="Duplicate a line item from a historic LEDES CSV.",
-        )
-
-        if st.session_state.get("sl_dup_historic_invoice", False):
-            import pandas as pd
-            hist_file = st.file_uploader(
-                "Upload Historic LEDES CSV (1998B-style export)",
-                type="csv",
-                key="historic_ledes_csv",
-                help="We will copy total, currency, worked date, TK name + rate, type (IF/F/E), and codes."
-            )
-            if hist_file is not None:
-                try:
-                    df_hist = pd.read_csv(hist_file, dtype=str)
-                    if "_normalize_historic_columns" in globals():
-                        df_hist = _normalize_historic_columns(df_hist)
-
-                    st.session_state["historic_invoice_df"] = df_hist
-                    st.session_state["historic_invoice_fee_df"] = df_hist  # we branch on IF/F/E later
-
-                    preview_cols = [c for c in [
-                        "EXP/FEE/INV_ADJ_TYPE",
-                        "LINE_ITEM_DATE",
-                        "TASK_CODE","ACTIVITY_CODE","EXPENSE_CODE",
-                        "TIMEKEEPER_NAME","TIMEKEEPER_RATE",
-                        "LINE_ITEM_TOTAL","LINE_ITEM_BILLED_TOTAL_CURRENCY"
-                    ] if c in df_hist.columns]
-                    st.markdown("**Historic Lines Preview (first 10)**")
-                    st.dataframe((df_hist[preview_cols] if preview_cols else df_hist).head(10), use_container_width=True)
-                except Exception as e:
-                    st.error(f"Could not read historic CSV: {e}")
-            else:
-                st.caption("Upload a CSV to enable historic duplication.")
-        else:
-            # Checkbox OFF → clear stored data to avoid stale usage
-            st.session_state.pop("historic_invoice_df", None)
-            st.session_state.pop("historic_invoice_fee_df", None)
-
-    # --- Preset and fee/expense sliders belong to Fees & Expenses only ---
-    st.selectbox(
-        "Invoice Size Presets",
-        options=list(PRESETS.keys()),
-        key="invoice_preset",
-        on_change=apply_preset,
-        help="Select a preset to quickly adjust the number of fee and expense lines below."
-    )
-
-    # Expense Settings
-    st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
-    with st.expander("Adjust Expense Amounts", expanded=False):
-        st.number_input(
-            "Local Travel (E109) mileage rate ($/mile)",
-            min_value=0.20, max_value=2.00, value=0.65, step=0.01,
-            key="mileage_rate_e109",
-            help="Used to calculate E109 totals as miles × rate. Miles are stored in the HOURS column."
-        )
-        # ... your other expense controls ...
 
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
@@ -2430,113 +2396,257 @@ with tab_objects[1]:
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
 
-    # Core toggles you want on this tab
-    spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
-    vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague descriptions.")
+    # --- Core fee/expense toggles ---
+    spend_agent = st.checkbox(
+        "Spend Agent",
+        value=False,
+        help="Ensures selected mandatory line items are included; configure below."
+    )
+    vague_line_items = st.checkbox(
+        "Vague Line Items",
+        value=False,
+        help="Randomly include 1 to 5 line items that have vague line item descriptions."
+    )
+
     multiple_attendees_meeting = st.checkbox(
-        "Multiple Attendees at Same Meeting", value=False,
-        help="Create two identical fee line items from 2 different timekeepers for the same meeting.",
+        "Multiple Attendees at Same Meeting",
+        value=False,
+        help="If checked, create two identical fee line items from 2 different timekeepers for the same meeting.",
         key="multiple_attendees_meeting",
     )
 
-    # >>> The only place these render <<<
-    render_fees_expenses_controls()
-
-    # Ensure local variables exist for downstream usage
-    fees = int(st.session_state.get('fee_slider', PRESETS['Custom']['fees']))
-    expenses = int(st.session_state.get('expense_slider', PRESETS['Custom']['expenses']))
     # --- SimpleLegal-only duplicate line item options + Historic upload ---
-    # ... inside Fees & Expenses tab ...
-    if timekeeper_data is None:
-            st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
-            fees = 0
-            expenses = 0
-    else:
-            max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
-            st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
-            
-            # Initialize the fee slider's state if it doesn't exist
-            if "fee_slider" not in st.session_state:
-                st.session_state.fee_slider = PRESETS["Custom"]["fees"]
-            
-            fees = st.number_input(
-                "Number of Fee Line Items",
-                min_value=0,
-                max_value=max_fees,
-                key="fee_slider",
+    selected_env = st.session_state.get("selected_env", "")
+    if selected_env == "SimpleLegal":
+        st.markdown("#### SimpleLegal Duplicate Line Items")
+
+        sl_dup_this_invoice = st.checkbox(
+            "SL Dup Line Items - This Invoice",
+            value=False,
+            key="sl_dup_this_invoice",
+            help="Duplicate one fee line item within the current invoice for SimpleLegal testing.",
+        )
+        sl_dup_historic_invoice = st.checkbox(
+            "SL Dup Line Items - Historic Invoice",
+            value=False,
+            key="sl_dup_historic_invoice",
+            help="Duplicate a fee line item from a historic LEDES CSV.",
+        )
+
+        if sl_dup_historic_invoice:
+            # Your original message requirement
+            #st.info("This will be in Step 2")
+
+            # Upload *right under* the Historic checkbox
+            hist_file = st.file_uploader(
+                "Upload Historic LEDES CSV (1998B-style export)",
+                type="csv",
+                key="historic_ledes_csv",
+                help="Upload a CSV export of a prior LEDES invoice. We'll pull one fee line from it."
             )
-            if spend_agent:
-                st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-            
-                # ---- CORRECTED AND CONSOLIDATED MANDATORY ITEMS LOGIC ----
-            
-                # Base list of all possible items
-                all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
 
-                # Determine the items available for selection based on the environment
-                if st.session_state.get("selected_env") == 'SimpleLegal':
-                    available_items = [
-                        name for name, details in CONFIG['MANDATORY_ITEMS'].items()
-                        if details.get('is_expense') and details.get('expense_code') == 'E110'
+            if hist_file is not None:
+                try:
+                    df_hist = pd.read_csv(hist_file, dtype=str)
+                    st.session_state["historic_invoice_df"] = df_hist
+
+                    # Try to narrow down to F(ee) rows if that column exists
+                    df_fee = df_hist.copy()
+                    if "EXP/FEE/INV_ADJ_TYPE" in df_fee.columns:
+                        mask_fee = (
+                            df_fee["EXP/FEE/INV_ADJ_TYPE"]
+                            .astype(str)
+                            .str.strip()
+                            .str.upper()
+                            .str.startswith("F")
+                        )
+                        if mask_fee.any():
+                            df_fee = df_fee[mask_fee]
+
+                    st.session_state["historic_invoice_fee_df"] = df_fee
+
+                    # Small preview so you can see what you uploaded
+                    preview_cols = [
+                        c for c in [
+                            "INVOICE_NUMBER",
+                            "CLIENT_MATTER_ID",
+                            "LINE_ITEM_NUMBER",
+                            "LINE_ITEM_DATE",
+                            "TASK_CODE",
+                            "ACTIVITY_CODE",
+                            "TIMEKEEPER_ID",
+                            "TIMEKEEPER_NAME",
+                            "DESCRIPTION",
+                            "HOURS",
+                            "RATE",
+                            "EXP/FEE/INV_ADJ_TYPE",
+                        ]
+                        if c in df_fee.columns
                     ]
-                    st.info("For the 'SimpleLegal' profile, only E110 mandatory expenses are available.")
-                else:
-                    available_items = all_items
-
-                # Determine the default selected items
-                saved_selection = st.session_state.get("mandatory_items_default")
-                if saved_selection is not None:
-                    # Use last selection if saved, but only include items currently available
-                    default_selection = [item for item in saved_selection if item in available_items]
-                else:
-                    # Otherwise, determine initial defaults based on environment.
-                    if st.session_state.get("selected_env") == 'SimpleLegal':
-                        # For SimpleLegal, all available items are selected by default.
-                        default_selection = list(available_items)
+                    st.markdown("**Historic Fee Lines Preview (first 10 rows)**")
+                    if preview_cols:
+                        st.dataframe(df_fee[preview_cols].head(10), use_container_width=True)
                     else:
-                        # For other environments, default to all items
-                        default_selection = list(available_items)
-            
-                # Special rule for 'Unity': ensure 'Partner: Paralegal Task' is pre-selected if available.
-                if st.session_state.get("selected_env") == "Unity":
-                    pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
-                    if pp_key and pp_key not in default_selection:
-                        default_selection.append(pp_key)
-            
-                # Render the multiselect widget
-                selected_items = st.multiselect(
-                    "Select Mandatory Items to Include",
-                    options=available_items,
-                    default=default_selection,
-                    key="mandatory_items_multiselect",
-                )
+                        st.dataframe(df_fee.head(10), use_container_width=True)
 
-                # Persist the user's selection so it survives reruns.
-                st.session_state["mandatory_items_default"] = list(selected_items)
-            
-                # Conditional UI for Airfare Details
-                if 'Airfare E110' in selected_items:
-                    st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
-                    ac1, ac2 = st.columns(2)
-                    with ac1:
-                        st.text_input("Airline", key="airfare_airline", value="United Airlines")
-                        st.text_input("Departure City", key="airfare_departure_city", value="Newark")
-                        st.checkbox("Roundtrip", key="airfare_roundtrip", value=True)
-                    with ac2:
-                        st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
-                        st.text_input("Arrival City", key="airfare_arrival_city", value="Los Angeles")
-                        st.number_input("Amount", min_value=0.0, value=450.75, step=0.01, key="airfare_amount", help="This amount will be used for the airfare line item total.")
-                    st.selectbox(
-                        "Fare Class",
-                        options=["First", "Business", "Premium Economy", "Economy/Coach"],
-                        key="airfare_fare_class",
-                        help="Select the standard airline fare class (e.g., First, Business, Coach). This will be added to the line item description."
-                    )
-            
-                # Conditional UI for Uber Details
-                if 'Uber E110' in selected_items:
-                    st.markdown("<h4 style='color: #1E1E1E;'>Uber E110 Details</h4>", unsafe_allow_html=True)
-                    st.number_input("Ride Amount", min_value=0.0, value=25.50, step=0.01, key="uber_amount", help="This amount will be used for the Uber ride line item total.")
+                except Exception as e:
+                    st.error(f"Could not read historic CSV: {e}")
+            else:
+                st.caption("Upload a historic LEDES CSV to enable duplication from a prior invoice.")
+               
+    # In the "Fees & Expenses" tab, before the sliders
+    st.selectbox(
+        "Invoice Size Presets",
+        options=list(PRESETS.keys()),
+        key="invoice_preset",
+        on_change=apply_preset,
+        help="Select a preset to quickly adjust the number of fee and expense lines below."
+    )
+    
+    if timekeeper_data is None:
+        st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
+        fees = 0
+        expenses = 0
+    else:
+        max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
+        st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
+        
+        # Initialize the fee slider's state if it doesn't exist
+        if "fee_slider" not in st.session_state:
+            st.session_state.fee_slider = PRESETS["Custom"]["fees"]
+        
+        fees = st.number_input(
+            "Number of Fee Line Items",
+            min_value=0,
+            max_value=max_fees,
+            key="fee_slider",
+        )
+        st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
+        with st.expander("Adjust Expense Amounts", expanded=False):
+            st.number_input(
+                "Local Travel (E109) mileage rate ($/mile)",
+                min_value=0.20, max_value=2.00, value=0.65, step=0.01,
+                key="mileage_rate_e109",
+                help="Used to calculate E109 totals as miles × rate. Miles are stored in the HOURS column."
+            )
+            st.slider(
+                "Out-of-town Travel (E110) amount range ($)",
+                min_value=10.0, max_value=7500.0, value=(100.0, 800.0), step=10.0,
+                key="travel_range_e110",
+                help="Random amount for each E110 line will be drawn from this range."
+            )
+            st.slider(
+                "Telephone (E105) amount range ($)",
+                min_value=1.0, max_value=50.0, value=(5.0, 15.0), step=1.0,
+                key="telephone_range_e105",
+                help="Random amount for each E105 line will be drawn from this range."
+            )
+     
+            # 1. Determine the default rate based on the selected LEDES version
+            if st.session_state.get("ledes_version") == "1998BI":
+                default_copy_rate = 0.10
+            else:
+                default_copy_rate = 0.24
+        
+            # 2. Use the variable as the slider's default value
+            st.number_input(
+                "Photocopies (E101) per-page rate ($)",
+                min_value=0.04,
+                max_value=1.50,
+                value=default_copy_rate, 
+                step=0.01,
+                key="copying_rate_e101",
+                help="Per-page rate used for E101 Photocopy expenses."
+            )
+        st.caption("Number of expense line items to generate")
+        
+        # Initialize the expense slider's state if it doesn't exist
+        if "expense_slider" not in st.session_state:
+            st.session_state.expense_slider = PRESETS["Custom"]["expenses"]
+        
+        expenses = st.number_input(
+            "Number of Expense Line Items",
+            min_value=0,
+            max_value=50,
+            key="expense_slider",
+        )
+    max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
+    
+    if spend_agent:
+        st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
+        
+        # ---- CORRECTED AND CONSOLIDATED MANDATORY ITEMS LOGIC ----
+        
+        # Base list of all possible items
+        all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
+
+        # Determine the items available for selection based on the environment
+        if st.session_state.get("selected_env") == 'SimpleLegal':
+            available_items = [
+                name for name, details in CONFIG['MANDATORY_ITEMS'].items()
+                if details.get('is_expense') and details.get('expense_code') == 'E110'
+            ]
+            st.info("For the 'SimpleLegal' profile, only E110 mandatory expenses are available.")
+        else:
+            available_items = all_items
+
+        # Determine the default selected items
+        saved_selection = st.session_state.get("mandatory_items_default")
+        if saved_selection is not None:
+            # Use last selection if saved, but only include items currently available
+            default_selection = [item for item in saved_selection if item in available_items]
+        else:
+            # Otherwise, determine initial defaults based on environment.
+            if st.session_state.get("selected_env") == 'SimpleLegal':
+                # For SimpleLegal, all available items are selected by default.
+                default_selection = list(available_items)
+            else:
+                # For other environments, default to all items
+                default_selection = list(available_items)
+        
+        # Special rule for 'Unity': ensure 'Partner: Paralegal Task' is pre-selected if available.
+        if st.session_state.get("selected_env") == "Unity":
+            pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
+            if pp_key and pp_key not in default_selection:
+                default_selection.append(pp_key)
+        
+        # Render the multiselect widget
+        selected_items = st.multiselect(
+            "Select Mandatory Items to Include",
+            options=available_items,
+            default=default_selection,
+            key="mandatory_items_multiselect",
+        )
+
+        # Persist the user's selection so it survives reruns.
+        st.session_state["mandatory_items_default"] = list(selected_items)
+        
+        # Conditional UI for Airfare Details
+        if 'Airfare E110' in selected_items:
+            st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
+            ac1, ac2 = st.columns(2)
+            with ac1:
+                st.text_input("Airline", key="airfare_airline", value="United Airlines")
+                st.text_input("Departure City", key="airfare_departure_city", value="Newark")
+                st.checkbox("Roundtrip", key="airfare_roundtrip", value=True)
+            with ac2:
+                st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
+                st.text_input("Arrival City", key="airfare_arrival_city", value="Los Angeles")
+                st.number_input("Amount", min_value=0.0, value=450.75, step=0.01, key="airfare_amount", help="This amount will be used for the airfare line item total.")
+            st.selectbox(
+                "Fare Class",
+                options=["First", "Business", "Premium Economy", "Economy/Coach"],
+                key="airfare_fare_class",
+                help="Select the standard airline fare class (e.g., First, Business, Coach). This will be added to the line item description."
+            )
+        
+        # Conditional UI for Uber Details
+        if 'Uber E110' in selected_items:
+            st.markdown("<h4 style='color: #1E1E1E;'>Uber E110 Details</h4>", unsafe_allow_html=True)
+            st.number_input("Ride Amount", min_value=0.0, value=25.50, step=0.01, key="uber_amount", help="This amount will be used for the Uber ride line item total.")
+
+    else:
+        selected_items = []
 
 
 output_tab_index = tabs.index("Output")
@@ -2551,14 +2661,14 @@ with tab_objects[output_tab_index]:
     st.session_state["__bb_remaining"] = int(num_block_billed)
 
     include_pdf = st.checkbox("Include PDF Invoice", value=False)
-
+    
     uploaded_logo = None
     logo_width = None
     logo_height = None
-
+    
     if include_pdf:
         include_logo = st.checkbox("Include Logo in PDF", value=True, help="Uncheck to exclude logo from PDF header, using only law firm text.")
-
+    
     generate_multiple = st.checkbox("Generate Multiple Invoices", help="Create more than one invoice.")
     num_invoices = 1
     multiple_periods = False
@@ -2578,291 +2688,287 @@ with tab_objects[output_tab_index]:
     if generate_receipts:
         zip_receipts = st.checkbox("Zip Receipts", value=True, key="zip_receipts", help="Combine all generated receipt images into a single ZIP file.")
 
-    # Email Configuration Tab (only created if send_email is True)
-    if st.session_state.send_email:
-        email_tab_index = len(tabs) - 1
-email_tab_index = (len(tabs) - 1) if st.session_state.get('send_email', False) else None
-if email_tab_index is not None:
-        # Email Configuration Tab (only render if Send Email is ON)
-    email_tab_index = (len(tabs) - 1) if st.session_state.get("send_email", False) else None
-if email_tab_index is not None:
+# Email Configuration Tab (only created if send_email is True)
+if st.session_state.send_email:
+    email_tab_index = len(tabs) - 1
     with tab_objects[email_tab_index]:
         st.markdown("<h2 style='color: #1E1E1E;'>Email Configuration</h2>", unsafe_allow_html=True)
+        recipient_email = st.text_input("Recipient Email Address:")
+        try:
+            sender_email = st.secrets.email.email_from
+            st.caption(f"Sender Email will be from: {st.secrets.get('email', {}).get('username', 'N/A')}")
+        except AttributeError:
+            st.caption("Sender Email: Not configured (check secrets.toml)")
+        st.text_input("Email Subject Template:", value=f"LEDES Invoice for {matter_number_base} (Invoice #{{invoice_number}})", key="email_subject")
+        st.text_area("Email Body Template:", value=f"Please find the attached invoice files for matter {{matter_number}}.\n\nBest regards,\nYour Law Firm", height=150, key="email_body")
+else:
+    recipient_email = ""
 
-        recipient_email = st.text_input("Recipient Email Address:", key="recipient_email")
-        subject_line    = st.text_input("Email Subject:", value="LEDES Invoice", key="email_subject")
-        body_text       = st.text_area("Email Body:", height=150, key="email_body", value="Please find the attached invoice(s).")
+# Validation Logic
 
-        st.markdown("---")
-        st.caption("Attachments will be added automatically after generation.")
-
-
-        # Validation Logic
-
-        # --- Tax Fields Tab (only if 1998BIv2 selected) ---
-        if "Tax Fields" in tabs:
-            tax_tab_index = tabs.index("Tax Fields")
+# --- Tax Fields Tab (only if 1998BIv2 selected) ---
+if "Tax Fields" in tabs:
+    tax_tab_index = tabs.index("Tax Fields")
     with tab_objects[tax_tab_index]:
         st.markdown("<h2 style='color: #1E1E1E;'>Tax Fields</h2>", unsafe_allow_html=True)
-    st.session_state.setdefault("tax_matter_name", "")
-    st.session_state.setdefault("tax_po_number", "")
-    st.session_state.setdefault("tax_client_matter_id", "")
-    st.session_state.setdefault("tax_invoice_currency", "USD")
-    st.session_state.setdefault("tax_rate", 0.19)
+        st.session_state.setdefault("tax_matter_name", "")
+        st.session_state.setdefault("tax_po_number", "")
+        st.session_state.setdefault("tax_client_matter_id", "")
+        st.session_state.setdefault("tax_invoice_currency", "USD")
+        st.session_state.setdefault("tax_rate", 0.19)
 
-    st.text_input("Matter Name *", key="tax_matter_name")
-    st.text_input("PO Number (optional)", key="tax_po_number")
-    st.text_input("Client Matter ID *", key="tax_client_matter_id")
-    st.selectbox("Invoice Currency *", ["USD", "AUD", "CAD", "GBP", "EUR"], index=["USD", "AUD", "CAD", "GBP", "EUR"].index(st.session_state.get("tax_invoice_currency", "USD")), key="tax_invoice_currency")
-    st.number_input("Tax Rate *", min_value=0.0, max_value=1.0, step=0.01, value=st.session_state.get("tax_rate", 0.19), key="tax_rate")
-    st.selectbox("Tax Type *", ["VAT","PST","QST","GST"], index=0, key="tax_type", help="Type of tax to apply to line items.")
+        st.text_input("Matter Name *", key="tax_matter_name")
+        st.text_input("PO Number (optional)", key="tax_po_number")
+        st.text_input("Client Matter ID *", key="tax_client_matter_id")
+        st.selectbox("Invoice Currency *", ["USD", "AUD", "CAD", "GBP", "EUR"], index=["USD", "AUD", "CAD", "GBP", "EUR"].index(st.session_state.get("tax_invoice_currency", "USD")), key="tax_invoice_currency")
+        st.number_input("Tax Rate *", min_value=0.0, max_value=1.0, step=0.01, value=st.session_state.get("tax_rate", 0.19), key="tax_rate")
+        st.selectbox("Tax Type *", ["VAT","PST","QST","GST"], index=0, key="tax_type", help="Type of tax to apply to line items.")
 
-    with st.expander("Law Firm Details"):
-        st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Law Firm Address 2", key="pf_lf_address2", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Law Firm City", key="pf_lf_city", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Law Firm State/Region", key="pf_lf_state", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Law Firm Postcode", key="pf_lf_postcode", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Law Firm Country", key="pf_lf_country", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Law Firm Tax ID", key="pf_law_firm_id", disabled=not st.session_state.get("allow_override", False))
+        with st.expander("Law Firm Details"):
+            st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Address 2", key="pf_lf_address2", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm City", key="pf_lf_city", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm State/Region", key="pf_lf_state", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Postcode", key="pf_lf_postcode", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Country", key="pf_lf_country", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Law Firm Tax ID", key="pf_law_firm_id", disabled=not st.session_state.get("allow_override", False))
 
-    with st.expander("Client Details"):
-        st.text_input("Client Address 1", key="pf_client_address1", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Client Address 2", key="pf_client_address2", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Client City", key="pf_client_city", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Client State/Region", key="pf_client_state", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Client Postcode", key="pf_client_postcode", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Client Country", key="pf_client_country", disabled=not st.session_state.get("allow_override", False))
-        st.text_input("Client Tax ID", key="pf_client_tax_id", disabled=not st.session_state.get("allow_override", False))
+        with st.expander("Client Details"):
+            st.text_input("Client Address 1", key="pf_client_address1", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Address 2", key="pf_client_address2", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client City", key="pf_client_city", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client State/Region", key="pf_client_state", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Postcode", key="pf_client_postcode", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Country", key="pf_client_country", disabled=not st.session_state.get("allow_override", False))
+            st.text_input("Client Tax ID", key="pf_client_tax_id", disabled=not st.session_state.get("allow_override", False))
 
-    is_valid_input = True
-    if timekeeper_data is None:
-        st.error("Please upload a valid timekeeper CSV file.")
+is_valid_input = True
+if timekeeper_data is None:
+    st.error("Please upload a valid timekeeper CSV file.")
     is_valid_input = False
-    if billing_start_date >= billing_end_date:
-        st.error("Billing start date must be before end date.")
+if billing_start_date >= billing_end_date:
+    st.error("Billing start date must be before end date.")
     is_valid_input = False
-    if st.session_state.send_email and not recipient_email:
-        st.error("Please provide a recipient email address.")
+if st.session_state.send_email and not recipient_email:
+    st.error("Please provide a recipient email address.")
     is_valid_input = False
-    if not invoice_number_base or not matter_number_base:
-        st.error("Invoice Number and Matter Number cannot be empty.")
+if not invoice_number_base or not matter_number_base:
+    st.error("Invoice Number and Matter Number cannot be empty.")
     is_valid_input = False
 
-    # --- 1998BIv2 validation ---
-    if st.session_state.get("ledes_version") == "1998BIv2":
-        if not st.session_state.get("tax_matter_name", "").strip():
-            st.error("Matter Name is required for LEDES 1998BIv2.")
-    is_valid_input = False
+# --- 1998BIv2 validation ---
+if st.session_state.get("ledes_version") == "1998BIv2":
+    if not st.session_state.get("tax_matter_name", "").strip():
+        st.error("Matter Name is required for LEDES 1998BIv2.")
+        is_valid_input = False
     if st.session_state.get("tax_invoice_currency", "USD") not in ["USD","AUD","CAD","GBP","EUR"]:
         st.error("Invoice Currency must be one of USD, AUD, CAD, GBP, EUR.")
-    is_valid_input = False
+        is_valid_input = False
     if st.session_state.get("tax_rate", 0.19) < 0:
         st.error("Tax Rate must be zero or positive.")
+        is_valid_input = False
+
+if combine_ledes and num_invoices <= 1:
+    st.error("Cannot combine LEDES file if only one invoice is being generated.")
     is_valid_input = False
+st.markdown("---")
+generate_button = st.button("Generate Invoice(s)", disabled=not is_valid_input)
 
-    if combine_ledes and num_invoices <= 1:
-        st.error("Cannot combine LEDES file if only one invoice is being generated.")
-    is_valid_input = False
-    st.markdown("---")
-    generate_button = st.button("Generate Invoice(s)", disabled=not is_valid_input)
+# Final download/email logic
+def get_mime_type(filename):
+    if filename.endswith(".txt"): return "text/plain"
+    if filename.endswith(".pdf"): return "application/pdf"
+    if filename.endswith(".png"): return "image/png"
+    if filename.endswith(".zip"): return "application/zip"
+    return "application/octet-stream"
 
-    # Final download/email logic
-    def get_mime_type(filename):
-        if filename.endswith(".txt"): return "text/plain"
-        if filename.endswith(".pdf"): return "application/pdf"
-        if filename.endswith(".png"): return "image/png"
-        if filename.endswith(".zip"): return "application/zip"
-        return "application/octet-stream"
-
-    # Main App Logic
-    if generate_button:
-        if ledes_version == "XML 2.1":
-            st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
-    st.stop()
-
+# Main App Logic
+if generate_button:
+    if ledes_version == "XML 2.1":
+        st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
+        st.stop()
+    
     faker = Faker()
     descriptions = [d.strip() for d in invoice_desc.split('\n') if d.strip()]
     num_invoices = int(num_invoices)
-
+    
     if multiple_periods and len(descriptions) != num_invoices:
         st.warning(f"You have selected to generate {num_invoices} invoices, but provided {len(descriptions)} descriptions. Please provide one description per period.")
     else:
         attachments_list = []
-    receipt_files = []
-    combined_ledes_content = ""
-    zip_receipts_enabled = st.session_state.get('zip_receipts', False) if generate_receipts else False
+        receipt_files = []
+        combined_ledes_content = ""
+        zip_receipts_enabled = st.session_state.get('zip_receipts', False) if generate_receipts else False
 
-    with st.status("Generating invoices...") as status:
-        current_end_date = billing_end_date
-        current_start_date = billing_start_date
-        
-        for i in range(num_invoices):
-            if multiple_periods and i > 0:
-                current_end_date = current_start_date - datetime.timedelta(days=1)
-                current_start_date = current_end_date.replace(day=1)
+        with st.status("Generating invoices...") as status:
+            current_end_date = billing_end_date
+            current_start_date = billing_start_date
             
-            status.update(label=f"Generating Invoice {i+1}/{num_invoices} for period {current_start_date} to {current_end_date}")
-            
-            current_invoice_desc = descriptions[i] if multiple_periods and i < len(descriptions) else descriptions[0]
-            
-            num_mandatory_fees = sum(1 for item in selected_items if not CONFIG['MANDATORY_ITEMS'][item]['is_expense'])
-            num_mandatory_expenses = len(selected_items) - num_mandatory_fees
-            
-            fees_to_generate = max(0, fees - num_mandatory_fees)
-            expenses_to_generate = max(0, expenses - num_mandatory_expenses)
-
-            max_daily_hours = int(st.session_state.get('max_daily_hours', 6))
-            rows, total_amount = _generate_invoice_data(
-                fees_to_generate, expenses_to_generate, timekeeper_data, client_id, law_firm_id,
-                current_invoice_desc, current_start_date, current_end_date,
-                task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, num_block_billed, faker,
-                vague_line_items
-            )
-
-            skipped_mandatory_items = []
-            if spend_agent:
-                rows, skipped_mandatory_items = _ensure_mandatory_lines(
-                    rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id, 
-                    current_start_date, current_end_date, selected_items
-                )
-            
-            df_invoice = pd.DataFrame(rows)
-            total_amount = df_invoice["LINE_ITEM_TOTAL"].sum()
-            
-            if skipped_mandatory_items:
-                skipped_list = ", ".join(f"'{item}'" for item in skipped_mandatory_items)
-                st.warning(
-                    f"**Mandatory Items Skipped:** The following items were not added to the invoice because their assigned timekeepers were not found in your CSV file: **{skipped_list}**"
-                )
-
-            current_invoice_number = f"{invoice_number_base}-{i+1}"
-            current_matter_number = matter_number_base
-            
-            is_first = (i == 0) and combine_ledes
-            if ledes_version == "1998BIv2":
-                ledes_content_part = _create_ledes_1998biv2_content(
-                    rows,
-                    current_start_date, current_end_date,
-                    current_invoice_number, current_matter_number,
-                    st.session_state.get('tax_matter_name',''),
-                    st.session_state.get('tax_po_number',''),
-                    st.session_state.get('tax_client_matter_id',''),
-                    st.session_state.get('tax_invoice_currency','USD'),
-                    st.session_state.get('tax_rate', 0.19),
-                    is_first_invoice=not combine_ledes or is_first
-                )
-            elif ledes_version == "1998BI":
-                ledes_content_part = _create_ledes_1998bi_content(
-                    rows,
-                    current_start_date, current_end_date,
-                    current_invoice_number, current_matter_number,
-                    st.session_state.get('tax_matter_name',''),
-                    st.session_state.get('tax_po_number',''),
-                    st.session_state.get('tax_client_matter_id',''),
-                    st.session_state.get('tax_invoice_currency','USD'),
-                    st.session_state.get('tax_rate', 0.19),
-                    is_first_invoice=not combine_ledes or is_first
-                )
-            else:
-                ledes_content_part = _create_ledes_1998b_content(
-                    rows,
-                    total_amount,
-                    current_start_date, current_end_date,
-                    current_invoice_number, current_matter_number,
-                    is_first_invoice=not combine_ledes or is_first
-                )
-            if combine_ledes:
-                combined_ledes_content += ledes_content_part + "\n"
-            else:
-                ledes_filename = (f"LEDES_1998BI_{current_invoice_number}.txt" if ledes_version == "1998BI" else (f"LEDES_1998BIv2_{current_invoice_number}.txt" if ledes_version == "1998BIv2" else f"LEDES_1998B_{current_invoice_number}.txt"))
-                attachments_list.append((ledes_filename, ledes_content_part.encode('utf-8')))
-            
-            if include_pdf:
-                logo_bytes = None
-                if include_logo:
-                    use_custom_logo = st.session_state.get('use_custom_logo_checkbox', False)
-                    logo_bytes = _get_logo_bytes(uploaded_logo, law_firm_id, use_custom_logo)
+            for i in range(num_invoices):
+                if multiple_periods and i > 0:
+                    current_end_date = current_start_date - datetime.timedelta(days=1)
+                    current_start_date = current_end_date.replace(day=1)
                 
-                pdf_filename = f"Invoice_{current_invoice_number}.pdf"
-                pdf_buffer = _create_pdf_invoice(
-                    df_invoice,
-                    total_amount,
-                    current_invoice_number,
-                    current_end_date,
-                    current_start_date,
-                    current_end_date,
-                    client_id,
-                    law_firm_id,
-                    logo_bytes=logo_bytes,
-                    include_logo=include_logo,
-                    client_name=client_name,
-                    law_firm_name=law_firm_name,
-                    ledes_version=ledes_version,
-                    matter_name=st.session_state.get('tax_matter_name',''),
-                    po_number=st.session_state.get('tax_po_number',''),
-                    client_matter_id=st.session_state.get('tax_client_matter_id',''),
-                    invoice_currency=st.session_state.get('tax_invoice_currency','USD'),
-                    tax_rate=st.session_state.get('tax_rate', 0.19)
+                status.update(label=f"Generating Invoice {i+1}/{num_invoices} for period {current_start_date} to {current_end_date}")
+                
+                current_invoice_desc = descriptions[i] if multiple_periods and i < len(descriptions) else descriptions[0]
+                
+                num_mandatory_fees = sum(1 for item in selected_items if not CONFIG['MANDATORY_ITEMS'][item]['is_expense'])
+                num_mandatory_expenses = len(selected_items) - num_mandatory_fees
+                
+                fees_to_generate = max(0, fees - num_mandatory_fees)
+                expenses_to_generate = max(0, expenses - num_mandatory_expenses)
+
+                rows, total_amount = _generate_invoice_data(
+                    fees_to_generate, expenses_to_generate, timekeeper_data, client_id, law_firm_id,
+                    current_invoice_desc, current_start_date, current_end_date,
+                    task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, num_block_billed, faker,
+                    vague_line_items
                 )
-                attachments_list.append((pdf_filename, pdf_buffer.getvalue()))
+
+                skipped_mandatory_items = []
+                if spend_agent:
+                    rows, skipped_mandatory_items = _ensure_mandatory_lines(
+                        rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id, 
+                        current_start_date, current_end_date, selected_items
+                    )
+                
+                df_invoice = pd.DataFrame(rows)
+                total_amount = df_invoice["LINE_ITEM_TOTAL"].sum()
+                
+                if skipped_mandatory_items:
+                    skipped_list = ", ".join(f"'{item}'" for item in skipped_mandatory_items)
+                    st.warning(
+                        f"**Mandatory Items Skipped:** The following items were not added to the invoice because their assigned timekeepers were not found in your CSV file: **{skipped_list}**"
+                    )
+
+                current_invoice_number = f"{invoice_number_base}-{i+1}"
+                current_matter_number = matter_number_base
+                
+                is_first = (i == 0) and combine_ledes
+                if ledes_version == "1998BIv2":
+                    ledes_content_part = _create_ledes_1998biv2_content(
+                        rows,
+                        current_start_date, current_end_date,
+                        current_invoice_number, current_matter_number,
+                        st.session_state.get('tax_matter_name',''),
+                        st.session_state.get('tax_po_number',''),
+                        st.session_state.get('tax_client_matter_id',''),
+                        st.session_state.get('tax_invoice_currency','USD'),
+                        st.session_state.get('tax_rate', 0.19),
+                        is_first_invoice=not combine_ledes or is_first
+                    )
+                elif ledes_version == "1998BI":
+                    ledes_content_part = _create_ledes_1998bi_content(
+                        rows,
+                        current_start_date, current_end_date,
+                        current_invoice_number, current_matter_number,
+                        st.session_state.get('tax_matter_name',''),
+                        st.session_state.get('tax_po_number',''),
+                        st.session_state.get('tax_client_matter_id',''),
+                        st.session_state.get('tax_invoice_currency','USD'),
+                        st.session_state.get('tax_rate', 0.19),
+                        is_first_invoice=not combine_ledes or is_first
+                    )
+                else:
+                    ledes_content_part = _create_ledes_1998b_content(
+                        rows,
+                        total_amount,
+                        current_start_date, current_end_date,
+                        current_invoice_number, current_matter_number,
+                        is_first_invoice=not combine_ledes or is_first
+                    )
+                if combine_ledes:
+                    combined_ledes_content += ledes_content_part + "\n"
+                else:
+                    ledes_filename = (f"LEDES_1998BI_{current_invoice_number}.txt" if ledes_version == "1998BI" else (f"LEDES_1998BIv2_{current_invoice_number}.txt" if ledes_version == "1998BIv2" else f"LEDES_1998B_{current_invoice_number}.txt"))
+                    attachments_list.append((ledes_filename, ledes_content_part.encode('utf-8')))
+                
+                if include_pdf:
+                    logo_bytes = None
+                    if include_logo:
+                        use_custom_logo = st.session_state.get('use_custom_logo_checkbox', False)
+                        logo_bytes = _get_logo_bytes(uploaded_logo, law_firm_id, use_custom_logo)
+                    
+                    pdf_filename = f"Invoice_{current_invoice_number}.pdf"
+                    pdf_buffer = _create_pdf_invoice(
+                        df_invoice,
+                        total_amount,
+                        current_invoice_number,
+                        current_end_date,
+                        current_start_date,
+                        current_end_date,
+                        client_id,
+                        law_firm_id,
+                        logo_bytes=logo_bytes,
+                        include_logo=include_logo,
+                        client_name=client_name,
+                        law_firm_name=law_firm_name,
+                        ledes_version=ledes_version,
+                        matter_name=st.session_state.get('tax_matter_name',''),
+                        po_number=st.session_state.get('tax_po_number',''),
+                        client_matter_id=st.session_state.get('tax_client_matter_id',''),
+                        invoice_currency=st.session_state.get('tax_invoice_currency','USD'),
+                        tax_rate=st.session_state.get('tax_rate', 0.19)
+                    )
+                    attachments_list.append((pdf_filename, pdf_buffer.getvalue()))
+                
+                if generate_receipts:
+                    for _, row in df_invoice.iterrows():
+                        if row.get("EXPENSE_CODE") and row.get("EXPENSE_CODE") != "E101":
+                            receipt_filename, receipt_data_buf = _create_receipt_image(row.to_dict(), faker)
+                            if receipt_data_buf:
+                                receipt_files.append((receipt_filename, receipt_data_buf.getvalue()))
+
+            # Process receipts after loop
+            if receipt_files:
+                if zip_receipts_enabled:
+                    zip_buf = io.BytesIO()
+                    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                        for filename, data in receipt_files:
+                            zip_file.writestr(filename, data)
+                    zip_buf.seek(0)
+                    attachments_list.append(("receipts.zip", zip_buf.getvalue()))
+                else:
+                    attachments_list.extend(receipt_files)
+
+            # This is inside the `if generate_button:` block
             
-            if generate_receipts:
-                for _, row in df_invoice.iterrows():
-                    if row.get("EXPENSE_CODE") and row.get("EXPENSE_CODE") != "E101":
-                        receipt_filename, receipt_data_buf = _create_receipt_image(row.to_dict(), faker)
-                        if receipt_data_buf:
-                            receipt_files.append((receipt_filename, receipt_data_buf.getvalue()))
-
-        # Process receipts after loop
-        if receipt_files:
-            if zip_receipts_enabled:
-                zip_buf = io.BytesIO()
-                with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                    for filename, data in receipt_files:
-                        zip_file.writestr(filename, data)
-                zip_buf.seek(0)
-                attachments_list.append(("receipts.zip", zip_buf.getvalue()))
-            else:
-                attachments_list.extend(receipt_files)
-
-        # This is inside the `if generate_button:` block
-        
-        # After the loop, store all generated files (except combined LEDES) in session state
-        st.session_state.generated_files = attachments_list
-        
-        # Handle combined LEDES separately if needed
-        if combine_ledes:
-            st.session_state.generated_files.insert(0, ("LEDES_Combined.txt", combined_ledes_content.encode('utf-8')))
-
-        # Handle Emailing
-        if st.session_state.send_email:
-            subject, body = _customize_email_body(current_matter_number, f"{invoice_number_base}-Combined" if combine_ledes else f"{current_invoice_number}")
+            # After the loop, store all generated files (except combined LEDES) in session state
+            st.session_state.generated_files = attachments_list
             
-            # Use the files stored in session state for the email
-            if not _send_email_with_attachment(recipient_email, subject, body, st.session_state.generated_files):
-                st.error("Email failed to send. You can download the files below.")
-            else:
-                # Clear the files after successful send so buttons don't linger
-                st.session_state.generated_files = [] 
-        
-        status.update(label="Invoice generation complete!", state="complete")
+            # Handle combined LEDES separately if needed
+            if combine_ledes:
+                st.session_state.generated_files.insert(0, ("LEDES_Combined.txt", combined_ledes_content.encode('utf-8')))
 
-    # --- New Display Block (place this AFTER the `if generate_button:` block) ---
-    # This block runs on every interaction, ensuring the buttons stay visible.
-    if "generated_files" in st.session_state and st.session_state.generated_files:
-        st.subheader("Generated Files")
+            # Handle Emailing
+            if st.session_state.send_email:
+                subject, body = _customize_email_body(current_matter_number, f"{invoice_number_base}-Combined" if combine_ledes else f"{current_invoice_number}")
+                
+                # Use the files stored in session state for the email
+                if not _send_email_with_attachment(recipient_email, subject, body, st.session_state.generated_files):
+                    st.error("Email failed to send. You can download the files below.")
+                else:
+                    # Clear the files after successful send so buttons don't linger
+                    st.session_state.generated_files = [] 
+            
+            status.update(label="Invoice generation complete!", state="complete")
+
+
+# --- New Display Block (place this AFTER the `if generate_button:` block) ---
+# This block runs on every interaction, ensuring the buttons stay visible.
+if "generated_files" in st.session_state and st.session_state.generated_files:
+    st.subheader("Generated Files")
     # Use columns for a cleaner layout if many files are generated
     cols = st.columns(3) 
     col_idx = 0
     for filename, data in st.session_state.generated_files:
         with cols[col_idx % 3]:
             st.download_button(
-            label=f"Download {filename}",
-            data=data,
-            file_name=filename,
-            mime=get_mime_type(filename),
-            key=f"download_{filename}" # Unique key is important
+                label=f"Download {filename}",
+                data=data,
+                file_name=filename,
+                mime=get_mime_type(filename),
+                key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
-
