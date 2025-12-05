@@ -2024,7 +2024,7 @@ with st.sidebar.expander("How do I format the custom line items CSV?"):
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
 # Insert Tax Fields tab before Output when LEDES 1998BIv2 is selected
-if st.session_state.get("ledes_version") in ("1998BI", "1998BIv2"):
+if st.session_state.get("ledes_version") in ("1998BI", "1998BIv2", "XML 2.1"):
     tabs = tabs[:-1] + ["Tax Fields"] + tabs[-1:]
 # Email settings will live under the Output tab.
 tab_objects = st.tabs(tabs)
@@ -2411,7 +2411,7 @@ else:
 
 # Validation Logic
 
-# --- Tax Fields Tab (only if 1998BIv2 selected) ---
+# --- Tax Fields Tab (only if 1998BIv2 or XML selected) ---
 if "Tax Fields" in tabs:
     tax_tab_index = tabs.index("Tax Fields")
     with tab_objects[tax_tab_index]:
