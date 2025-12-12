@@ -1883,7 +1883,7 @@ with st.sidebar.expander("Timekeeper Downloads"):
     # OnitX Timekeepers
     onit_tk_data = read_file_for_download("assets/onit_elm_tk.csv")
     if onit_tk_data:
-        st.download_button("OnitX", onit_tk_data, "onit_elm_tk.csv", "text/csv")
+        st.download_button("OnitX", onitx_tk_data, "onitx_tk.csv", "text/csv")
 
     # OnitX_SS&E Timekeepers
     onit_tk_data = read_file_for_download("assets/onit_elm_tk.csv")
@@ -1893,7 +1893,7 @@ with st.sidebar.expander("Timekeeper Downloads"):
     # OnitX Timekeepers - VAT
     onit_vat_tk_data = read_file_for_download("assets/onit_vat_tk.csv")
     if onit_vat_tk_data:
-        st.download_button("OnitX - VAT", onit_vat_tk_data, "onit_vat_tk.csv", "text/csv")
+        st.download_button("OnitX - VAT", onitx_vat_tk_data, "onitx_vat_tk.csv", "text/csv")
 
     # SimpleLegal Timekeepers
     sl_tk_data = read_file_for_download("assets/simplelegal_tk.csv")
