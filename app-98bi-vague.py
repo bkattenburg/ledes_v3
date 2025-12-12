@@ -1880,14 +1880,19 @@ st.sidebar.markdown("## Downloads")
 
 with st.sidebar.expander("Timekeeper Downloads"):
     # OnitX Timekeepers
-    onit_tk_data = read_file_for_download("assets/onit_elm_tk.csv")
-    if onit_tk_data:
-        st.download_button("OnitX", onit_tk_data, "onit_elm_tk.csv", "text/csv")
+    onitx_tk_data = read_file_for_download("assets/onitx_tk.csv")
+    if onitx_tk_data:
+        st.download_button("OnitX", onitx_tk_data, "onitx_tk.csv", "text/csv")
 
+    # OnitX_SS&E Timekeepers
+    #onitx_SSE_tk_data = read_file_for_download("assets/onitx_SS&E_tk.csv")
+    #if onitx_SSE_tk_data:
+    #    st.download_button("OnitX SS&E", onitx_SSE_tk_data, "onitx_SS&E_tk.csv", "text/csv")
+    
     # OnitX Timekeepers - VAT
-    onit_vat_tk_data = read_file_for_download("assets/onit_vat_tk.csv")
-    if onit_vat_tk_data:
-        st.download_button("OnitX - VAT", onit_vat_tk_data, "onit_vat_tk.csv", "text/csv")
+    onitx_vat_tk_data = read_file_for_download("assets/onitx_vat_tk.csv")
+    if onitx_vat_tk_data:
+        st.download_button("OnitX - VAT", onitx_vat_tk_data, "onitx_vat_tk.csv", "text/csv")
 
     # SimpleLegal Timekeepers
     sl_tk_data = read_file_for_download("assets/simplelegal_tk.csv")
@@ -2705,6 +2710,7 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
 
