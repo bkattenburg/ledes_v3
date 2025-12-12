@@ -1885,6 +1885,11 @@ with st.sidebar.expander("Timekeeper Downloads"):
     if onit_tk_data:
         st.download_button("OnitX", onit_tk_data, "onit_elm_tk.csv", "text/csv")
 
+    # OnitX_SS&E Timekeepers
+    onit_tk_data = read_file_for_download("assets/onit_elm_tk.csv")
+    if onit_tk_data:
+        st.download_button("OnitX SS&E", onitx_SS&E_tk, "onitx_SS&E_tk.csv", "text/csv")
+    
     # OnitX Timekeepers - VAT
     onit_vat_tk_data = read_file_for_download("assets/onit_vat_tk.csv")
     if onit_vat_tk_data:
