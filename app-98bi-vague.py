@@ -246,7 +246,7 @@ def apply_preset():
 # Billing Profiles Configuration
 # ===============================
 # Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
-BILLING_PROFILES = [("OnitX N&M",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
+BILLING_PROFILES = [("OnitX Nelson & Murdock",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
     ("OnitX SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
     ("OnitX VAT", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
     ("SimpleLegal", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
@@ -2711,5 +2711,6 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
                 key=f"download_{filename}" # Unique key is important
             )
         col_idx += 1
+
 
 
