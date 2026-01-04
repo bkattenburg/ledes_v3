@@ -215,6 +215,8 @@ from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont, Image
 import zipfile
+from datetime import date, timedelta
+import calendar
 
 
 st.markdown("""
@@ -247,7 +249,7 @@ def apply_preset():
 # ===============================
 # Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
 BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
-    ("SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
+    #("SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
     ("OnitX VAT", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
     ("SimpleLegal", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
     ("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
@@ -1886,9 +1888,9 @@ with st.sidebar.expander("Timekeeper Downloads"):
         st.download_button("OnitX", onitx_tk_data, "onitx_tk.csv", "text/csv")
 
     # OnitX_SS&E Timekeepers
-    onitx_SSE_tk_data = read_file_for_download("assets/onitx_SS&E_tk.csv")
-    if onitx_SSE_tk_data:
-        st.download_button("OnitX SS&E", onitx_SSE_tk_data, "onitx_SS&E_tk.csv", "text/csv")
+    #onitx_SSE_tk_data = read_file_for_download("assets/onitx_SS&E_tk.csv")
+    #if onitx_SSE_tk_data:
+    #    st.download_button("OnitX SS&E", onitx_SSE_tk_data, "onitx_SS&E_tk.csv", "text/csv")
     
     # OnitX Timekeepers - VAT
     onitx_vat_tk_data = read_file_for_download("assets/onitx_vat_tk.csv")
@@ -2195,7 +2197,32 @@ with tab_objects[1]:
     st.markdown("<h3 style='color: #1E1E1E;'>Numbers & Version</h3>", unsafe_allow_html=True)
     # Other invoice details
     matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
-    invoice_number_base = st.text_input("Invoice Number (Base):", "INV-MMM-XXXXXX")
+    #invoice_number_base = st.text_input("Invoice Number (Base):", "INV-MMM-XXXXXX")
+    def prior_month_stamp(today: date) -> str:
+        # Go to last day of prior month (handles Jan -> Dec of previous year)
+        last_day_prev_month = today.replace(day=1) - timedelta(days=1)
+        yyyy = last_day_prev_month.year
+        mmm = calendar.month_abbr[last_day_prev_month.month].upper()  # e.g., "DEC"
+        return f"{yyyy}-{mmm}"
+
+    # Compute the dynamic default: YYYY-MMM-XXXXXX based on PRIOR month
+    stamp = prior_month_stamp(date.today())
+    dynamic_default = f"{stamp}-XXXXXX"
+
+    # Only auto-set the field when it’s first created OR when the month stamp changes
+    # (prevents overwriting user edits on reruns)
+    if "invoice_number_base" not in st.session_state:
+        st.session_state.invoice_number_base = dynamic_default
+        st.session_state._invoice_base_stamp = stamp
+    elif st.session_state.get("_invoice_base_stamp") != stamp:
+        st.session_state.invoice_number_base = dynamic_default
+        st.session_state._invoice_base_stamp = stamp
+
+    invoice_number_base = st.text_input(
+        "Invoice Number (Base):",
+        key="invoice_number_base",
+        help="Format: YYYY-MMM-XXXXXX (XXXXXX is the matter placeholder)"
+    )
 
     LEDES_OPTIONS = ["1998B", "1998BI"]
     ledes_version = st.selectbox(
