@@ -208,7 +208,8 @@ from email.mime.application import MIMEApplication
 from faker import Faker
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+#from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch
@@ -1395,7 +1396,8 @@ def _create_pdf_invoice(
         try:
             if not _validate_image_bytes(logo_bytes):
                 raise ValueError("Invalid logo bytes")
-            img = Image(io.BytesIO(logo_bytes), width=0.6 * inch, height=0.6 * inch, kind='direct', hAlign='LEFT')
+            #img = Image(io.BytesIO(logo_bytes), width=0.6 * inch, height=0.6 * inch, kind='direct', hAlign='LEFT')
+            img = RLImage(io.BytesIO(logo_bytes), width=0.6 * inch, height=0.6 * inch, kind="direct", hAlign="LEFT")
             img._restrictSize(0.6 * inch, 0.6 * inch)
             img.alt = "Law Firm Logo"
             inner_table_data = [[img, Paragraph(law_firm_info, header_info_style)]]
