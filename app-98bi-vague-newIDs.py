@@ -251,6 +251,38 @@ def _invoice_number_for_period(base_invoice_number: str, period_end_date: date) 
     suffix = parts[-1] if parts else base
     return f"{stamp}-{suffix}"
 
+
+def _default_invoice_description_lines(base_text: str, period_end_date: date, num_periods: int) -> str:
+    """Build default Invoice Description text (one line per period, newest to oldest).
+
+    Example (end=2025-12-31, num_periods=3):
+      Professional Services Rendered - Dec 2025
+      Professional Services Rendered - Nov 2025
+      Professional Services Rendered - Oct 2025
+    """
+    base = (base_text or "").strip() or "Professional Services Rendered"
+    try:
+        n = int(num_periods)
+    except Exception:
+        n = 1
+    n = max(1, n)
+
+    y0 = int(period_end_date.year)
+    m0 = int(period_end_date.month)
+
+    lines = []
+    for i in range(n):
+        total = y0 * 12 + (m0 - 1) - i
+        y = total // 12
+        m = total % 12 + 1
+        lines.append(f"{base} - {calendar.month_abbr[m]} {y}")
+    return "\n".join(lines)
+
+
+def _mark_invoice_desc_manual():
+    # Called when the user edits the Invoice Description field so we don't overwrite their changes.
+    st.session_state["invoice_desc_auto"] = False
+
 import calendar
 
 
@@ -2257,7 +2289,7 @@ with tab_objects[1]:
     invoice_number_base = st.text_input(
         "Invoice Number (Base):",
         key="invoice_number_base",
-        help="Format: YYYY-MMM-XXXXXX (XXXXXX is the Matter Number placeholder)"
+        help="Format: YYYY-MMM-XXXXXX (XXXXXX is the matter placeholder)"
     )
 
     LEDES_OPTIONS = ["1998B", "1998BI"]
@@ -2277,10 +2309,55 @@ with tab_objects[1]:
     first_day_of_previous_month = last_day_of_previous_month.replace(day=1)
     billing_start_date = st.date_input("Billing Start Date", value=first_day_of_previous_month)
     billing_end_date = st.date_input("Billing End Date", value=last_day_of_previous_month)
+    # --- Invoice Description defaults (per billing period) ---
+    # NOTE: num_invoices / multiple_periods are defined later (in the Output tab UI).
+    # For Invoice Description defaults, pull the latest widget state from session_state.
+    _multiple_periods = bool(
+        st.session_state.get("multiple_billing_periods",
+            st.session_state.get("Multiple Billing Periods", False)
+        )
+    )
+    _generate_multiple = bool(
+        st.session_state.get("generate_multiple_invoices",
+            st.session_state.get("Generate Multiple Invoices", False)
+        )
+    )
+
+    if _generate_multiple and _multiple_periods:
+        _num_periods = int(
+            st.session_state.get("num_billing_periods",
+                st.session_state.get("How Many Billing Periods:", 1)
+            )
+        )
+        desc_periods = max(1, _num_periods)
+    else:
+        desc_periods = 1
+    desired_invoice_desc = _default_invoice_description_lines(
+        "Professional Services Rendered",
+        billing_end_date,
+        desc_periods
+    )
+
+    if "invoice_desc_text" not in st.session_state:
+        st.session_state["invoice_desc_text"] = desired_invoice_desc
+        st.session_state["invoice_desc_auto"] = True
+        st.session_state["invoice_desc_last_desired"] = desired_invoice_desc
+    else:
+        current_desc = st.session_state.get("invoice_desc_text", "")
+        last_desired = st.session_state.get("invoice_desc_last_desired", "")
+        # Update automatically only if the user hasn't customized it (still auto/legacy default)
+        if current_desc.strip() in ("", "Professional Services Rendered") or (
+            st.session_state.get("invoice_desc_auto", False) and current_desc == last_desired
+        ):
+            st.session_state["invoice_desc_text"] = desired_invoice_desc
+            st.session_state["invoice_desc_auto"] = True
+        st.session_state["invoice_desc_last_desired"] = desired_invoice_desc
+
     invoice_desc = st.text_area(
         "Invoice Description (One per period, each on a new line)",
-        value="Professional Services Rendered",
-        height=150
+        key="invoice_desc_text",
+        height=150,
+        on_change=_mark_invoice_desc_manual
     )
 # #############################################################################
 
