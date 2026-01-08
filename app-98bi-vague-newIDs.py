@@ -217,6 +217,40 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont, Image
 import zipfile
 from datetime import date, timedelta
+# --- Invoice number helpers (multiple billing periods) ---
+def _month_stamp_for_date(d: date) -> str:
+    """Return YYYY-MMM (MMM is 3-letter month abbreviation, upper-case)."""
+    yyyy = int(d.year)
+    mmm = calendar.month_abbr[int(d.month)].upper()
+    return f"{yyyy}-{mmm}"
+
+def _invoice_number_for_period(base_invoice_number: str, period_end_date: date) -> str:
+    """
+    For Multiple Billing Periods:
+    - Keep the suffix (everything after the second dash) from base_invoice_number
+    - Swap the YYYY-MMM prefix to match period_end_date
+
+    Examples:
+      base=2025-DEC-123456, end=2025-11-30 -> 2025-NOV-123456
+      base=2026-JAN-123456, end=2025-12-31 -> 2025-DEC-123456
+    """
+    base = str(base_invoice_number or "").strip()
+    if not base:
+        return base
+
+    stamp = _month_stamp_for_date(period_end_date)
+
+    # Preferred: base already looks like YYYY-MMM-REST...
+    m = re.match(r"^(\d{4})-([A-Za-z]{3})-(.+)$", base)
+    if m:
+        rest = m.group(3)  # keep everything after YYYY-MMM-
+        return f"{stamp}-{rest}"
+
+    # Fallback: keep the final segment as the suffix
+    parts = base.split("-")
+    suffix = parts[-1] if parts else base
+    return f"{stamp}-{suffix}"
+
 import calendar
 
 
@@ -2610,7 +2644,18 @@ if generate_button:
                         f"**Mandatory Items Skipped:** The following items were not added to the invoice because their assigned timekeepers were not found in your CSV file: **{skipped_list}**"
                     )
 
-                current_invoice_number = f"{invoice_number_base}-{i+1}"
+                # Invoice numbering
+                # - Single invoice: use the base as-is
+                # - Multiple invoices (not Multiple Billing Periods): append -1, -2, ...
+                # - Multiple Billing Periods: keep the base for the current period (i==0),
+                #   and rewrite YYYY-MMM for prior periods while preserving the suffix
+                if multiple_periods:
+                    if i == 0:
+                        current_invoice_number = str(invoice_number_base)
+                    else:
+                        current_invoice_number = _invoice_number_for_period(invoice_number_base, current_end_date)
+                else:
+                    current_invoice_number = (f"{invoice_number_base}-{i+1}" if int(num_invoices) > 1 else str(invoice_number_base))
                 current_matter_number = matter_number_base
                 
                 is_first = (i == 0) and combine_ledes
