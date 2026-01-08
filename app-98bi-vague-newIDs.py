@@ -2309,7 +2309,7 @@ with tab_objects[1]:
     first_day_of_previous_month = last_day_of_previous_month.replace(day=1)
     billing_start_date = st.date_input("Billing Start Date", value=first_day_of_previous_month)
     billing_end_date = st.date_input("Billing End Date", value=last_day_of_previous_month)
-    # --- Invoice Description defaults (per billing period) ---
+    # --- Invoice Description (auto-generated; optionally editable) ---
     # NOTE: The "Generate Multiple Invoices" / "Multiple Billing Periods" controls live in the Output tab.
     # Streamlit updates widget values in st.session_state before each rerun, so we can safely read them here.
     # We support both explicit widget keys (preferred) and legacy implicit keys (label-based).
@@ -2340,40 +2340,41 @@ with tab_objects[1]:
             desc_periods = 1
     else:
         desc_periods = 1
+
     desired_invoice_desc = _default_invoice_description_lines(
         "Professional Services Rendered",
         billing_end_date,
         desc_periods
     )
 
-    if "invoice_desc_text" not in st.session_state:
-        st.session_state["invoice_desc_text"] = desired_invoice_desc
-        st.session_state["invoice_desc_auto"] = True
-        st.session_state["invoice_desc_last_desired"] = desired_invoice_desc
-    else:
-        current_desc = st.session_state.get("invoice_desc_text", "")
-        last_desired = st.session_state.get("invoice_desc_last_desired", "")
-        # Update automatically only if the user hasn't customized it (still auto/legacy default)
-        if current_desc.strip() in ("", "Professional Services Rendered") or (
-            last_desired and current_desc == last_desired
-        ):
-            st.session_state["invoice_desc_text"] = desired_invoice_desc
-            st.session_state["invoice_desc_auto"] = True
-        st.session_state["invoice_desc_last_desired"] = desired_invoice_desc
+    allow_edit_invoice_desc = st.checkbox(
+        "Allow editing Invoice Description",
+        value=False,
+        key="invoice_desc_edit_enabled",
+        help="When unchecked, the description is auto-generated from the billing period(s) and shown read-only."
+    )
 
-    # Optional: let the user quickly restore the auto-generated defaults if they previously edited this field
-    if st.button("Reset Invoice Description to Defaults", key="reset_invoice_desc_defaults"):
+    if not allow_edit_invoice_desc:
+        # Always keep in sync with billing period(s)
         st.session_state["invoice_desc_text"] = desired_invoice_desc
-        st.session_state["invoice_desc_auto"] = True
-        st.session_state["invoice_desc_last_desired"] = desired_invoice_desc
+    else:
+        # If first time enabling editing, initialize from the current desired value
+        if "invoice_desc_text" not in st.session_state or not st.session_state.get("invoice_desc_text", "").strip():
+            st.session_state["invoice_desc_text"] = desired_invoice_desc
+
+        if st.button("Reset Invoice Description to Defaults", key="reset_invoice_desc_defaults"):
+            st.session_state["invoice_desc_text"] = desired_invoice_desc
 
     invoice_desc = st.text_area(
         "Invoice Description (One per period, each on a new line)",
         key="invoice_desc_text",
         height=150,
-        on_change=_mark_invoice_desc_manual
+        disabled=not allow_edit_invoice_desc
     )
-# #############################################################################
+
+    # Ensure downstream logic always uses the latest value
+    invoice_desc = st.session_state.get("invoice_desc_text", invoice_desc)
+    # #############################################################################
 
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
