@@ -2257,7 +2257,7 @@ with tab_objects[1]:
     invoice_number_base = st.text_input(
         "Invoice Number (Base):",
         key="invoice_number_base",
-        help="Format: YYYY-MMM-XXXXXX (XXXXXX is the matter placeholder)"
+        help="Format: YYYY-MMM-XXXXXX (XXXXXX is the Matter Number placeholder)"
     )
 
     LEDES_OPTIONS = ["1998B", "1998BI"]
