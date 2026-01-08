@@ -2310,26 +2310,34 @@ with tab_objects[1]:
     billing_start_date = st.date_input("Billing Start Date", value=first_day_of_previous_month)
     billing_end_date = st.date_input("Billing End Date", value=last_day_of_previous_month)
     # --- Invoice Description defaults (per billing period) ---
-    # NOTE: num_invoices / multiple_periods are defined later (in the Output tab UI).
-    # For Invoice Description defaults, pull the latest widget state from session_state.
-    _multiple_periods = bool(
-        st.session_state.get("multiple_billing_periods",
-            st.session_state.get("Multiple Billing Periods", False)
-        )
-    )
+    # NOTE: The "Generate Multiple Invoices" / "Multiple Billing Periods" controls live in the Output tab.
+    # Streamlit updates widget values in st.session_state before each rerun, so we can safely read them here.
+    # We support both explicit widget keys (preferred) and legacy implicit keys (label-based).
     _generate_multiple = bool(
         st.session_state.get("generate_multiple_invoices",
             st.session_state.get("Generate Multiple Invoices", False)
         )
     )
+    _multiple_periods = bool(
+        st.session_state.get("multiple_billing_periods",
+            st.session_state.get("Multiple Billing Periods", False)
+        )
+    )
+
+    _raw_periods = (
+        st.session_state.get("num_billing_periods")
+        or st.session_state.get("How Many Billing Periods:")
+        or st.session_state.get("How many billing periods:")
+        or st.session_state.get("How Many Billing Periods")
+        or st.session_state.get("How many billing periods")
+        or 1
+    )
 
     if _generate_multiple and _multiple_periods:
-        _num_periods = int(
-            st.session_state.get("num_billing_periods",
-                st.session_state.get("How Many Billing Periods:", 1)
-            )
-        )
-        desc_periods = max(1, _num_periods)
+        try:
+            desc_periods = max(1, int(_raw_periods))
+        except Exception:
+            desc_periods = 1
     else:
         desc_periods = 1
     desired_invoice_desc = _default_invoice_description_lines(
@@ -2347,10 +2355,16 @@ with tab_objects[1]:
         last_desired = st.session_state.get("invoice_desc_last_desired", "")
         # Update automatically only if the user hasn't customized it (still auto/legacy default)
         if current_desc.strip() in ("", "Professional Services Rendered") or (
-            st.session_state.get("invoice_desc_auto", False) and current_desc == last_desired
+            last_desired and current_desc == last_desired
         ):
             st.session_state["invoice_desc_text"] = desired_invoice_desc
             st.session_state["invoice_desc_auto"] = True
+        st.session_state["invoice_desc_last_desired"] = desired_invoice_desc
+
+    # Optional: let the user quickly restore the auto-generated defaults if they previously edited this field
+    if st.button("Reset Invoice Description to Defaults", key="reset_invoice_desc_defaults"):
+        st.session_state["invoice_desc_text"] = desired_invoice_desc
+        st.session_state["invoice_desc_auto"] = True
         st.session_state["invoice_desc_last_desired"] = desired_invoice_desc
 
     invoice_desc = st.text_area(
@@ -2531,6 +2545,19 @@ with tab_objects[2]:
 output_tab_index = tabs.index("Output")
 with tab_objects[output_tab_index]:
     st.markdown("<h3 style='color: #1E1E1E;'>Output</h3>", unsafe_allow_html=True)
+    # --- Backward-compatible widget-key aliases ---
+    # Older versions relied on Streamlit's implicit (label-based) widget keys.
+    # Newer versions set explicit keys so other tabs (like Invoice Details) can reliably read these values.
+    if "generate_multiple_invoices" not in st.session_state and "Generate Multiple Invoices" in st.session_state:
+        st.session_state["generate_multiple_invoices"] = st.session_state["Generate Multiple Invoices"]
+    if "multiple_billing_periods" not in st.session_state and "Multiple Billing Periods" in st.session_state:
+        st.session_state["multiple_billing_periods"] = st.session_state["Multiple Billing Periods"]
+    if "num_billing_periods" not in st.session_state:
+        for _k in ("How many billing periods:", "How Many Billing Periods:", "How Many Billing Periods", "How many billing periods"):
+            if _k in st.session_state:
+                st.session_state["num_billing_periods"] = st.session_state[_k]
+                break
+
     include_block_billed = st.checkbox("Include Block Billed Line Items", value=True)
     num_block_billed = 0
     if include_block_billed:
@@ -2548,14 +2575,14 @@ with tab_objects[output_tab_index]:
     if include_pdf:
         include_logo = st.checkbox("Include Logo in PDF", value=True, help="Uncheck to exclude logo from PDF header, using only law firm text.")
     
-    generate_multiple = st.checkbox("Generate Multiple Invoices", help="Create more than one invoice.")
+    generate_multiple = st.checkbox("Generate Multiple Invoices", key="generate_multiple_invoices", help="Create more than one invoice.")
     num_invoices = 1
     multiple_periods = False
     if generate_multiple:
         combine_ledes = st.checkbox("Combine LEDES into single file", help="If checked, all generated LEDES invoices will be combined into a single file with one header.")
-        multiple_periods = st.checkbox("Multiple Billing Periods", help="Backfills one invoice per prior month from the given end date, newest to oldest.")
+        multiple_periods = st.checkbox("Multiple Billing Periods", key="multiple_billing_periods", help="Backfills one invoice per prior month from the given end date, newest to oldest.")
         if multiple_periods:
-            num_periods = st.number_input("How Many Billing Periods:", min_value=2, max_value=6, value=2, step=1, help="Number of month-long periods to create (overrides Number of Invoices).")
+            num_periods = st.number_input("How Many Billing Periods:", key="num_billing_periods", min_value=2, max_value=6, value=2, step=1, help="Number of month-long periods to create (overrides Number of Invoices).")
             num_invoices = num_periods
         else:
             num_invoices = st.number_input("Number of Invoices to Create:", min_value=1, value=1, step=1, help="Creates N invoices. When 'Multiple Billing Periods' is enabled, one invoice per period.")
