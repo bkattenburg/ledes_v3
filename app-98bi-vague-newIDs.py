@@ -2354,24 +2354,50 @@ with tab_objects[1]:
         help="When unchecked, the description is auto-generated from the billing period(s) and shown read-only."
     )
 
+    
+    # Track whether Invoice Description is auto-generated (default) or user-customized
+    st.session_state.setdefault("invoice_desc_auto", True)
+    
     if not allow_edit_invoice_desc:
-        # Always keep in sync with billing period(s)
-        st.session_state["invoice_desc_text"] = desired_invoice_desc
+        # Auto mode stays in sync with billing period(s). If the user customized, we simply lock/display.
+        if st.session_state.get("invoice_desc_auto", True):
+            st.session_state["invoice_desc_text"] = desired_invoice_desc
+    
+        # Quick way to return to auto defaults even while locked
+        if st.button("Reset Invoice Description to Defaults", key="reset_invoice_desc_defaults_ro"):
+            st.session_state["invoice_desc_auto"] = True
+            st.session_state["invoice_desc_text"] = desired_invoice_desc
+    
     else:
         # If first time enabling editing, initialize from the current desired value
         if "invoice_desc_text" not in st.session_state or not st.session_state.get("invoice_desc_text", "").strip():
             st.session_state["invoice_desc_text"] = desired_invoice_desc
-
+    
         if st.button("Reset Invoice Description to Defaults", key="reset_invoice_desc_defaults"):
+            st.session_state["invoice_desc_auto"] = True
             st.session_state["invoice_desc_text"] = desired_invoice_desc
-
-    invoice_desc = st.text_area(
-        "Invoice Description (One per period, each on a new line)",
-        key="invoice_desc_text",
-        height=150,
-        disabled=not allow_edit_invoice_desc
-    )
-
+    
+        invoice_desc = st.text_area(
+            "Invoice Description (One per period, each on a new line)",
+            key="invoice_desc_text",
+            height=150,
+            on_change=_mark_invoice_desc_manual,
+        )
+    
+    if not allow_edit_invoice_desc:
+        mode_label = "Auto-generated" if st.session_state.get("invoice_desc_auto", True) else "Locked (custom)"
+        st.markdown(f"**Invoice Description ({mode_label}; one per period):**")
+        _desc_text = st.session_state.get("invoice_desc_text", desired_invoice_desc)
+        _lines = [ln.strip() for ln in str(_desc_text).splitlines() if ln.strip()]
+        if _lines:
+            st.markdown("\n".join([f"- {ln}" for ln in _lines]))
+        else:
+            st.info("No description available.")
+    
+        with st.expander("Copyable text"):
+            st.code(str(_desc_text), language=None)
+    
+        invoice_desc = _desc_text
     # Ensure downstream logic always uses the latest value
     invoice_desc = st.session_state.get("invoice_desc_text", invoice_desc)
     # #############################################################################
