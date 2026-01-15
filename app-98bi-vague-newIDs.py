@@ -318,7 +318,7 @@ def apply_preset():
 BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
     #("SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
     ("OnitX VAT", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
-    ("SimpleLegal - JDL", "Penguin LLC",   "C004",       "JDL",               "JDL001"),
+    ("SimpleLegal - JDC", "Penguin LLC",   "C004",       "JDC",               "JDC001"),
     ("SimpleLegal - Kirkland", "Penguin LLC",   "C004",       "Kirkland & Ellis LLP",               "18"),
     ("SimpleLegal - Latham", "Cardinal Company",   "C003",       "Latham & Watkins LLP",               "17"),
     ("SimpleLegal - Davis", "Owl LLC",   "C001",       "Davis Polk & Wardell LLP (New York)",               "19"),
@@ -1970,9 +1970,9 @@ with st.sidebar.expander("Timekeeper Downloads"):
         st.download_button("OnitX - VAT", onitx_vat_tk_data, "onitx_vat_tk.csv", "text/csv")
 
     # SimpleLegal Timekeepers
-    sl_tk_data_jdl = read_file_for_download("assets/simplelegal_tk - JDL.csv")
-    if sl_tk_data_jdl:
-        st.download_button("SL - JDL", sl_tk_data_jdl, "simplelegal_tk - JDL.csv", "text/csv")
+    sl_tk_data_jdc = read_file_for_download("assets/simplelegal_tk - JDC.csv")
+    if sl_tk_data_jdc:
+        st.download_button("SL - JDC", sl_tk_data_jdc, "simplelegal_tk - JDC.csv", "text/csv")
     
     sl_tk_data_kirkland = read_file_for_download("assets/simplelegal_tk - Kirkland.csv")
     if sl_tk_data_kirkland:
