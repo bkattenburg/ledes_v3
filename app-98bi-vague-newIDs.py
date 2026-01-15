@@ -1968,23 +1968,23 @@ with st.sidebar.expander("Timekeeper Downloads"):
     # SimpleLegal Timekeepers
     sl_tk_data_jdc = read_file_for_download("assets/simplelegal_tk - JDC.csv")
     if sl_tk_data_jdc:
-        st.download_button("SL - JDC", sl_tk_data, "simplelegal_tk - JDC.csv", "text/csv")
+        st.download_button("SL - JDC", sl_tk_data_jdc, "simplelegal_tk - JDC.csv", "text/csv")
     
     sl_tk_data_kirkland = read_file_for_download("assets/simplelegal_tk - Kirkland.csv")
     if sl_tk_data_kirkland:
-        st.download_button("SL - Kirkland", sl_tk_data, "simplelegal_tk - Kirkland.csv", "text/csv")
+        st.download_button("SL - Kirkland", sl_tk_data_kirkland, "simplelegal_tk - Kirkland.csv", "text/csv")
 
     sl_tk_data_latham = read_file_for_download("assets/simplelegal_tk - Latham.csv")
     if sl_tk_data_latham:
-        st.download_button("SL - Latham", sl_tk_data, "simplelegal_tk - Latham.csv", "text/csv")
+        st.download_button("SL - Latham", sl_tk_data_latham, "simplelegal_tk - Latham.csv", "text/csv")
 
     sl_tk_data_davis = read_file_for_download("assets/simplelegal_tk - Davis.csv")
     if sl_tk_data_davis:
-        st.download_button("SL - Davis", sl_tk_data, "simplelegal_tk - Davis.csv", "text/csv")
+        st.download_button("SL - Davis", sl_tk_data_davis, "simplelegal_tk - Davis.csv", "text/csv")
 
     sl_tk_data_cravath = read_file_for_download("assets/simplelegal_tk - Cravath.csv")
     if sl_tk_data_cravath:
-        st.download_button("SL - Cravath", sl_tk_data, "simplelegal_tk - Cravath.csv", "text/csv")
+        st.download_button("SL - Cravath", sl_tk_data_cravath, "simplelegal_tk - Cravath.csv", "text/csv")
 
     # Unity Timekeepers
     unity_tk_data = read_file_for_download("assets/unity_tk.csv")
