@@ -2551,6 +2551,7 @@ with tab_objects[2]:
                 default_selection.append(pp_key)
         
         # Render the multiselect widget
+        prev_selected_items = st.session_state.get("_mandatory_items_prev", [])
         selected_items = st.multiselect(
             "Select Mandatory Items to Include",
             options=available_items,
@@ -2560,9 +2561,21 @@ with tab_objects[2]:
 
         # Persist the user's selection so it survives reruns.
         st.session_state["mandatory_items_default"] = list(selected_items)
+        st.session_state["_mandatory_items_prev"] = list(selected_items)
         
         # Conditional UI for Airfare Details
         if 'Airfare E110' in selected_items:
+            # Auto-generate a random airfare amount when Spend Agent is enabled and the item is selected.
+            # Generated once on first select (or re-select) and persists unless manually overridden.
+            if ("airfare_amount" not in st.session_state) or (
+                'Airfare E110' not in prev_selected_items and st.session_state.get("airfare_amount_auto", True)
+            ):
+                st.session_state["airfare_amount"] = round(random.uniform(500.00, 14000.00), 2)
+                st.session_state["airfare_amount_auto"] = True
+
+            def _mark_airfare_amount_manual():
+                st.session_state["airfare_amount_auto"] = False
+
             st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
             ac1, ac2 = st.columns(2)
             with ac1:
@@ -2572,18 +2585,47 @@ with tab_objects[2]:
             with ac2:
                 st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
                 st.text_input("Arrival City", key="airfare_arrival_city", value="Los Angeles")
-                st.number_input("Amount", min_value=0.0, value=450.75, step=0.01, key="airfare_amount", help="This amount will be used for the airfare line item total.")
+                st.number_input(
+                    "Amount",
+                    min_value=500.00,
+                    max_value=14000.00,
+                    value=float(st.session_state.get("airfare_amount", 500.00)),
+                    step=0.01,
+                    key="airfare_amount",
+                    on_change=_mark_airfare_amount_manual,
+                    help="This amount will be used for the airfare line item total."
+                )
             st.selectbox(
                 "Fare Class",
                 options=["First", "Business", "Premium Economy", "Economy/Coach"],
                 key="airfare_fare_class",
                 help="Select the standard airline fare class (e.g., First, Business, Coach). This will be added to the line item description."
             )
-        
+
         # Conditional UI for Uber Details
         if 'Uber E110' in selected_items:
+            # Auto-generate a random Uber amount when Spend Agent is enabled and the item is selected.
+            # Generated once on first select (or re-select) and persists unless manually overridden.
+            if ("uber_amount" not in st.session_state) or (
+                'Uber E110' not in prev_selected_items and st.session_state.get("uber_amount_auto", True)
+            ):
+                st.session_state["uber_amount"] = round(random.uniform(15.00, 65.00), 2)
+                st.session_state["uber_amount_auto"] = True
+
+            def _mark_uber_amount_manual():
+                st.session_state["uber_amount_auto"] = False
+
             st.markdown("<h4 style='color: #1E1E1E;'>Uber E110 Details</h4>", unsafe_allow_html=True)
-            st.number_input("Ride Amount", min_value=0.0, value=25.50, step=0.01, key="uber_amount", help="This amount will be used for the Uber ride line item total.")
+            st.number_input(
+                "Ride Amount",
+                min_value=15.00,
+                max_value=65.00,
+                value=float(st.session_state.get("uber_amount", 15.00)),
+                step=0.01,
+                key="uber_amount",
+                on_change=_mark_uber_amount_manual,
+                help="This amount will be used for the Uber ride line item total."
+            )
 
     else:
         selected_items = []
