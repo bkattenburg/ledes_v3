@@ -1282,8 +1282,23 @@ def _generate_invoice_data(
     total_amount = sum(float(r.get("LINE_ITEM_TOTAL", 0.0)) for r in rows)
     return rows, total_amount
 
-def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoice_desc: str, client_id: str, law_firm_id: str, billing_start_date: datetime.date, billing_end_date: datetime.date, selected_items: List[str]) -> Tuple[List[Dict], List[str]]:
-    """Ensure mandatory line items are included and return a list of any skipped items."""
+def _ensure_mandatory_lines(
+    rows: List[Dict],
+    timekeeper_data: List[Dict],
+    invoice_desc: str,
+    client_id: str,
+    law_firm_id: str,
+    billing_start_date: datetime.date,
+    billing_end_date: datetime.date,
+    selected_items: List[str],
+    *,
+    randomize_amounts_per_invoice: bool = False,
+) -> Tuple[List[Dict], List[str]]:
+    """Ensure mandatory line items are included and return a list of any skipped items.
+
+    If ``randomize_amounts_per_invoice`` is True, Airfare/Uber (E110) amounts will be randomized per
+    invoice *only when the corresponding amount field is still in auto mode*.
+    """
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
     skipped_items = []
@@ -1301,7 +1316,12 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 dep_city = st.session_state.get('airfare_departure_city', 'N/A')
                 arr_city = st.session_state.get('airfare_arrival_city', 'N/A')
                 is_roundtrip = st.session_state.get('airfare_roundtrip', False)
-                amount = float(st.session_state.get('airfare_amount', 0.0))
+                # If generating multiple invoices, optionally randomize the amount per invoice (more realistic).
+                # Respect manual overrides: only randomize when the amount is still marked as "auto".
+                if randomize_amounts_per_invoice and st.session_state.get('airfare_amount_auto', True):
+                    amount = round(random.uniform(500.00, 14000.00), 2)
+                else:
+                    amount = float(st.session_state.get('airfare_amount', 0.0))
                 fare_class = st.session_state.get('airfare_fare_class', 'Economy/Coach')
                 trip_type = " (Roundtrip)" if is_roundtrip else ""
                 description = f"Airfare ({fare_class}): {airline} {flight_num}, {dep_city} to {arr_city}{trip_type}"
@@ -1321,7 +1341,12 @@ def _ensure_mandatory_lines(rows: List[Dict], timekeeper_data: List[Dict], invoi
                 }
                 rows.append(row)
             elif item_name == 'Uber E110':
-                amount = float(st.session_state.get('uber_amount', 0.0))
+                # If generating multiple invoices, optionally randomize the amount per invoice (more realistic).
+                # Respect manual overrides: only randomize when the amount is still marked as "auto".
+                if randomize_amounts_per_invoice and st.session_state.get('uber_amount_auto', True):
+                    amount = round(random.uniform(15.00, 65.00), 2)
+                else:
+                    amount = float(st.session_state.get('uber_amount', 0.0))
                 description = item['desc']
                 row = {
                     "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
@@ -2826,6 +2851,8 @@ if generate_button:
                     rows, skipped_mandatory_items = _ensure_mandatory_lines(
                         rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id, 
                         current_start_date, current_end_date, selected_items
+                        ,
+                        randomize_amounts_per_invoice=(int(num_invoices) > 1)
                     )
                 
                 df_invoice = pd.DataFrame(rows)
