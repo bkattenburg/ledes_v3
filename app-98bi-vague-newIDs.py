@@ -200,6 +200,8 @@ import io
 import os
 import logging
 import re
+import csv
+import uuid
 import smtplib
 from typing import Optional, List, Dict, Any, Tuple
 from email.mime.text import MIMEText
@@ -2797,6 +2799,7 @@ generate_button = st.button("Generate Invoice(s)", disabled=not is_valid_input)
 # Final download/email logic
 def get_mime_type(filename):
     if filename.endswith(".txt"): return "text/plain"
+    if filename.endswith(".csv"): return "text/csv"
     if filename.endswith(".pdf"): return "application/pdf"
     if filename.endswith(".png"): return "image/png"
     if filename.endswith(".zip"): return "application/zip"
@@ -2816,7 +2819,8 @@ if generate_button:
         st.warning(f"You have selected to generate {num_invoices} invoices, but provided {len(descriptions)} descriptions. Please provide one description per period.")
     else:
         attachments_list = []
-        receipt_files = []
+        receipts_by_invoice = {}  # invoice_number -> list of {"zip_path","flat_name","data"}
+        receipt_manifest_rows = []  # mapping receipts back to invoices
         combined_ledes_content = ""
         zip_receipts_enabled = st.session_state.get('zip_receipts', False) if generate_receipts else False
 
@@ -2947,23 +2951,64 @@ if generate_button:
                     attachments_list.append((pdf_filename, pdf_buffer.getvalue()))
                 
                 if generate_receipts:
-                    for _, row in df_invoice.iterrows():
-                        if row.get("EXPENSE_CODE") and row.get("EXPENSE_CODE") != "E101":
-                            receipt_filename, receipt_data_buf = _create_receipt_image(row.to_dict(), faker)
+                    receipts_by_invoice.setdefault(current_invoice_number, [])
+                    for line_no, (_, row) in enumerate(df_invoice.iterrows(), start=1):
+                        if row.get('EXPENSE_CODE') and row.get('EXPENSE_CODE') != 'E101':
+                            _unused_name, receipt_data_buf = _create_receipt_image(row.to_dict(), faker)
                             if receipt_data_buf:
-                                receipt_files.append((receipt_filename, receipt_data_buf.getvalue()))
+                                exp_code = str(row.get('EXPENSE_CODE','')).strip()
+                                li_date = row.get('LINE_ITEM_DATE','')
+                                if isinstance(li_date, (datetime.date, datetime.datetime)):
+                                    dt_str = li_date.strftime('%Y%m%d')
+                                else:
+                                    dt_str = str(li_date).replace('-', '')
+                                unique = uuid.uuid4().hex[:6]
+                                zip_path = f"receipts/{current_invoice_number}/Receipt_L{line_no}_{exp_code}_{dt_str}_{unique}.png"
+                                flat_name = f"{current_invoice_number}__Receipt_L{line_no}_{exp_code}_{dt_str}_{unique}.png"
+                                receipts_by_invoice[current_invoice_number].append({
+                                    'zip_path': zip_path,
+                                    'flat_name': flat_name,
+                                    'data': receipt_data_buf.getvalue(),
+                                })
+                                desc = row.get('DESCRIPTION', '') or row.get('LINE_ITEM_DESCRIPTION', '')
+                                receipt_manifest_rows.append({
+                                    'invoice_number': current_invoice_number,
+                                    'zip_path': zip_path,
+                                    'flat_name': flat_name,
+                                    'line_no': line_no,
+                                    'expense_code': exp_code,
+                                    'line_item_date': str(li_date),
+                                    'amount': row.get('LINE_ITEM_TOTAL', ''),
+                                    'description': desc,
+                                })
 
-            # Process receipts after loop
-            if receipt_files:
+            # Process receipts after loop (across ALL invoices)
+            any_receipts = any(files for files in receipts_by_invoice.values())
+            if any_receipts:
                 if zip_receipts_enabled:
                     zip_buf = io.BytesIO()
-                    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                        for filename, data in receipt_files:
-                            zip_file.writestr(filename, data)
+                    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                        for inv_no, files in receipts_by_invoice.items():
+                            for f in files:
+                                zip_file.writestr(f["zip_path"], f["data"])
+                        if receipt_manifest_rows:
+                            out = io.StringIO()
+                            writer = csv.DictWriter(out, fieldnames=list(receipt_manifest_rows[0].keys()))
+                            writer.writeheader()
+                            writer.writerows(receipt_manifest_rows)
+                            zip_file.writestr("manifest.csv", out.getvalue().encode("utf-8"))
                     zip_buf.seek(0)
                     attachments_list.append(("receipts.zip", zip_buf.getvalue()))
                 else:
-                    attachments_list.extend(receipt_files)
+                    for inv_no, files in receipts_by_invoice.items():
+                        for f in files:
+                            attachments_list.append((f["flat_name"], f["data"]))
+                    if receipt_manifest_rows:
+                        out = io.StringIO()
+                        writer = csv.DictWriter(out, fieldnames=list(receipt_manifest_rows[0].keys()))
+                        writer.writeheader()
+                        writer.writerows(receipt_manifest_rows)
+                        attachments_list.append(("receipt_manifest.csv", out.getvalue().encode("utf-8")))
 
             # This is inside the `if generate_button:` block
             
