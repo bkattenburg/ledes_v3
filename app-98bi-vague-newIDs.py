@@ -330,6 +330,12 @@ BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdoc
 
 
 # Extended profile details (addresses, tax ids, defaults)
+# NOTE: VAT-enabled profiles should default to LEDES 1998BI and EUR, and can be used to generate VAT-style invoices.
+VAT_ENABLED_PROFILES = {"OnitX EUR - Nelson", "SS&E Group - EUR"}
+
+def _is_vat_profile(env: str) -> bool:
+    return str(env or "") in VAT_ENABLED_PROFILES
+
 BILLING_PROFILE_DETAILS = {
     "OnitX EUR - Nelson": {
         "ledes_default": "1998BI",
@@ -343,7 +349,7 @@ BILLING_PROFILE_DETAILS = {
             "city": "Antwerpen",
             "state": "",
             "postcode": "2000",
-            "country": "Belgium"
+            "country": "Belgium",
         },
         # Client details (Belgium)
         "client": {
@@ -355,15 +361,16 @@ BILLING_PROFILE_DETAILS = {
             "city": "Grand-Hallet",
             "state": "Luxemburg",
             "postcode": "3230",
-            "country": "Belgium"
-        }
+            "country": "Belgium",
+        },
     },
+
     "SS&E Group - EUR": {
         # Enable VAT-style invoices for the SS&E profile
         "ledes_default": "1998BI",
         # Default currency (can be changed in Tax Fields)
-        "invoice_currency": "EUR"
-        # Law Firm details (Belgium)
+        "invoice_currency": "EUR",
+        # Law Firm details
         "law_firm": {
             "name": "Simpson Schneider & Ellis Group",
             "id": "879376127RT0002",
@@ -372,7 +379,7 @@ BILLING_PROFILE_DETAILS = {
             "city": "Vancouver",
             "state": "British Columbia",
             "postcode": "V5K 0A1",
-            "country": "Canada"
+            "country": "Canada",
         },
         # Client details (Belgium)
         "client": {
@@ -384,8 +391,9 @@ BILLING_PROFILE_DETAILS = {
             "city": "Grand-Hallet",
             "state": "Luxemburg",
             "postcode": "3230",
-            "country": "Belgium"
-    }
+            "country": "Belgium",
+        },
+    },
 }
 
 def get_profile(env: str):
@@ -703,9 +711,10 @@ def _create_ledes_line_1998biv2(row: Dict, line_no: int, inv_total: float,
     """Create a single LEDES 1998BIv2 line."""
     try:
         date_obj = datetime.datetime.strptime(row["LINE_ITEM_DATE"], "%Y-%m-%d").date()
-        hours = float(row.get("HOURS", 0) or 0)
-        rate = float(row.get("RATE", 0) or 0)
+        units = float(row.get("HOURS", 0) or 0)
+        unit_cost = float(row.get("RATE", 0) or 0)
         line_total = float(row.get("LINE_ITEM_TOTAL", 0) or 0)
+
         is_expense = bool(row.get("EXPENSE_CODE", ""))
         adj_type = "E" if is_expense else "F"
         task_code = "" if is_expense else str(row.get("TASK_CODE", ""))
@@ -715,18 +724,21 @@ def _create_ledes_line_1998biv2(row: Dict, line_no: int, inv_total: float,
         timekeeper_class = "" if is_expense else str(row.get("TIMEKEEPER_CLASSIFICATION", ""))
         timekeeper_name = "" if is_expense else str(row.get("TIMEKEEPER_NAME", ""))
         description = str(row.get("DESCRIPTION", "")).replace("|", " - ")
+
+        tax_type = str(st.session_state.get("tax_type", "VAT"))
+
         return [
             bill_end.strftime("%Y%m%d"),
             str(invoice_number),
             str(row.get("CLIENT_ID", "")),
             str(matter_number),
-            f"{inv_total:.2f}",  # tax-inclusive
+            f"{inv_total:.2f}",  # tax-inclusive invoice total
             bill_start.strftime("%Y%m%d"),
             bill_end.strftime("%Y%m%d"),
             str(row.get("INVOICE_DESCRIPTION", "")),
             str(line_no),
             adj_type,
-            f"{hours:.1f}" if adj_type == "F" else f"{int(hours)}",
+            f"{units:.1f}" if adj_type == "F" else f"{int(units)}",
             "0.00",
             f"{line_total:.2f}",
             date_obj.strftime("%Y%m%d"),
@@ -736,23 +748,20 @@ def _create_ledes_line_1998biv2(row: Dict, line_no: int, inv_total: float,
             timekeeper_id,
             description,
             str(row.get("LAW_FIRM_ID", "")),
-            f"{rate:.2f}",
+            f"{unit_cost:.2f}",
             timekeeper_name,
             timekeeper_class,
             str(client_matter_id),
             str(matter_name),
             str(po_number),
             str(invoice_currency),
-            f"{float(tax_rate):.2f}"
-        ,
-            matter_name,
-            po_number,
-            invoice_currency,
             f"{float(tax_rate):.2f}",
-            str(st.session_state.get("tax_type","VAT"))]
+            tax_type,
+        ]
     except Exception as e:
         logging.error(f"Error creating LEDES 1998BIv2 line: {e}")
         return []
+
 
 def _create_ledes_1998biv2_content(rows: List[Dict],
                                    bill_start: datetime.date, bill_end: datetime.date,
@@ -2080,14 +2089,15 @@ with st.sidebar.expander("Line Items"):
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Help & FAQs")
 
-with st.sidebar.expander("LEDES 1998BI - Matter Setup - OnitX Only"):
+with st.sidebar.expander("LEDES 1998BI - Matter Setup (VAT Profiles)"):
     bp = Image.open("assets/BP Error Message.png")
     good = Image.open("assets/Country Currency Correct.png")
     bad = Image.open("assets/Country Currency Default.png")
     matter_good = Image.open("assets/matter_good.png")
     matter_bad = Image.open("assets/matter_bad.png")
     st.markdown("""   
-    How do I create a matter for LEDES 1998BI (VAT) invoices? 
+    How do I create a matter for LEDES 1998BI (VAT) invoices?
+    - This applies to VAT-enabled profiles such as **OnitX EUR - Nelson** and **SS&E Group - EUR**. 
     - When creating a new matter, make sure to select **'Onit LLC - Belgium'** for the Legal Entity. The default is 'A Onit Inc.' 
     - When **'Onit LLC - Belgium'** is selected as the Legal Entity, the **Country** and **Matter Currency** fields change from their default values (United States and United States Dollar).
     - Make sure to update the **Country field to 'Belgium'** and the **Matter Currency field to 'Euro'**.
@@ -2325,7 +2335,7 @@ with tab_objects[1]:
         if st.session_state.get("client_tax_id"):
             st.session_state["client_id"] = st.session_state["client_tax_id"]
             prof_client_id = st.session_state["client_id"] # Also update the local variable for the widget
-        if st.session_state.get('selected_env') == "OnitX EUR - Nelson":
+        if _is_vat_profile(st.session_state.get("selected_env")):
             st.markdown(
         """
         **Note:** Please review the **LEDES 1998BI - Matter Setup** section in Help & FAQs.
@@ -2791,22 +2801,22 @@ if "Tax Fields" in tabs:
         st.selectbox("Tax Type *", ["VAT","PST","QST","GST"], index=0, key="tax_type", help="Type of tax to apply to line items.")
 
         with st.expander("Law Firm Details"):
-            st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Address 2", key="pf_lf_address2", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm City", key="pf_lf_city", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm State/Region", key="pf_lf_state", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Postcode", key="pf_lf_postcode", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Country", key="pf_lf_country", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Tax ID", key="pf_law_firm_id", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Address 2", key="pf_lf_address2", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm City", key="pf_lf_city", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm State/Region", key="pf_lf_state", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Postcode", key="pf_lf_postcode", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Country", key="pf_lf_country", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Tax ID", key="pf_law_firm_id", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
 
         with st.expander("Client Details"):
-            st.text_input("Client Address 1", key="pf_client_address1", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Address 2", key="pf_client_address2", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client City", key="pf_client_city", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client State/Region", key="pf_client_state", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Postcode", key="pf_client_postcode", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Country", key="pf_client_country", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Tax ID", key="pf_client_tax_id", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Address 1", key="pf_client_address1", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Address 2", key="pf_client_address2", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client City", key="pf_client_city", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client State/Region", key="pf_client_state", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Postcode", key="pf_client_postcode", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Country", key="pf_client_country", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Tax ID", key="pf_client_tax_id", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
 
 is_valid_input = True
 if timekeeper_data is None:
