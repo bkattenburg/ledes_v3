@@ -317,8 +317,8 @@ def apply_preset():
 # Billing Profiles Configuration
 # ===============================
 # Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
-BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
-    ("SS&E Group - EUR", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
+BILLING_PROFILES = [("OnitX USD - Nelson",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
+    ("OnitX EUR - SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
     ("OnitX EUR - Nelson", "Onit LLC - Belgium", "00-4100871", "Nelson and Murdock - Belgium", "3233384400"),
     ("OnitX GBP - Nelson", "Onit - UK", "23058", "Nelson and Murdock - Belgium", "3233384400"),
     ("SimpleLegal - JDC", "Penguin LLC",   "C004",       "JDC",               "JDC001"),
@@ -326,19 +326,19 @@ BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdoc
     ("SimpleLegal - Latham", "Cardinal Company",   "C003",       "Latham & Watkins LLP",               "17"),
     ("SimpleLegal - Davis", "Owl LLC",   "C001",       "Davis Polk & Wardell LLP (New York)",               "19"),
     ("SimpleLegal - Cravath", "Eagle LLC",   "C002",       "Cravath, Swaine & Moore LLP",               "11"),
-    ("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
+    #("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
 
 
 # Extended profile details (addresses, tax ids, defaults)
 # NOTE: VAT-enabled profiles should default to LEDES 1998BI and EUR, and can be used to generate VAT-style invoices.
-VAT_ENABLED_PROFILES = {"OnitX EUR - Nelson", "SS&E Group - EUR"}
+VAT_ENABLED_PROFILES = {"OnitX EUR - Nelson", "OnitX EUR - SS&E Group", "OnitX GBP - Nelson"}
 
 def _is_vat_profile(env: str) -> bool:
     return str(env or "") in VAT_ENABLED_PROFILES
 
 BILLING_PROFILE_DETAILS = {
-    "SS&E Group - EUR": {
+    "OnitX EUR - SS&E Group": {
         # Enable VAT-style invoices for the SS&E profile
         "ledes_default": "1998BI",
         # Default currency (can be changed in Tax Fields)
@@ -2092,9 +2092,9 @@ with st.sidebar.expander("Timekeeper Downloads"):
         st.download_button("SL - Cravath", sl_tk_data_cravath, "simplelegal_tk - Cravath.csv", "text/csv")
 
     # Unity Timekeepers
-    unity_tk_data = read_file_for_download("assets/unity_tk.csv")
-    if unity_tk_data:
-        st.download_button("Unity", unity_tk_data, "unity_tk.csv", "text/csv")
+    #unity_tk_data = read_file_for_download("assets/unity_tk.csv")
+    #if unity_tk_data:
+    #    st.download_button("Unity", unity_tk_data, "unity_tk.csv", "text/csv")
         
 with st.sidebar.expander("Line Items"):
     # Custom Line Items File
@@ -2133,7 +2133,7 @@ with st.sidebar.expander("LEDES 1998BI - Matter Setup (VAT Profiles)"):
     matter_bad = Image.open("assets/matter_bad.png")
     st.markdown("""   
     How do I create a matter for LEDES 1998BI (VAT) invoices?
-    - This applies to VAT-enabled profiles such as **OnitX EUR - Nelson** and **SS&E Group - EUR**. 
+    - This applies to VAT-enabled profiles such as **OnitX EUR - Nelson** and **OnitX EUR - SS&E Group**. 
     - When creating a new matter, make sure to select **'Onit LLC - Belgium'** for the Legal Entity. The default is 'A Onit Inc.' 
     - When **'Onit LLC - Belgium'** is selected as the Legal Entity, the **Country** and **Matter Currency** fields change from their default values (United States and United States Dollar).
     - Make sure to update the **Country field to 'Belgium'** and the **Matter Currency field to 'Euro'**.
