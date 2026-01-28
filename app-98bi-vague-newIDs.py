@@ -2078,7 +2078,7 @@ st.sidebar.markdown("## Downloads")
 with st.sidebar.expander("Timekeeper Downloads"):
     # OnitX Timekeepers
     onitx_Nelson_usd_tk_data = read_file_for_download("assets/onitx_tk.csv")
-    if onitx_tk_data:
+    if onitx_Nelson_usd_tk_data:
         st.download_button("OnitX - Nelson - USD", onitx_Nelson_usd_tk_data, "OnitX_Nelson_USD_tk.csv", "text/csv")
 
     # OnitX_SS&E Timekeepers - EUR
