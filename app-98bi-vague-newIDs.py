@@ -319,7 +319,7 @@ def apply_preset():
 # Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
 BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
     ("SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
-    ("OnitX VAT", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
+    ("OnitX EUR", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
     ("SimpleLegal - JDC", "Penguin LLC",   "C004",       "JDC",               "JDC001"),
     ("SimpleLegal - Kirkland", "Penguin LLC",   "C004",       "Kirkland & Ellis LLP",               "18"),
     ("SimpleLegal - Latham", "Cardinal Company",   "C003",       "Latham & Watkins LLP",               "17"),
@@ -331,7 +331,7 @@ BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdoc
 
 # Extended profile details (addresses, tax ids, defaults)
 BILLING_PROFILE_DETAILS = {
-    "OnitX VAT": {
+    "OnitX EUR - Nelson": {
         "ledes_default": "1998BI",
         "invoice_currency": "EUR",
         # Law Firm details (Belgium)
@@ -2000,9 +2000,9 @@ with st.sidebar.expander("Timekeeper Downloads"):
         st.download_button("OnitX SS&E", onitx_SSE_tk_data, "onitx_SS&E_tk.csv", "text/csv")
     
     # OnitX Timekeepers - VAT
-    onitx_vat_tk_data = read_file_for_download("assets/onitx_vat_tk.csv")
-    if onitx_vat_tk_data:
-        st.download_button("OnitX - VAT", onitx_vat_tk_data, "onitx_vat_tk.csv", "text/csv")
+    onitx_eur_nelson_tk_data = read_file_for_download("assets/onitx_eur_nelson_tk.csv")
+    if onitx_eur_nelson_tk_data:
+        st.download_button("OnitX - VAT", onitx_eur_nelson_tk_data, "onitx_eur_nelson_tk.csv", "text/csv")
 
     # SimpleLegal Timekeepers
     sl_tk_data_jdc = read_file_for_download("assets/simplelegal_tk - JDC.csv")
@@ -2304,7 +2304,7 @@ with tab_objects[1]:
         if st.session_state.get("client_tax_id"):
             st.session_state["client_id"] = st.session_state["client_tax_id"]
             prof_client_id = st.session_state["client_id"] # Also update the local variable for the widget
-        if st.session_state.get('selected_env') == "OnitX VAT":
+        if st.session_state.get('selected_env') == "OnitX EUR - Nelson":
             st.markdown(
         """
         **Note:** Please review the **LEDES 1998BI - Matter Setup** section in Help & FAQs.
@@ -2770,22 +2770,22 @@ if "Tax Fields" in tabs:
         st.selectbox("Tax Type *", ["VAT","PST","QST","GST"], index=0, key="tax_type", help="Type of tax to apply to line items.")
 
         with st.expander("Law Firm Details"):
-            st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Address 2", key="pf_lf_address2", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm City", key="pf_lf_city", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm State/Region", key="pf_lf_state", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Postcode", key="pf_lf_postcode", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Country", key="pf_lf_country", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Tax ID", key="pf_law_firm_id", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Address 2", key="pf_lf_address2", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm City", key="pf_lf_city", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm State/Region", key="pf_lf_state", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Postcode", key="pf_lf_postcode", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Country", key="pf_lf_country", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Tax ID", key="pf_law_firm_id", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
 
         with st.expander("Client Details"):
-            st.text_input("Client Address 1", key="pf_client_address1", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Address 2", key="pf_client_address2", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client City", key="pf_client_city", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client State/Region", key="pf_client_state", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Postcode", key="pf_client_postcode", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Country", key="pf_client_country", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Tax ID", key="pf_client_tax_id", disabled=(st.session_state.get("selected_env") == "OnitX VAT" and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Address 1", key="pf_client_address1", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Address 2", key="pf_client_address2", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Client City", key="pf_client_city", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Client State/Region", key="pf_client_state", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Postcode", key="pf_client_postcode", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Country", key="pf_client_country", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Tax ID", key="pf_client_tax_id", disabled=(st.session_state.get("selected_env") == "OnitX EUR - Nelson" and not st.session_state.get("allow_override", False)))
 
 is_valid_input = True
 if timekeeper_data is None:
