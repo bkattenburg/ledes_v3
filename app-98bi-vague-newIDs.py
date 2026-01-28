@@ -427,6 +427,29 @@ BILLING_PROFILE_DETAILS = {
     },
 }
 
+
+
+# --- LINE_ITEM_TAX_TYPE mapping (profile-driven) ---
+# Rule:
+#   - If the selected profile's invoice_currency is EUR -> BE_VAT
+#   - If the selected profile's invoice_currency is GBP -> UK_VAT
+#   - Otherwise -> fallback (usually VAT)
+LINE_ITEM_TAX_TYPE_BY_CURRENCY = {
+    "EUR": "BE_VAT",
+    "GBP": "UK_VAT",
+}
+
+def _resolve_line_item_tax_type(selected_env: str, fallback: str = "VAT") -> str:
+    """Resolve LINE_ITEM_TAX_TYPE for LEDES 1998BI/1998BIv2 lines based on profile."""
+    prof_cur = ""
+    try:
+        prof_cur = str((BILLING_PROFILE_DETAILS.get(str(selected_env), {}) or {}).get("invoice_currency", "") or "")
+    except Exception:
+        prof_cur = ""
+    cur = (prof_cur or st.session_state.get("tax_invoice_currency") or st.session_state.get("invoice_currency") or "")
+    cur = str(cur).strip().upper()
+    return LINE_ITEM_TAX_TYPE_BY_CURRENCY.get(cur, str(fallback))
+
 def get_profile(env: str):
     """Return (client_name, client_id, law_firm_name, law_firm_id) for the environment."""
     for p in BILLING_PROFILES:
@@ -756,7 +779,7 @@ def _create_ledes_line_1998biv2(row: Dict, line_no: int, inv_total: float,
         timekeeper_name = "" if is_expense else str(row.get("TIMEKEEPER_NAME", ""))
         description = str(row.get("DESCRIPTION", "")).replace("|", " - ")
 
-        tax_type = str(st.session_state.get("tax_type", "VAT"))
+        tax_type = _resolve_line_item_tax_type(st.session_state.get("selected_env", ""), fallback=str(st.session_state.get("tax_type", "VAT")))
 
         return [
             bill_end.strftime("%Y%m%d"),
@@ -896,6 +919,9 @@ def _create_ledes_1998bi_content(rows: List[Dict],
 
     invoice_total = round(net_total + tax_total, 2)
 
+    # Profile-driven LINE_ITEM_TAX_TYPE
+    line_item_tax_type = _resolve_line_item_tax_type(st.session_state.get("selected_env", ""), fallback=str(st.session_state.get("tax_type", "VAT")))
+
     # Second pass: write lines
     for i, row in enumerate(rows, start=1):
         is_expense, units, unit_cost, adj_amount, base_amount, line_tax_rate, line_tax_total = prepped[i-1]
@@ -967,7 +993,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
             cl_name, cl_address1, cl_address2, cl_city, cl_state, cl_postcode, cl_country,
             f"{line_tax_rate:.6f}",
             f"{line_tax_total:.2f}",
-            str(st.session_state.get("tax_type","VAT")),
+            str(line_item_tax_type),
         ]
         lines.append("|".join(map(str, line)) + "[]")
 
