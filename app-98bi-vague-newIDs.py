@@ -318,7 +318,7 @@ def apply_preset():
 # ===============================
 # Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
 BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
-    #("SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
+    ("SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
     ("OnitX VAT", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
     ("SimpleLegal - JDC", "Penguin LLC",   "C004",       "JDC",               "JDC001"),
     ("SimpleLegal - Kirkland", "Penguin LLC",   "C004",       "Kirkland & Ellis LLP",               "18"),
@@ -1987,9 +1987,9 @@ with st.sidebar.expander("Timekeeper Downloads"):
         st.download_button("OnitX", onitx_tk_data, "onitx_tk.csv", "text/csv")
 
     # OnitX_SS&E Timekeepers
-    #onitx_SSE_tk_data = read_file_for_download("assets/onitx_SS&E_tk.csv")
-    #if onitx_SSE_tk_data:
-    #    st.download_button("OnitX SS&E", onitx_SSE_tk_data, "onitx_SS&E_tk.csv", "text/csv")
+    onitx_SSE_tk_data = read_file_for_download("assets/onitx_SS&E_tk.csv")
+    if onitx_SSE_tk_data:
+        st.download_button("OnitX SS&E", onitx_SSE_tk_data, "onitx_SS&E_tk.csv", "text/csv")
     
     # OnitX Timekeepers - VAT
     onitx_vat_tk_data = read_file_for_download("assets/onitx_vat_tk.csv")
