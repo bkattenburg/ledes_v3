@@ -318,7 +318,7 @@ def apply_preset():
 # ===============================
 # Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
 BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
-    ("SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
+    ("SS&E Group - EUR", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
     ("OnitX EUR - Nelson", "Onit LLC - Belgium", "00-4100871", "Nelson and Murdock - Belgium", "3233384400"),
     ("SimpleLegal - JDC", "Penguin LLC",   "C004",       "JDC",               "JDC001"),
     ("SimpleLegal - Kirkland", "Penguin LLC",   "C004",       "Kirkland & Ellis LLP",               "18"),
@@ -358,12 +358,33 @@ BILLING_PROFILE_DETAILS = {
             "country": "Belgium"
         }
     },
-    "SS&E Group": {
+    "SS&E Group - EUR": {
         # Enable VAT-style invoices for the SS&E profile
         "ledes_default": "1998BI",
         # Default currency (can be changed in Tax Fields)
         "invoice_currency": "EUR"
-        # (Intentionally omitting client/law_firm address overrides so base profile values are used)
+        # Law Firm details (Belgium)
+        "law_firm": {
+            "name": "Simpson Schneider & Ellis Group",
+            "id": "879376127RT0002",
+            "address1": "100 Vancouver Blvd",
+            "address2": "Suite 2100",
+            "city": "Vancouver",
+            "state": "British Columbia",
+            "postcode": "V5K 0A1",
+            "country": "Canada"
+        },
+        # Client details (Belgium)
+        "client": {
+            "name": "Onit LLC - Belgium",
+            "id": "00-4100871",
+            "tax_id": "00-4100871",
+            "address1": "P.O. Box 636",
+            "address2": "4368 Feugiat. Avenue",
+            "city": "Grand-Hallet",
+            "state": "Luxemburg",
+            "postcode": "3230",
+            "country": "Belgium"
     }
 }
 
