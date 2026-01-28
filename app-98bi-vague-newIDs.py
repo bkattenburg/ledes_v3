@@ -319,7 +319,7 @@ def apply_preset():
 # Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
 BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
     ("SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
-    ("OnitX EUR", "Onit LLC - Belgium", "", "Nelson and Murdock - Belgium", "3233384400"),
+    ("OnitX EUR", "Onit LLC - Belgium", "00-4100871", "Nelson and Murdock - Belgium", "3233384400"),
     ("SimpleLegal - JDC", "Penguin LLC",   "C004",       "JDC",               "JDC001"),
     ("SimpleLegal - Kirkland", "Penguin LLC",   "C004",       "Kirkland & Ellis LLP",               "18"),
     ("SimpleLegal - Latham", "Cardinal Company",   "C003",       "Latham & Watkins LLP",               "17"),
