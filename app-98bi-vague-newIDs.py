@@ -2025,9 +2025,9 @@ with st.sidebar.expander("Timekeeper Downloads"):
         st.download_button("OnitX", onitx_tk_data, "onitx_tk.csv", "text/csv")
 
     # OnitX_SS&E Timekeepers
-    onitx_SS&E_eur_tk_data = read_file_for_download("assets/onitx_SS&E_eur_tk.csv")
-    if onitx_SS&E_eur_tk_data:
-        st.download_button("OnitX - SS&E - EUR", onitx_SS&E_eur_tk_data, "onitx_SS&E_eur_tk.csv", "text/csv")
+    onitx_SSE_eur_tk_data = read_file_for_download("assets/onitx_SS&E_eur_tk.csv")
+    if onitx_SSE_eur_tk_data:
+        st.download_button("OnitX - SS&E - EUR", onitx_SSE_eur_tk_data, "onitx_SS&E_eur_tk.csv", "text/csv")
     
     # OnitX Timekeepers - VAT
     onitx_Nelson_eur_tk_data = read_file_for_download("assets/onitx_Nelson_eur_tk.csv")
