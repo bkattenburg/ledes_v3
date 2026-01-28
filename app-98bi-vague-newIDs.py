@@ -320,6 +320,7 @@ def apply_preset():
 BILLING_PROFILES = [("OnitX",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
     ("SS&E Group - EUR", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
     ("OnitX EUR - Nelson", "Onit LLC - Belgium", "00-4100871", "Nelson and Murdock - Belgium", "3233384400"),
+    ("OnitX GBP - Nelson", "Onit - UK", "23058", "Nelson and Murdock - Belgium", "3233384400"),
     ("SimpleLegal - JDC", "Penguin LLC",   "C004",       "JDC",               "JDC001"),
     ("SimpleLegal - Kirkland", "Penguin LLC",   "C004",       "Kirkland & Ellis LLP",               "18"),
     ("SimpleLegal - Latham", "Cardinal Company",   "C003",       "Latham & Watkins LLP",               "17"),
@@ -337,6 +338,36 @@ def _is_vat_profile(env: str) -> bool:
     return str(env or "") in VAT_ENABLED_PROFILES
 
 BILLING_PROFILE_DETAILS = {
+    "SS&E Group - EUR": {
+        # Enable VAT-style invoices for the SS&E profile
+        "ledes_default": "1998BI",
+        # Default currency (can be changed in Tax Fields)
+        "invoice_currency": "EUR",
+        # Law Firm details
+        "law_firm": {
+            "name": "Simpson Schneider & Ellis Group",
+            "id": "879376127RT0002",
+            "address1": "100 Vancouver Blvd",
+            "address2": "Suite 2100",
+            "city": "Vancouver",
+            "state": "British Columbia",
+            "postcode": "V5K 0A1",
+            "country": "Canada",
+        },
+        # Client details (Belgium)
+        "client": {
+            "name": "Onit LLC - Belgium",
+            "id": "00-4100871",
+            "tax_id": "00-4100871",
+            "address1": "P.O. Box 636",
+            "address2": "4368 Feugiat. Avenue",
+            "city": "Grand-Hallet",
+            "state": "Luxemburg",
+            "postcode": "3230",
+            "country": "Belgium",
+        },
+    },
+    
     "OnitX EUR - Nelson": {
         "ledes_default": "1998BI",
         "invoice_currency": "EUR",
@@ -365,33 +396,33 @@ BILLING_PROFILE_DETAILS = {
         },
     },
 
-    "SS&E Group - EUR": {
+    "OnitX GBP - Nelson": {
         # Enable VAT-style invoices for the SS&E profile
         "ledes_default": "1998BI",
         # Default currency (can be changed in Tax Fields)
-        "invoice_currency": "EUR",
+        "invoice_currency": "GBP",
         # Law Firm details
         "law_firm": {
-            "name": "Simpson Schneider & Ellis Group",
-            "id": "879376127RT0002",
-            "address1": "100 Vancouver Blvd",
-            "address2": "Suite 2100",
-            "city": "Vancouver",
-            "state": "British Columbia",
-            "postcode": "V5K 0A1",
-            "country": "Canada",
-        },
-        # Client details (Belgium)
-        "client": {
-            "name": "Onit LLC - Belgium",
-            "id": "00-4100871",
-            "tax_id": "00-4100871",
-            "address1": "P.O. Box 636",
-            "address2": "4368 Feugiat. Avenue",
-            "city": "Grand-Hallet",
-            "state": "Luxemburg",
-            "postcode": "3230",
+            "name": "Nelson and Murdock - Belgium",
+            "id": "3233384400",
+            "address1": "Hanzestedenplaats 1",
+            "address2": "",
+            "city": "Antwerpen",
+            "state": "",
+            "postcode": "2000",
             "country": "Belgium",
+        },
+        # Client details (London)
+        "client": {
+            "name": "Onit - UK",
+            "id": "23058",
+            "tax_id": "23058",
+            "address1": "9046 The Crescent",
+            "address2": "",
+            "city": "London",
+            "state": "",
+            "postcode": "NW9 7BD",
+            "country": "United Kingdom",
         },
     },
 }
