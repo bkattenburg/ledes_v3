@@ -403,14 +403,14 @@ BILLING_PROFILE_DETAILS = {
         "invoice_currency": "GBP",
         # Law Firm details
         "law_firm": {
-            "name": "Nelson and Murdock - Belgium",
+            "name": "Nelson and Murdock - London",
             "id": "3233384400",
-            "address1": "Hanzestedenplaats 1",
-            "address2": "",
-            "city": "Antwerpen",
+            "address1": "90 Fenchurch Street",
+            "address2": "6th Floor",
+            "city": "London",
             "state": "",
-            "postcode": "2000",
-            "country": "Belgium",
+            "postcode": "EC3M 4BY",
+            "country": "United Kingdom",
         },
         # Client details (London)
         "client": {
