@@ -2081,10 +2081,10 @@ with st.sidebar.expander("Timekeeper Downloads"):
     if onitx_Nelson_usd_tk_data:
         st.download_button("OnitX - Nelson - USD", onitx_Nelson_usd_tk_data, "OnitX_Nelson_USD_tk.csv", "text/csv")
 
-    # OnitX_SS&E Timekeepers - EUR
+    # OnitX_SS&E Timekeepers - CAD
     onitx_SSE_cad_tk_data = read_file_for_download("assets/onitx_SS&E_cad_tk.csv")
     if onitx_SSE_cad_tk_data:
-        st.download_button("OnitX - SS&E - EUR", onitx_SSE_cad_tk_data, "OnitX_SS&E_CAD_tk.csv", "text/csv")
+        st.download_button("OnitX - SS&E - CAD", onitx_SSE_cad_tk_data, "OnitX_SS&E_CAD_tk.csv", "text/csv")
     
     # OnitX Nelson Timekeepers - EUR
     onitx_Nelson_eur_tk_data = read_file_for_download("assets/onitx_Nelson_eur_tk.csv")
