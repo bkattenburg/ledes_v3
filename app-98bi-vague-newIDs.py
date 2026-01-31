@@ -2823,20 +2823,51 @@ with tab_objects[1]:
         st.session_state["_entity_defaults_sig"] = None
 
 # ===== 3. CREATE WIDGETS (now that all state is set) =====
-    allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can enter other Client & Vendor IDs without changing stored profiles. See 'Using custom Client and Vendor IDs' in the FAQ for more details", key="allow_override")    
-    # Names
-    c1, c2 = st.columns(2)
-    with c1:
-        client_name = st.text_input("Client Name", value=prof_client_name, disabled=not allow_override, key="client_name")
-    with c2:
-        law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, disabled=not allow_override, key="law_firm_name")
-    
-    # IDs (no format restrictions)
-    c3, c4 = st.columns(2)
-    with c3:
-        client_id = st.text_input("Client ID", value=prof_client_id, disabled=not allow_override, key="client_id")
-    with c4:
-        law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, disabled=not allow_override, key="law_firm_id")
+        allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can enter other Client & Vendor IDs without changing stored profiles. See 'Using custom Client and Vendor IDs' in the FAQ for more details", key="allow_override")    
+
+    # Only show these fields when override is enabled. When override is OFF, force them
+    # to the selected profile values and hide the inputs.
+    if not allow_override:
+        # Cache any prior overrides so they can be restored if the user turns override back ON
+        for _k, _prof_val, _cache_k in (
+            ("client_name", prof_client_name, "_override_cache_client_name"),
+            ("client_id", prof_client_id, "_override_cache_client_id"),
+            ("law_firm_name", prof_law_firm_name, "_override_cache_law_firm_name"),
+            ("law_firm_id", prof_law_firm_id, "_override_cache_law_firm_id"),
+        ):
+            _cur = st.session_state.get(_k, None)
+            if _cur is not None and str(_cur).strip() != "" and _cur != _prof_val:
+                st.session_state[_cache_k] = _cur
+            st.session_state[_k] = _prof_val
+
+        client_name = prof_client_name
+        client_id = prof_client_id
+        law_firm_name = prof_law_firm_name
+        law_firm_id = prof_law_firm_id
+    else:
+        # Restore cached overrides (if any) when turning override back ON
+        for _k, _prof_val, _cache_k in (
+            ("client_name", prof_client_name, "_override_cache_client_name"),
+            ("client_id", prof_client_id, "_override_cache_client_id"),
+            ("law_firm_name", prof_law_firm_name, "_override_cache_law_firm_name"),
+            ("law_firm_id", prof_law_firm_id, "_override_cache_law_firm_id"),
+        ):
+            if _cache_k in st.session_state and st.session_state.get(_k, _prof_val) == _prof_val:
+                st.session_state[_k] = st.session_state.get(_cache_k, _prof_val)
+
+        # Names
+        c1, c2 = st.columns(2)
+        with c1:
+            client_name = st.text_input("Client Name", value=prof_client_name, key="client_name")
+        with c2:
+            law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, key="law_firm_name")
+
+        # IDs (no format restrictions)
+        c3, c4 = st.columns(2)
+        with c3:
+            client_id = st.text_input("Client ID", value=prof_client_id, key="client_id")
+        with c4:
+            law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, key="law_firm_id")
 
     st.markdown("<h3 style='color: #1E1E1E;'>Numbers & Version</h3>", unsafe_allow_html=True)
     # Other invoice details
