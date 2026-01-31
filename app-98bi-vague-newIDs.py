@@ -321,11 +321,11 @@ BILLING_PROFILES = [("OnitX USD - Nelson",    "A Onit Inc.",   "02-4388252", "Ne
     ("OnitX CAD - SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
     ("OnitX EUR - Nelson", "Onit LLC - Belgium", "00-4100871", "Nelson and Murdock - Belgium", "3233384400"),
     ("OnitX GBP - Nelson", "Onit - UK", "23058", "Nelson and Murdock - Belgium", "3233384400"),
-    ("SimpleLegal - JDC", "Penguin LLC",   "C004",       "JDC",               "JDC001"),
-    ("SimpleLegal - Kirkland", "Penguin LLC",   "C004",       "Kirkland & Ellis LLP",               "18"),
-    ("SimpleLegal - Latham", "Cardinal Company",   "C003",       "Latham & Watkins LLP",               "17"),
-    ("SimpleLegal - Davis", "Owl LLC",   "C001",       "Davis Polk & Wardell LLP (New York)",               "19"),
-    ("SimpleLegal - Cravath", "Eagle LLC",   "C002",       "Cravath, Swaine & Moore LLP",               "11"),
+    ("SimpleLegal/Unity - JDC", "Penguin LLC",   "C004",       "JDC",               "JDC001"),
+    ("SimpleLegal/Unity - Kirkland", "Penguin LLC",   "C004",       "Kirkland & Ellis LLP",               "18"),
+    ("SimpleLegal/Unity - Latham", "Cardinal Company",   "C003",       "Latham & Watkins LLP",               "17"),
+    ("SimpleLegal/Unity - Davis", "Owl LLC",   "C001",       "Davis Polk & Wardell LLP (New York)",               "19"),
+    ("SimpleLegal/Unity - Cravath", "Eagle LLC",   "C002",       "Cravath, Swaine & Moore LLP",               "11"),
     #("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
 
@@ -560,22 +560,34 @@ def _build_entity_catalogs():
 
 CLIENT_CATALOG, VENDOR_CATALOG, ENV_DEFAULTS = _build_entity_catalogs()
 
-# --- Environment indexes (SimpleLegal vs OnitX) ---------------------------------
+# --- Environment indexes (SimpleLegal/Unity vs OnitX) ---------------------------------
+# Canonical environment names + backward-compatible aliases
+ENV_ONITX = "OnitX"
+ENV_SIMPLELEGAL_UNITY = "SimpleLegal/Unity"
+_ENV_ALIASES = {
+    "SimpleLegal": ENV_SIMPLELEGAL_UNITY,  # legacy
+    "Unity": ENV_SIMPLELEGAL_UNITY,        # legacy
+}
+
+def _canonical_env(env: str) -> str:
+    env = str(env or "").strip()
+    return _ENV_ALIASES.get(env, env)
+
 # The UI uses st.session_state["selected_env"] as a HIGH-LEVEL environment name
-# (e.g., "OnitX" or "SimpleLegal"). The detailed defaults (currency, LEDES default, etc.)
+# (e.g., "OnitX" or "SimpleLegal/Unity"). The detailed defaults (currency, LEDES default, etc.)
 # are driven by an "active" profile id derived from Environment + selected Client/Vendor pair.
 def _infer_environment(profile_id: str, prof_detail=None) -> str:
     """Return environment name for a profile id (prefers explicit prof_detail['environment'])."""
     try:
         if prof_detail and prof_detail.get("environment"):
-            return str(prof_detail.get("environment")).strip()
+            return _canonical_env(str(prof_detail.get("environment")).strip())
     except Exception:
         pass
     s = str(profile_id or "").strip()
     if not s:
         return ""
-    # Convention: first token is the environment (e.g., "OnitX", "SimpleLegal")
-    return s.split()[0].strip()
+    # Convention: first token is the environment (e.g., "OnitX", "SimpleLegal/Unity")
+    return _canonical_env(s.split()[0].strip())
 
 def _build_env_indexes():
     envs = set()
@@ -621,13 +633,13 @@ def _build_env_indexes():
     # Include EXTRA_* profiles:
     # - If an extra dict includes "environment", only include for that env (or envs list).
     # - If it has no "environment", include in all known envs (backward compatible).
-    known_envs = sorted([e for e in envs if e]) or ["OnitX", "SimpleLegal"]
+    known_envs = sorted([e for e in envs if e]) or [ENV_ONITX, ENV_SIMPLELEGAL_UNITY]
     for k, v in (EXTRA_CLIENT_PROFILES or {}).items():
         env_val = (v or {}).get("environment", None)
         if env_val:
             env_list = [env_val] if isinstance(env_val, str) else list(env_val)
             for e in env_list:
-                e = str(e).strip()
+                e = _canonical_env(str(e).strip())
                 if not e:
                     continue
                 env_client.setdefault(e, set()).add(k)
@@ -641,7 +653,7 @@ def _build_env_indexes():
         if env_val:
             env_list = [env_val] if isinstance(env_val, str) else list(env_val)
             for e in env_list:
-                e = str(e).strip()
+                e = _canonical_env(str(e).strip())
                 if not e:
                     continue
                 env_vendor.setdefault(e, set()).add(k)
@@ -667,7 +679,7 @@ ENVIRONMENTS, ENV_CLIENT_OPTIONS, ENV_VENDOR_OPTIONS, ENV_DEFAULT_ENTITY_PAIR, P
 
 def _resolve_active_profile_id(env: str, client_key: str, vendor_key: str) -> str:
     """Pick the most appropriate profile id for defaults, given env + selected Client/Vendor."""
-    env = str(env or "").strip()
+    env = _canonical_env(str(env or "").strip())
     client_key = str(client_key or "").strip()
     vendor_key = str(vendor_key or "").strip()
 
@@ -695,10 +707,12 @@ def _ensure_env_profile_state():
     Ensure selected_env (environment), selected_client_profile, selected_vendor_profile,
     and active_profile_id are all populated in session_state.
     """
-    envs = ENVIRONMENTS or ["OnitX", "SimpleLegal"]
-    if st.session_state.get("selected_env") not in envs:
-        st.session_state["selected_env"] = envs[0] if envs else "OnitX"
-    env = st.session_state.get("selected_env", envs[0] if envs else "OnitX")
+    envs = ENVIRONMENTS or [ENV_ONITX, ENV_SIMPLELEGAL_UNITY]
+    # Backward-compat: map legacy env names to canonical names
+    st.session_state["selected_env"] = _canonical_env(st.session_state.get("selected_env", ""))
+    if _canonical_env(st.session_state.get("selected_env")) not in envs:
+        st.session_state["selected_env"] = envs[0] if envs else ENV_ONITX
+    env = _canonical_env(st.session_state.get("selected_env", envs[0] if envs else ENV_ONITX))
 
     # Client/Vendor defaults for this environment
     default_client, default_vendor = ENV_DEFAULT_ENTITY_PAIR.get(env, ("", ""))
@@ -1738,7 +1752,7 @@ def _ensure_mandatory_lines(
             forced_name = item['tk_name']  # default from CONFIG
             
             # If Unity + Partner: Paralegal Tasks, prefer a Partner from tk_csv
-            if _is_partner_paralegal_item(item_name) and st.session_state.get("selected_env", "") == "Unity":
+            if _is_partner_paralegal_item(item_name) and _canonical_env(st.session_state.get("selected_env", "")) == ENV_SIMPLELEGAL_UNITY:
                 tk_match = _find_timekeeper_by_classification(_get_timekeepers(), "Partner")
                 if tk_match:
                     forced_name = tk_match.get("TIMEKEEPER_NAME", forced_name)
@@ -2586,7 +2600,7 @@ with tab_objects[0]:
 with tab_objects[1]:
     # ===== 1. GET USER INPUT THAT DRIVES LOGIC =====
     st.markdown("<h3 style='color: #1E1E1E;'>Billing Profiles</h3>", unsafe_allow_html=True)
-    env_names = ENVIRONMENTS or ["OnitX", "SimpleLegal"]
+    env_names = ENVIRONMENTS or ["OnitX", "SimpleLegal/Unity"]
     default_env = st.session_state.get("selected_env", env_names[0] if env_names else "OnitX")
     if env_names and default_env not in env_names:
         default_env = env_names[0]
@@ -3109,12 +3123,12 @@ with tab_objects[2]:
         all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
 
         # Determine the items available for selection based on the environment
-        if st.session_state.get("selected_env") == 'SimpleLegal':
+        if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
             available_items = [
                 name for name, details in CONFIG['MANDATORY_ITEMS'].items()
                 if details.get('is_expense') and details.get('expense_code') == 'E110'
             ]
-            st.info("For the 'SimpleLegal' profile, only E110 mandatory expenses are available.")
+            st.info("For the 'SimpleLegal/Unity' environment, only E110 mandatory expenses are available.")
         else:
             available_items = all_items
 
@@ -3125,7 +3139,7 @@ with tab_objects[2]:
             default_selection = [item for item in saved_selection if item in available_items]
         else:
             # Otherwise, determine initial defaults based on environment.
-            if st.session_state.get("selected_env") == 'SimpleLegal':
+            if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
                 # For SimpleLegal, all available items are selected by default.
                 default_selection = list(available_items)
             else:
@@ -3133,7 +3147,7 @@ with tab_objects[2]:
                 default_selection = list(available_items)
         
         # Special rule for 'Unity': ensure 'Partner: Paralegal Task' is pre-selected if available.
-        if st.session_state.get("selected_env") == "Unity":
+        if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
             pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
             if pp_key and pp_key not in default_selection:
                 default_selection.append(pp_key)
@@ -3308,22 +3322,22 @@ if "Tax Fields" in tabs:
         st.selectbox("Tax Type *", ["VAT","PST","QST","GST"], index=0, key="tax_type", help="Type of tax to apply to line items.")
 
         with st.expander("Law Firm Details"):
-            st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Address 2", key="pf_lf_address2", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm City", key="pf_lf_city", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm State/Region", key="pf_lf_state", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Postcode", key="pf_lf_postcode", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Country", key="pf_lf_country", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Law Firm Tax ID", key="pf_law_firm_id", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Address 2", key="pf_lf_address2", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm City", key="pf_lf_city", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm State/Region", key="pf_lf_state", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Postcode", key="pf_lf_postcode", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Country", key="pf_lf_country", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Law Firm Tax ID", key="pf_law_firm_id", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
 
         with st.expander("Client Details"):
-            st.text_input("Client Address 1", key="pf_client_address1", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Address 2", key="pf_client_address2", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Client City", key="pf_client_city", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Client State/Region", key="pf_client_state", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Postcode", key="pf_client_postcode", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Country", key="pf_client_country", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
-            st.text_input("Client Tax ID", key="pf_client_tax_id", disabled=(_is_vat_profile(st.session_state.get("selected_env")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Address 1", key="pf_client_address1", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Address 2", key="pf_client_address2", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client City", key="pf_client_city", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client State/Region", key="pf_client_state", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Postcode", key="pf_client_postcode", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Country", key="pf_client_country", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
+            st.text_input("Client Tax ID", key="pf_client_tax_id", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
 
 is_valid_input = True
 if timekeeper_data is None:
