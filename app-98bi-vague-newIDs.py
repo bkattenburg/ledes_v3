@@ -2823,8 +2823,9 @@ with tab_objects[1]:
         st.session_state["_entity_defaults_sig"] = None
 
 # ===== 3. CREATE WIDGETS (now that all state is set) =====
-        allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can enter other Client & Vendor IDs without changing stored profiles. See 'Using custom Client and Vendor IDs' in the FAQ for more details", key="allow_override")    
+    st.checkbox("Override values for this invoice", value=False, help="When checked, you can enter other Client & Vendor IDs without changing stored profiles. See 'Using custom Client and Vendor IDs' in the FAQ for more details", key="allow_override")    
 
+    allow_override = bool(st.session_state.get("allow_override", False))
     # Only show these fields when override is enabled. When override is OFF, force them
     # to the selected profile values and hide the inputs.
     if not allow_override:
