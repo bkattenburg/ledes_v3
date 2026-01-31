@@ -2884,10 +2884,14 @@ with tab_objects[1]:
         with c4:
             law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, key="law_firm_id")
 
-    st.markdown("<h3 style='color: #1E1E1E;'>Numbers & Version</h3>", unsafe_allow_html=True)
-    # Other invoice details
-    matter_number_base = st.text_input("Matter Number:", "2025-XXXXXX")
-    #invoice_number_base = st.text_input("Invoice Number (Base):", "INV-MMM-XXXXXX")
+        st.markdown("<h3 style='color: #1E1E1E;'>Numbers & Version</h3>", unsafe_allow_html=True)
+
+    # Environment-specific defaults:
+    # - SimpleLegal/Unity: Matter Number defaults to "saturn-xxxx"; Invoice Number defaults to "YYYY-MMM-Saturn-XXXXXX"
+    # - OnitX: keep existing defaults
+    _env_token = _canonical_env(st.session_state.get("selected_env", ""))
+    _is_sl_unity = (_env_token == ENV_SIMPLELEGAL_UNITY)
+
     def prior_month_stamp(today: date) -> str:
         # Go to last day of prior month (handles Jan -> Dec of previous year)
         last_day_prev_month = today.replace(day=1) - timedelta(days=1)
@@ -2895,23 +2899,55 @@ with tab_objects[1]:
         mmm = calendar.month_abbr[last_day_prev_month.month].upper()  # e.g., "DEC"
         return f"{yyyy}-{mmm}"
 
-    # Compute the dynamic default: YYYY-MMM-XXXXXX based on PRIOR month
+    # Compute the dynamic default: YYYY-MMM-... based on PRIOR month
     stamp = prior_month_stamp(date.today())
-    dynamic_default = f"{stamp}-XXXXXX"
 
-    # Only auto-set the field when it’s first created OR when the month stamp changes
-    # (prevents overwriting user edits on reruns)
+    # Matter Number default: "saturn-xxxx" for SimpleLegal/Unity, otherwise keep existing
+    matter_default = "saturn-xxxx" if _is_sl_unity else "2025-XXXXXX"
+    if "matter_number_base" not in st.session_state:
+        st.session_state["matter_number_base"] = matter_default
+        st.session_state["_matter_base_env"] = _env_token
+        st.session_state["_matter_base_default"] = matter_default
+    elif st.session_state.get("_matter_base_env") != _env_token:
+        prev_default = st.session_state.get("_matter_base_default")
+        # Only swap in the new default if the user hadn't customized the prior default
+        if st.session_state.get("matter_number_base") == prev_default:
+            st.session_state["matter_number_base"] = matter_default
+        st.session_state["_matter_base_env"] = _env_token
+        st.session_state["_matter_base_default"] = matter_default
+
+    matter_number_base = st.text_input(
+        "Matter Number:",
+        key="matter_number_base",
+        help=("Default is saturn-xxxx for SimpleLegal/Unity." if _is_sl_unity else "Default is 2025-XXXXXX.")
+    )
+
+    # Invoice Number (Base) default:
+    dynamic_default = f"{stamp}-Saturn-XXXXXX" if _is_sl_unity else f"{stamp}-XXXXXX"
+    _invoice_sig = f"{_env_token}|{stamp}|{'saturn' if _is_sl_unity else 'default'}"
+
+    # Only auto-set when first created OR when the env/month signature changes,
+    # and only if the user hadn't customized away from the prior default.
     if "invoice_number_base" not in st.session_state:
         st.session_state.invoice_number_base = dynamic_default
-        st.session_state._invoice_base_stamp = stamp
-    elif st.session_state.get("_invoice_base_stamp") != stamp:
-        st.session_state.invoice_number_base = dynamic_default
-        st.session_state._invoice_base_stamp = stamp
+        st.session_state._invoice_base_sig = _invoice_sig
+        st.session_state._invoice_base_default = dynamic_default
+    elif st.session_state.get("_invoice_base_sig") != _invoice_sig:
+        prev_default = st.session_state.get("_invoice_base_default")
+        if st.session_state.get("invoice_number_base") == prev_default:
+            st.session_state.invoice_number_base = dynamic_default
+        st.session_state._invoice_base_sig = _invoice_sig
+        st.session_state._invoice_base_default = dynamic_default
 
+    invoice_help = (
+        "Format: YYYY-MMM-Saturn-XXXXXX (XXXXXX is the matter placeholder)"
+        if _is_sl_unity
+        else "Format: YYYY-MMM-XXXXXX (XXXXXX is the matter placeholder)"
+    )
     invoice_number_base = st.text_input(
         "Invoice Number (Base):",
         key="invoice_number_base",
-        help="Format: YYYY-MMM-XXXXXX (XXXXXX is the matter placeholder)"
+        help=invoice_help
     )
 
     LEDES_OPTIONS = ["1998B", "1998BI"]
