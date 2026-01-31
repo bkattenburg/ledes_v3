@@ -317,7 +317,7 @@ def apply_preset():
 # Billing Profiles Configuration
 # ===============================
 # Format: (Environment, Client Name, Client ID, Law Firm Name, Law Firm ID)
-BILLING_PROFILES = [("OnitX USD - Nelson",    "A Onit Inc.",   "02-4388252", "Nelson & Murdock", "02-1234567"),
+BILLING_PROFILES = [("OnitX USD - Nelson",    "A Onit Inc.",   "02-4388252", "Nelson and Murdock", "02-1234567"),
     ("OnitX CAD - SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
     ("OnitX EUR - Nelson", "Onit LLC - Belgium", "00-4100871", "Nelson and Murdock - Belgium", "3233384400"),
     ("OnitX GBP - Nelson", "Onit - UK", "23058", "Nelson and Murdock - Belgium", "3233384400"),
@@ -345,7 +345,7 @@ BILLING_PROFILE_DETAILS = {
         "invoice_currency": "CAD",
         # Law Firm details
         "law_firm": {
-            "name": "Simpson Schneider & Ellis Group",
+            "name": "Simpson Schneider and Ellis Group",
             "id": "879376127RT0002",
             "address1": "100 Vancouver Blvd",
             "address2": "Suite 2100",
