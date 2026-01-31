@@ -334,8 +334,8 @@ BILLING_PROFILES = [("OnitX USD - Nelson",    "A Onit Inc.",   "02-4388252", "Ne
 # NOTE: VAT-enabled profiles should default to LEDES 1998BI and EUR, and can be used to generate VAT-style invoices.
 VAT_ENABLED_PROFILES = {"OnitX EUR - Nelson", "OnitX CAD - SS&E Group", "OnitX GBP - Nelson"}
 
-def _is_vat_profile(env: str) -> bool:
-    return str(env or "") in VAT_ENABLED_PROFILES
+def _is_vat_profile(profile_id: str) -> bool:
+    return str(profile_id or "") in VAT_ENABLED_PROFILES
 
 BILLING_PROFILE_DETAILS = {
     "OnitX CAD - SS&E Group": {
@@ -439,11 +439,11 @@ LINE_ITEM_TAX_TYPE_BY_CURRENCY = {
     "GBP": "UK_VAT",
 }
 
-def _resolve_line_item_tax_type(selected_env: str, fallback: str = "VAT") -> str:
+def _resolve_line_item_tax_type(active_profile_id: str, fallback: str = "VAT") -> str:
     """Resolve LINE_ITEM_TAX_TYPE for LEDES 1998BI/1998BIv2 lines based on profile."""
     prof_cur = ""
     try:
-        prof_cur = str((BILLING_PROFILE_DETAILS.get(str(selected_env), {}) or {}).get("invoice_currency", "") or "")
+        prof_cur = str((BILLING_PROFILE_DETAILS.get(str(active_profile_id), {}) or {}).get("invoice_currency", "") or "")
     except Exception:
         prof_cur = ""
     cur = (prof_cur or st.session_state.get("tax_invoice_currency") or st.session_state.get("invoice_currency") or "")
@@ -559,6 +559,163 @@ def _build_entity_catalogs():
     return client_cat, vendor_cat, env_defaults
 
 CLIENT_CATALOG, VENDOR_CATALOG, ENV_DEFAULTS = _build_entity_catalogs()
+
+# --- Environment indexes (SimpleLegal vs OnitX) ---------------------------------
+# The UI uses st.session_state["selected_env"] as a HIGH-LEVEL environment name
+# (e.g., "OnitX" or "SimpleLegal"). The detailed defaults (currency, LEDES default, etc.)
+# are driven by an "active" profile id derived from Environment + selected Client/Vendor pair.
+def _infer_environment(profile_id: str, prof_detail=None) -> str:
+    """Return environment name for a profile id (prefers explicit prof_detail['environment'])."""
+    try:
+        if prof_detail and prof_detail.get("environment"):
+            return str(prof_detail.get("environment")).strip()
+    except Exception:
+        pass
+    s = str(profile_id or "").strip()
+    if not s:
+        return ""
+    # Convention: first token is the environment (e.g., "OnitX", "SimpleLegal")
+    return s.split()[0].strip()
+
+def _build_env_indexes():
+    envs = set()
+    env_client = {}  # env -> set(client_keys)
+    env_vendor = {}  # env -> set(vendor_keys)
+    env_default_pair = {}  # env -> (client_key, vendor_key) first seen
+    pair_to_profile = {}  # (env, client_key, vendor_key) -> profile_id
+
+    # From BILLING_PROFILES
+    for p in (BILLING_PROFILES or []):
+        try:
+            profile_id, c_name, c_id, lf_name, lf_id = p
+        except Exception:
+            continue
+        env = _infer_environment(profile_id, (BILLING_PROFILE_DETAILS or {}).get(profile_id))
+        if not env:
+            continue
+        envs.add(env)
+        ck = _entity_label(c_name, c_id)
+        vk = _entity_label(lf_name, lf_id)
+        env_client.setdefault(env, set()).add(ck)
+        env_vendor.setdefault(env, set()).add(vk)
+        env_default_pair.setdefault(env, (ck, vk))
+        pair_to_profile.setdefault((env, ck, vk), profile_id)
+
+    # From BILLING_PROFILE_DETAILS (richer; may correct names/ids)
+    for profile_id, prof in (BILLING_PROFILE_DETAILS or {}).items():
+        env = _infer_environment(profile_id, prof)
+        if not env:
+            continue
+        envs.add(env)
+        cl = (prof or {}).get("client", {}) or {}
+        lf = (prof or {}).get("law_firm", {}) or {}
+        ck = _entity_label(cl.get("name"), cl.get("id"))
+        vk = _entity_label(lf.get("name"), lf.get("id"))
+        if ck:
+            env_client.setdefault(env, set()).add(ck)
+        if vk:
+            env_vendor.setdefault(env, set()).add(vk)
+        env_default_pair.setdefault(env, (ck, vk))
+        pair_to_profile.setdefault((env, ck, vk), profile_id)
+
+    # Include EXTRA_* profiles:
+    # - If an extra dict includes "environment", only include for that env (or envs list).
+    # - If it has no "environment", include in all known envs (backward compatible).
+    known_envs = sorted([e for e in envs if e]) or ["OnitX", "SimpleLegal"]
+    for k, v in (EXTRA_CLIENT_PROFILES or {}).items():
+        env_val = (v or {}).get("environment", None)
+        if env_val:
+            env_list = [env_val] if isinstance(env_val, str) else list(env_val)
+            for e in env_list:
+                e = str(e).strip()
+                if not e:
+                    continue
+                env_client.setdefault(e, set()).add(k)
+                envs.add(e)
+        else:
+            for e in known_envs:
+                env_client.setdefault(e, set()).add(k)
+
+    for k, v in (EXTRA_VENDOR_PROFILES or {}).items():
+        env_val = (v or {}).get("environment", None)
+        if env_val:
+            env_list = [env_val] if isinstance(env_val, str) else list(env_val)
+            for e in env_list:
+                e = str(e).strip()
+                if not e:
+                    continue
+                env_vendor.setdefault(e, set()).add(k)
+                envs.add(e)
+        else:
+            for e in known_envs:
+                env_vendor.setdefault(e, set()).add(k)
+
+    envs = sorted([e for e in envs if e]) or known_envs
+    env_client_opts = {e: sorted(list(env_client.get(e, set())), key=lambda x: str(x).lower()) for e in envs}
+    env_vendor_opts = {e: sorted(list(env_vendor.get(e, set())), key=lambda x: str(x).lower()) for e in envs}
+
+    # Ensure every env has a default pair
+    for e in envs:
+        if e not in env_default_pair:
+            dc = env_client_opts.get(e, [""])[0] if env_client_opts.get(e) else ""
+            dv = env_vendor_opts.get(e, [""])[0] if env_vendor_opts.get(e) else ""
+            env_default_pair[e] = (dc, dv)
+
+    return envs, env_client_opts, env_vendor_opts, env_default_pair, pair_to_profile
+
+ENVIRONMENTS, ENV_CLIENT_OPTIONS, ENV_VENDOR_OPTIONS, ENV_DEFAULT_ENTITY_PAIR, PROFILE_PAIR_TO_ID = _build_env_indexes()
+
+def _resolve_active_profile_id(env: str, client_key: str, vendor_key: str) -> str:
+    """Pick the most appropriate profile id for defaults, given env + selected Client/Vendor."""
+    env = str(env or "").strip()
+    client_key = str(client_key or "").strip()
+    vendor_key = str(vendor_key or "").strip()
+
+    pid = PROFILE_PAIR_TO_ID.get((env, client_key, vendor_key))
+    if pid:
+        return pid
+
+    # Fall back to the first profile id we can find for this environment
+    for p in (BILLING_PROFILES or []):
+        try:
+            profile_id = p[0]
+        except Exception:
+            continue
+        if _infer_environment(profile_id, (BILLING_PROFILE_DETAILS or {}).get(profile_id)) == env:
+            return profile_id
+
+    # Last resort: any profile id
+    try:
+        return (BILLING_PROFILES or [])[0][0]
+    except Exception:
+        return ""
+
+def _ensure_env_profile_state():
+    """
+    Ensure selected_env (environment), selected_client_profile, selected_vendor_profile,
+    and active_profile_id are all populated in session_state.
+    """
+    envs = ENVIRONMENTS or ["OnitX", "SimpleLegal"]
+    if st.session_state.get("selected_env") not in envs:
+        st.session_state["selected_env"] = envs[0] if envs else "OnitX"
+    env = st.session_state.get("selected_env", envs[0] if envs else "OnitX")
+
+    # Client/Vendor defaults for this environment
+    default_client, default_vendor = ENV_DEFAULT_ENTITY_PAIR.get(env, ("", ""))
+    valid_clients = set(ENV_CLIENT_OPTIONS.get(env, [])) or set(CLIENT_CATALOG.keys())
+    valid_vendors = set(ENV_VENDOR_OPTIONS.get(env, [])) or set(VENDOR_CATALOG.keys())
+
+    if st.session_state.get("selected_client_profile") not in valid_clients:
+        st.session_state["selected_client_profile"] = default_client or (next(iter(valid_clients)) if valid_clients else "")
+    if st.session_state.get("selected_vendor_profile") not in valid_vendors:
+        st.session_state["selected_vendor_profile"] = default_vendor or (next(iter(valid_vendors)) if valid_vendors else "")
+
+    st.session_state["active_profile_id"] = _resolve_active_profile_id(
+        env,
+        st.session_state.get("selected_client_profile", ""),
+        st.session_state.get("selected_vendor_profile", ""),
+    )
+# -------------------------------------------------------------------------------
 
 
 
@@ -891,7 +1048,7 @@ def _create_ledes_line_1998biv2(row: Dict, line_no: int, inv_total: float,
         timekeeper_name = "" if is_expense else str(row.get("TIMEKEEPER_NAME", ""))
         description = str(row.get("DESCRIPTION", "")).replace("|", " - ")
 
-        tax_type = _resolve_line_item_tax_type(st.session_state.get("selected_env", ""), fallback=str(st.session_state.get("tax_type", "VAT")))
+        tax_type = _resolve_line_item_tax_type(st.session_state.get("active_profile_id", ""), fallback=str(st.session_state.get("tax_type", "VAT")))
 
         return [
             bill_end.strftime("%Y%m%d"),
@@ -1032,7 +1189,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
     invoice_total = round(net_total + tax_total, 2)
 
     # Profile-driven LINE_ITEM_TAX_TYPE
-    line_item_tax_type = _resolve_line_item_tax_type(st.session_state.get("selected_env", ""), fallback=str(st.session_state.get("tax_type", "VAT")))
+    line_item_tax_type = _resolve_line_item_tax_type(st.session_state.get("active_profile_id", ""), fallback=str(st.session_state.get("tax_type", "VAT")))
 
     # Second pass: write lines
     for i, row in enumerate(rows, start=1):
@@ -2342,17 +2499,20 @@ with st.sidebar.expander("How do I format the custom line items CSV?"):
     **Note:** Use `{NAME_PLACEHOLDER}` in a description to auto-insert a random name.
     """)
     
-# --- LEDES version defaulting (do not clobber user choice) ---
-# Set a sensible default when the Environment / Profile changes, but keep any manual selection.
-_current_env_for_ledes = st.session_state.get("selected_env", "OnitX")
-_prev_env_for_ledes = st.session_state.get("_prev_env_for_ledes")
+# --- Environment/Profile state (selected_env is environment; active_profile_id is derived) ---
+_ensure_env_profile_state()
 
-if _prev_env_for_ledes != _current_env_for_ledes:
-    if _current_env_for_ledes in BILLING_PROFILE_DETAILS:
-        st.session_state["ledes_version"] = BILLING_PROFILE_DETAILS[_current_env_for_ledes].get("ledes_default", "1998B")
+# --- LEDES version defaulting (do not clobber user choice) ---
+# Set a sensible default when the ACTIVE profile changes, but keep any manual selection.
+_current_profile_for_ledes = st.session_state.get("active_profile_id", "")
+_prev_profile_for_ledes = st.session_state.get("_prev_profile_for_ledes")
+
+if _prev_profile_for_ledes != _current_profile_for_ledes:
+    if _current_profile_for_ledes in BILLING_PROFILE_DETAILS:
+        st.session_state["ledes_version"] = BILLING_PROFILE_DETAILS[_current_profile_for_ledes].get("ledes_default", "1998B")
     else:
         st.session_state.setdefault("ledes_version", "1998B")
-    st.session_state["_prev_env_for_ledes"] = _current_env_for_ledes
+    st.session_state["_prev_profile_for_ledes"] = _current_profile_for_ledes
 
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
@@ -2426,11 +2586,11 @@ with tab_objects[0]:
 with tab_objects[1]:
     # ===== 1. GET USER INPUT THAT DRIVES LOGIC =====
     st.markdown("<h3 style='color: #1E1E1E;'>Billing Profiles</h3>", unsafe_allow_html=True)
-    env_names = [p[0] for p in BILLING_PROFILES]
-    default_env = st.session_state.get("selected_env", "OnitX")
-    if default_env not in env_names:
+    env_names = ENVIRONMENTS or ["OnitX", "SimpleLegal"]
+    default_env = st.session_state.get("selected_env", env_names[0] if env_names else "OnitX")
+    if env_names and default_env not in env_names:
         default_env = env_names[0]
-    selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
+    selected_env = st.selectbox("Environment", env_names, index=env_names.index(default_env) if (env_names and default_env in env_names) else 0, key="selected_env")
 
     
 
@@ -2438,11 +2598,11 @@ with tab_objects[1]:
     # These are disabled when "Override values for this invoice" is enabled.
     _override_now = bool(st.session_state.get("allow_override", False))
 
-    _client_options = list(CLIENT_CATALOG.keys())
-    _vendor_options = list(VENDOR_CATALOG.keys())
+    _client_options = list(ENV_CLIENT_OPTIONS.get(selected_env, [])) or list(CLIENT_CATALOG.keys())
+    _vendor_options = list(ENV_VENDOR_OPTIONS.get(selected_env, [])) or list(VENDOR_CATALOG.keys())
 
-    # Env-specific default pair
-    _env_default_client, _env_default_vendor = ENV_DEFAULTS.get(selected_env, (
+    # Env-specific default pair (first-seen pair for that environment)
+    _env_default_client, _env_default_vendor = ENV_DEFAULT_ENTITY_PAIR.get(selected_env, (
         _client_options[0] if _client_options else "",
         _vendor_options[0] if _vendor_options else "",
     ))
@@ -2487,12 +2647,18 @@ with tab_objects[1]:
 
 # ===== 2. PERFORM ALL LOGIC AND STATE MODIFICATIONS =====
     
-    # Get base values from the selected profile
-    prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
+    # Resolve the active profile id for defaults (derived from Environment + selected Client/Vendor pair)
+    _sel_client_key = st.session_state.get("selected_client_profile", "")
+    _sel_vendor_key = st.session_state.get("selected_vendor_profile", "")
+    active_profile_id = _resolve_active_profile_id(selected_env, _sel_client_key, _sel_vendor_key)
+    st.session_state["active_profile_id"] = active_profile_id
+
+    # Get base values from the active profile (used as a fallback when a detailed profile is present)
+    prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(active_profile_id)
 
     # If a detailed profile exists, use its specific values to override the base ones
-    if selected_env in BILLING_PROFILE_DETAILS and not st.session_state.get("allow_override"):
-        prof = BILLING_PROFILE_DETAILS[selected_env]
+    if active_profile_id in BILLING_PROFILE_DETAILS and not st.session_state.get("allow_override"):
+        prof = BILLING_PROFILE_DETAILS[active_profile_id]
         prof_client_name = prof.get("client", {}).get("name", prof_client_name)
         prof_law_firm_name = prof.get("law_firm", {}).get("name", prof_law_firm_name)
         prof_client_id = prof.get("client", {}).get("id", prof_client_id)
@@ -2506,9 +2672,9 @@ with tab_objects[1]:
     if st.session_state.get("allow_override"):
         st.session_state["_profile_defaults_sig"] = None
 
-    if selected_env in BILLING_PROFILE_DETAILS and not st.session_state["allow_override"]:
-        prof = BILLING_PROFILE_DETAILS[selected_env]
-        _defaults_sig = f"{selected_env}|no_override"
+    if active_profile_id in BILLING_PROFILE_DETAILS and not st.session_state["allow_override"]:
+        prof = BILLING_PROFILE_DETAILS[active_profile_id]
+        _defaults_sig = f"{active_profile_id}|no_override"
 
         # Only apply profile defaults once per profile (or when override is toggled back off)
         if st.session_state.get("_profile_defaults_sig") != _defaults_sig:
@@ -2562,7 +2728,7 @@ with tab_objects[1]:
         if st.session_state.get("client_tax_id"):
             st.session_state["client_id"] = st.session_state["client_tax_id"]
             prof_client_id = st.session_state["client_id"] # Also update the local variable for the widget
-        if _is_vat_profile(st.session_state.get("selected_env")):
+        if _is_vat_profile(st.session_state.get("active_profile_id", "")):
             st.markdown(
         """
         **Note:** Please review the **LEDES 1998BI - Matter Setup** section in Help & FAQs.
