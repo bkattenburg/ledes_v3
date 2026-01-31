@@ -450,6 +450,118 @@ def _resolve_line_item_tax_type(selected_env: str, fallback: str = "VAT") -> str
     cur = str(cur).strip().upper()
     return LINE_ITEM_TAX_TYPE_BY_CURRENCY.get(cur, str(fallback))
 
+# --- Client/Vendor catalogs (mix-and-match selections) ---
+# These catalogs allow users to mix-and-match a Client (Legal Entity) and a Vendor/Law Firm profile
+# independent of the selected Environment/Profile.
+#
+# Add new entities here (optional). Keys should be unique and are displayed in the dropdowns.
+EXTRA_CLIENT_PROFILES = {
+    # "Acme Corp (C123)": {
+    #     "name": "Acme Corp",
+    #     "id": "C123",
+    #     "tax_id": "C123",  # optional
+    #     "address1": "1 Market St",
+    #     "address2": "",
+    #     "city": "San Francisco",
+    #     "state": "CA",
+    #     "postcode": "94105",
+    #     "country": "United States",
+    # },
+}
+
+EXTRA_VENDOR_PROFILES = {
+    # "Example Law LLP (V456)": {
+    #     "name": "Example Law LLP",
+    #     "id": "V456",
+    #     "address1": "100 Main St",
+    #     "address2": "Suite 200",
+    #     "city": "New York",
+    #     "state": "NY",
+    #     "postcode": "10001",
+    #     "country": "United States",
+    # },
+}
+
+def _entity_label(name: str, entity_id: str) -> str:
+    name = str(name or "").strip()
+    entity_id = str(entity_id or "").strip()
+    if name and entity_id:
+        return f"{name} ({entity_id})"
+    return name or entity_id or "Unnamed"
+
+def _merge_nonempty(dst: dict, src: dict) -> dict:
+    """Merge src into dst, preferring non-empty values in src."""
+    out = dict(dst or {})
+    for k, v in (src or {}).items():
+        if v is None:
+            continue
+        if isinstance(v, str) and v.strip() == "":
+            continue
+        out[k] = v
+    return out
+
+def _build_entity_catalogs():
+    # Start with any explicitly provided extras
+    client_cat = {k: dict(v) for k, v in (EXTRA_CLIENT_PROFILES or {}).items()}
+    vendor_cat = {k: dict(v) for k, v in (EXTRA_VENDOR_PROFILES or {}).items()}
+
+    # Pull entities out of BILLING_PROFILE_DETAILS (richer data)
+    for env, prof in (BILLING_PROFILE_DETAILS or {}).items():
+        cl = (prof or {}).get("client", {}) or {}
+        lf = (prof or {}).get("law_firm", {}) or {}
+        cl_key = _entity_label(cl.get("name"), cl.get("id"))
+        lf_key = _entity_label(lf.get("name"), lf.get("id"))
+        if cl_key not in client_cat:
+            client_cat[cl_key] = {}
+        client_cat[cl_key] = _merge_nonempty(client_cat[cl_key], cl)
+        if lf_key not in vendor_cat:
+            vendor_cat[lf_key] = {}
+        vendor_cat[lf_key] = _merge_nonempty(vendor_cat[lf_key], lf)
+
+    # Pull entities from BILLING_PROFILES (basic data)
+    for p in (BILLING_PROFILES or []):
+        try:
+            env, c_name, c_id, lf_name, lf_id = p
+        except Exception:
+            continue
+        cl_key = _entity_label(c_name, c_id)
+        lf_key = _entity_label(lf_name, lf_id)
+        client_cat.setdefault(cl_key, {"name": c_name, "id": c_id})
+        vendor_cat.setdefault(lf_key, {"name": lf_name, "id": lf_id})
+
+    # Determine default client/vendor per env (prefer detailed profile; otherwise fall back to BILLING_PROFILES tuple)
+    env_defaults = {}
+    for p in (BILLING_PROFILES or []):
+        try:
+            env, c_name, c_id, lf_name, lf_id = p
+        except Exception:
+            continue
+
+        if env in (BILLING_PROFILE_DETAILS or {}):
+            prof = BILLING_PROFILE_DETAILS.get(env, {}) or {}
+            cl = (prof.get("client", {}) or {})
+            lf = (prof.get("law_firm", {}) or {})
+            c_name = cl.get("name", c_name)
+            c_id = cl.get("id", c_id)
+            lf_name = lf.get("name", lf_name)
+            lf_id = lf.get("id", lf_id)
+
+        cl_key = _entity_label(c_name, c_id)
+        lf_key = _entity_label(lf_name, lf_id)
+        # Ensure keys exist
+        client_cat.setdefault(cl_key, {"name": c_name, "id": c_id})
+        vendor_cat.setdefault(lf_key, {"name": lf_name, "id": lf_id})
+        env_defaults[env] = (cl_key, lf_key)
+
+    # Stable sorted options
+    client_cat = dict(sorted(client_cat.items(), key=lambda kv: str(kv[0]).lower()))
+    vendor_cat = dict(sorted(vendor_cat.items(), key=lambda kv: str(kv[0]).lower()))
+    return client_cat, vendor_cat, env_defaults
+
+CLIENT_CATALOG, VENDOR_CATALOG, ENV_DEFAULTS = _build_entity_catalogs()
+
+
+
 def get_profile(env: str):
     """Return (client_name, client_id, law_firm_name, law_firm_id) for the environment."""
     for p in BILLING_PROFILES:
@@ -2320,7 +2432,60 @@ with tab_objects[1]:
         default_env = env_names[0]
     selected_env = st.selectbox("Environment / Profile", env_names, index=env_names.index(default_env), key="selected_env")
 
-    # ===== 2. PERFORM ALL LOGIC AND STATE MODIFICATIONS =====
+    
+
+    # --- Client & Vendor selection (mix-and-match) ---
+    # These are disabled when "Override values for this invoice" is enabled.
+    _override_now = bool(st.session_state.get("allow_override", False))
+
+    _client_options = list(CLIENT_CATALOG.keys())
+    _vendor_options = list(VENDOR_CATALOG.keys())
+
+    # Env-specific default pair
+    _env_default_client, _env_default_vendor = ENV_DEFAULTS.get(selected_env, (
+        _client_options[0] if _client_options else "",
+        _vendor_options[0] if _vendor_options else "",
+    ))
+
+    # When the environment changes, reset the pair to that env's defaults (least-surprising behavior).
+    if st.session_state.get("_prev_env_for_entity_pair") != selected_env:
+        if _env_default_client:
+            st.session_state["selected_client_profile"] = _env_default_client
+        if _env_default_vendor:
+            st.session_state["selected_vendor_profile"] = _env_default_vendor
+        st.session_state["_prev_env_for_entity_pair"] = selected_env
+
+    # Current selections (fall back to env defaults)
+    _cur_client = st.session_state.get("selected_client_profile", _env_default_client)
+    if _cur_client not in _client_options and _env_default_client in _client_options:
+        _cur_client = _env_default_client
+
+    _cur_vendor = st.session_state.get("selected_vendor_profile", _env_default_vendor)
+    if _cur_vendor not in _vendor_options and _env_default_vendor in _vendor_options:
+        _cur_vendor = _env_default_vendor
+
+    # UI widgets
+    csel1, csel2 = st.columns(2)
+    with csel1:
+        st.selectbox(
+            "Client Profile (Legal Entity)",
+            _client_options,
+            index=_client_options.index(_cur_client) if (_client_options and _cur_client in _client_options) else 0,
+            key="selected_client_profile",
+            disabled=_override_now,
+            help="Select the Client (Legal Entity) to populate Client fields on the Tax Fields tab for LEDES 1998BI/1998BIv2."
+        )
+    with csel2:
+        st.selectbox(
+            "Vendor / Law Firm Profile",
+            _vendor_options,
+            index=_vendor_options.index(_cur_vendor) if (_vendor_options and _cur_vendor in _vendor_options) else 0,
+            key="selected_vendor_profile",
+            disabled=_override_now,
+            help="Select the Vendor/Law Firm profile to populate Law Firm fields on the Tax Fields tab for LEDES 1998BI/1998BIv2."
+        )
+
+# ===== 2. PERFORM ALL LOGIC AND STATE MODIFICATIONS =====
     
     # Get base values from the selected profile
     prof_client_name, prof_client_id, prof_law_firm_name, prof_law_firm_id = get_profile(selected_env)
@@ -2409,7 +2574,89 @@ with tab_objects[1]:
         unsafe_allow_html=False
     )
 
-    # ===== 3. CREATE WIDGETS (now that all state is set) =====
+    
+
+    # --- Apply selected Client/Vendor pair into session state ---
+    # When override is OFF, keep invoice + Tax Fields in sync with the selected Client/Vendor pair.
+    # We only re-apply when the selection changes, so manual edits (while override is OFF) can still persist.
+    if not bool(st.session_state.get("allow_override", False)):
+        _sel_client_key = st.session_state.get("selected_client_profile", "")
+        _sel_vendor_key = st.session_state.get("selected_vendor_profile", "")
+        _sig = f"{selected_env}|{_sel_client_key}|{_sel_vendor_key}|no_override"
+
+        if st.session_state.get("_entity_defaults_sig") != _sig:
+            _cl = CLIENT_CATALOG.get(_sel_client_key, {}) or {}
+            _vf = VENDOR_CATALOG.get(_sel_vendor_key, {}) or {}
+
+            # --- Client (Legal Entity) ---
+            _cl_name = _cl.get("name", "") or st.session_state.get("client_name", "")
+            _cl_id = _cl.get("id", "") or st.session_state.get("client_id", "")
+            _cl_tax = _cl.get("tax_id", None)
+
+            st.session_state["client_name"] = _cl_name
+            # Prefer tax_id as the effective client_id when provided (VAT-style)
+            if _cl_tax is not None and str(_cl_tax).strip() != "":
+                st.session_state["client_tax_id"] = str(_cl_tax)
+                st.session_state["client_id"] = str(_cl_tax)
+            else:
+                # Do not clear existing tax id unless explicitly provided
+                st.session_state["client_id"] = _cl_id
+
+            # Address fields (only set when present in the selected profile; otherwise keep existing)
+            for _k_src, _k_dst in [
+                ("address1", "client_address1"),
+                ("address2", "client_address2"),
+                ("city", "client_city"),
+                ("state", "client_state"),
+                ("postcode", "client_postcode"),
+                ("country", "client_country"),
+            ]:
+                v = _cl.get(_k_src, None)
+                if v is not None and (not isinstance(v, str) or v.strip() != ""):
+                    st.session_state[_k_dst] = v
+
+            # Mirror into pf_* fields so Tax Fields tab is pre-populated
+            st.session_state["pf_client_tax_id"] = st.session_state.get("client_tax_id", "")
+            st.session_state["pf_client_address1"] = st.session_state.get("client_address1", "")
+            st.session_state["pf_client_address2"] = st.session_state.get("client_address2", "")
+            st.session_state["pf_client_city"] = st.session_state.get("client_city", "")
+            st.session_state["pf_client_state"] = st.session_state.get("client_state", "")
+            st.session_state["pf_client_postcode"] = st.session_state.get("client_postcode", "")
+            st.session_state["pf_client_country"] = st.session_state.get("client_country", "")
+
+            # --- Vendor / Law Firm ---
+            _vf_name = _vf.get("name", "") or st.session_state.get("law_firm_name", "")
+            _vf_id = _vf.get("id", "") or st.session_state.get("law_firm_id", "")
+            st.session_state["law_firm_name"] = _vf_name
+            st.session_state["law_firm_id"] = _vf_id
+
+            for _k_src, _k_dst in [
+                ("address1", "lf_address1"),
+                ("address2", "lf_address2"),
+                ("city", "lf_city"),
+                ("state", "lf_state"),
+                ("postcode", "lf_postcode"),
+                ("country", "lf_country"),
+            ]:
+                v = _vf.get(_k_src, None)
+                if v is not None and (not isinstance(v, str) or v.strip() != ""):
+                    st.session_state[_k_dst] = v
+
+            # Mirror into pf_* fields
+            st.session_state["pf_law_firm_id"] = st.session_state.get("law_firm_id", "")
+            st.session_state["pf_lf_address1"] = st.session_state.get("lf_address1", "")
+            st.session_state["pf_lf_address2"] = st.session_state.get("lf_address2", "")
+            st.session_state["pf_lf_city"] = st.session_state.get("lf_city", "")
+            st.session_state["pf_lf_state"] = st.session_state.get("lf_state", "")
+            st.session_state["pf_lf_postcode"] = st.session_state.get("lf_postcode", "")
+            st.session_state["pf_lf_country"] = st.session_state.get("lf_country", "")
+
+            st.session_state["_entity_defaults_sig"] = _sig
+    else:
+        # If override is ON, clear the sig so turning override back OFF re-applies the selected pair.
+        st.session_state["_entity_defaults_sig"] = None
+
+# ===== 3. CREATE WIDGETS (now that all state is set) =====
     allow_override = st.checkbox("Override values for this invoice", value=False, help="When checked, you can enter other Client & Vendor IDs without changing stored profiles. See 'Using custom Client and Vendor IDs' in the FAQ for more details", key="allow_override")    
     # Names
     c1, c2 = st.columns(2)
