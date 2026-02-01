@@ -573,6 +573,18 @@ def _canonical_env(env: str) -> str:
     env = str(env or "").strip()
     return _ENV_ALIASES.get(env, env)
 
+def _env_ledes_version_default(env: str):
+    """Return a forced/default LEDES version for an environment, or None.
+
+    Business rules:
+    - SimpleLegal/Unity: default/reset to 1998B
+    - OnitX: default/reset to 1998B
+    """
+    env = _canonical_env(env)
+    if env in (ENV_SIMPLELEGAL_UNITY, ENV_ONITX):
+        return "1998B"
+    return None
+
 # The UI uses st.session_state["selected_env"] as a HIGH-LEVEL environment name
 # (e.g., "OnitX" or "SimpleLegal/Unity"). The detailed defaults (currency, LEDES default, etc.)
 # are driven by an "active" profile id derived from Environment + selected Client/Vendor pair.
@@ -2516,13 +2528,23 @@ with st.sidebar.expander("How do I format the custom line items CSV?"):
 # --- Environment/Profile state (selected_env is environment; active_profile_id is derived) ---
 _ensure_env_profile_state()
 
-# --- LEDES version defaulting (do not clobber user choice) ---
-# Set a sensible default when the ACTIVE profile changes, but keep any manual selection.
+# --- LEDES version defaulting / resetting ---
+# Apply environment rules when the ACTIVE profile changes:
+# - SimpleLegal/Unity: default/reset to 1998B
+# - OnitX: default/reset to 1998B
+# Otherwise, use profile-level ledes_default (if present), else fall back to 1998B.
 _current_profile_for_ledes = st.session_state.get("active_profile_id", "")
 _prev_profile_for_ledes = st.session_state.get("_prev_profile_for_ledes")
 
 if _prev_profile_for_ledes != _current_profile_for_ledes:
-    if _current_profile_for_ledes in BILLING_PROFILE_DETAILS:
+    _env_for_ledes = _canonical_env(st.session_state.get("selected_env", "")) or _infer_environment(
+        _current_profile_for_ledes,
+        (BILLING_PROFILE_DETAILS or {}).get(_current_profile_for_ledes),
+    )
+    _forced_ledes = _env_ledes_version_default(_env_for_ledes)
+    if _forced_ledes:
+        st.session_state["ledes_version"] = _forced_ledes
+    elif _current_profile_for_ledes in BILLING_PROFILE_DETAILS:
         st.session_state["ledes_version"] = BILLING_PROFILE_DETAILS[_current_profile_for_ledes].get("ledes_default", "1998B")
     else:
         st.session_state.setdefault("ledes_version", "1998B")
@@ -2693,7 +2715,11 @@ with tab_objects[1]:
         # Only apply profile defaults once per profile (or when override is toggled back off)
         if st.session_state.get("_profile_defaults_sig") != _defaults_sig:
             # Default LEDES version for profile
-            st.session_state["ledes_version"] = prof.get("ledes_default", st.session_state.get("ledes_version", "1998B"))
+            _forced_ledes = _env_ledes_version_default(selected_env)
+            if _forced_ledes:
+                st.session_state["ledes_version"] = _forced_ledes
+            else:
+                st.session_state["ledes_version"] = prof.get("ledes_default", st.session_state.get("ledes_version", "1998B"))
             # Default invoice currency
             st.session_state["tax_invoice_currency"] = prof.get("invoice_currency", st.session_state.get("tax_invoice_currency", "USD"))
 
@@ -2957,6 +2983,11 @@ with tab_objects[1]:
         key="ledes_version",
         #help="XML 2.1 export is not implemented yet; please use 1998B or 1998BI."
     )
+    # Keep Tax Fields -> Client Matter ID in sync with Invoice Details -> Matter Number when using 1998BI
+    # (SimpleLegal/Unity and some ELM systems treat these as the same logical identifier.)
+    if ledes_version == "1998BI":
+        st.session_state["tax_client_matter_id"] = st.session_state.get("matter_number_base", "")
+
     if ledes_version == "XML 2.1":
         st.warning("This is not yet implemented - please use 1998B")
 
