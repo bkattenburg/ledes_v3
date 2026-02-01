@@ -578,10 +578,9 @@ def _env_ledes_version_default(env: str):
 
     Business rules:
     - SimpleLegal/Unity: default/reset to 1998B
-    - OnitX: default/reset to 1998B
     """
     env = _canonical_env(env)
-    if env in (ENV_SIMPLELEGAL_UNITY, ENV_ONITX):
+    if env == ENV_SIMPLELEGAL_UNITY:
         return "1998B"
     return None
 
@@ -2529,19 +2528,20 @@ with st.sidebar.expander("How do I format the custom line items CSV?"):
 _ensure_env_profile_state()
 
 # --- LEDES version defaulting / resetting ---
-# Apply environment rules when the ACTIVE profile changes:
+# Apply environment rules when the ACTIVE profile OR selected environment changes:
 # - SimpleLegal/Unity: default/reset to 1998B
-# - OnitX: default/reset to 1998B
 # Otherwise, use profile-level ledes_default (if present), else fall back to 1998B.
 _current_profile_for_ledes = st.session_state.get("active_profile_id", "")
 _prev_profile_for_ledes = st.session_state.get("_prev_profile_for_ledes")
 
-if _prev_profile_for_ledes != _current_profile_for_ledes:
-    _env_for_ledes = _canonical_env(st.session_state.get("selected_env", "")) or _infer_environment(
-        _current_profile_for_ledes,
-        (BILLING_PROFILE_DETAILS or {}).get(_current_profile_for_ledes),
-    )
-    _forced_ledes = _env_ledes_version_default(_env_for_ledes)
+_current_env_for_ledes = _canonical_env(st.session_state.get("selected_env", "")) or _infer_environment(
+    _current_profile_for_ledes,
+    (BILLING_PROFILE_DETAILS or {}).get(_current_profile_for_ledes),
+)
+_prev_env_for_ledes = st.session_state.get("_prev_env_for_ledes")
+
+if (_prev_profile_for_ledes != _current_profile_for_ledes) or (_prev_env_for_ledes != _current_env_for_ledes):
+    _forced_ledes = _env_ledes_version_default(_current_env_for_ledes)
     if _forced_ledes:
         st.session_state["ledes_version"] = _forced_ledes
     elif _current_profile_for_ledes in BILLING_PROFILE_DETAILS:
@@ -2549,6 +2549,7 @@ if _prev_profile_for_ledes != _current_profile_for_ledes:
     else:
         st.session_state.setdefault("ledes_version", "1998B")
     st.session_state["_prev_profile_for_ledes"] = _current_profile_for_ledes
+    st.session_state["_prev_env_for_ledes"] = _current_env_for_ledes
 
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
@@ -2948,6 +2949,9 @@ with tab_objects[1]:
         help=("Default is saturn-xxxx for SimpleLegal/Unity." if _is_sl_unity else "Default is 2025-XXXXXX.")
     )
 
+    # Keep Tax Fields -> Client Matter ID synced with Invoice Details -> Matter Number
+    st.session_state["tax_client_matter_id"] = matter_number_base
+
     # Invoice Number (Base) default:
     dynamic_default = f"{stamp}-Saturn-XXXXXX" if _is_sl_unity else f"{stamp}-XXXXXX"
     _invoice_sig = f"{_env_token}|{stamp}|{'saturn' if _is_sl_unity else 'default'}"
@@ -2983,10 +2987,6 @@ with tab_objects[1]:
         key="ledes_version",
         #help="XML 2.1 export is not implemented yet; please use 1998B or 1998BI."
     )
-    # Keep Tax Fields -> Client Matter ID in sync with Invoice Details -> Matter Number when using 1998BI
-    # (SimpleLegal/Unity and some ELM systems treat these as the same logical identifier.)
-    if ledes_version == "1998BI":
-        st.session_state["tax_client_matter_id"] = st.session_state.get("matter_number_base", "")
 
     if ledes_version == "XML 2.1":
         st.warning("This is not yet implemented - please use 1998B")
