@@ -937,7 +937,7 @@ def _calculate_max_fees(timekeeper_data: Optional[List[Dict]], billing_start_dat
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
     max_lines = int((num_timekeepers * num_days * max_daily_hours) / 0.5)
-    return max(1, min(200, max_lines))
+    return max(1, min(750, max_lines))
 
 def _load_timekeepers(uploaded_file: Optional[Any]) -> Optional[List[Dict]]:
     """Load timekeepers from CSV file."""
@@ -3176,7 +3176,7 @@ with tab_objects[2]:
         expenses = st.number_input(
             "Number of Expense Line Items",
             min_value=0,
-            max_value=50,
+            max_value=500,
             key="expense_slider",
         )
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
