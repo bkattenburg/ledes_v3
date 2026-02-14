@@ -326,6 +326,7 @@ BILLING_PROFILES = [("OnitX USD - Nelson",    "A Onit Inc.",   "02-4388252", "Ne
     ("SimpleLegal/Unity - Latham", "Cardinal Company",   "C003",       "Latham & Watkins LLP",               "17"),
     ("SimpleLegal/Unity - Davis", "Owl LLC",   "C001",       "Davis Polk & Wardell LLP (New York)",               "19"),
     ("SimpleLegal/Unity - Cravath", "Eagle LLC",   "C002",       "Cravath, Swaine & Moore LLP",               "11"),
+    ("SimpleLegal/Unity - Whitaker", "Penguin LLC", "C004", "Whitaker & Holbrook LLP", "195",
     #("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
 
@@ -2390,26 +2391,30 @@ with st.sidebar.expander("Timekeeper Downloads"):
     if onitx_Nelson_gbp_tk_data:
         st.download_button("OnitX - Nelson - GBP", onitx_Nelson_eur_tk_data, "OnitX_Nelson_GBP_tk.csv", "text/csv")
     
-    # SimpleLegal Timekeepers
-    sl_tk_data_jdc = read_file_for_download("assets/simplelegal_tk - JDC.csv")
+    # Unity Timekeepers
+    sl_tk_data_jdc = read_file_for_download("assets/unity_tk - JDC.csv")
     if sl_tk_data_jdc:
-        st.download_button("SL - JDC", sl_tk_data_jdc, "simplelegal_tk - JDC.csv", "text/csv")
+        st.download_button("Unity - JDC", sl_tk_data_jdc, "unity_tk - JDC.csv", "text/csv")
     
-    sl_tk_data_kirkland = read_file_for_download("assets/simplelegal_tk - Kirkland.csv")
+    sl_tk_data_kirkland = read_file_for_download("assets/unity_tk - Kirkland.csv")
     if sl_tk_data_kirkland:
-        st.download_button("SL - Kirkland", sl_tk_data_kirkland, "simplelegal_tk - Kirkland.csv", "text/csv")
+        st.download_button("Unity - Kirkland", sl_tk_data_kirkland, "unity_tk - Kirkland.csv", "text/csv")
 
-    sl_tk_data_latham = read_file_for_download("assets/simplelegal_tk - Latham.csv")
+    sl_tk_data_latham = read_file_for_download("assets/unity_tk - Latham.csv")
     if sl_tk_data_latham:
-        st.download_button("SL - Latham", sl_tk_data_latham, "simplelegal_tk - Latham.csv", "text/csv")
+        st.download_button("Unity - Latham", sl_tk_data_latham, "unity_tk - Latham.csv", "text/csv")
 
-    sl_tk_data_davis = read_file_for_download("assets/simplelegal_tk - Davis.csv")
+    sl_tk_data_davis = read_file_for_download("assets/unity_tk - Davis.csv")
     if sl_tk_data_davis:
-        st.download_button("SL - Davis", sl_tk_data_davis, "simplelegal_tk - Davis.csv", "text/csv")
+        st.download_button("Unity - Davis", sl_tk_data_davis, "unity_tk - Davis.csv", "text/csv")
 
-    sl_tk_data_cravath = read_file_for_download("assets/simplelegal_tk - Cravath.csv")
+    sl_tk_data_cravath = read_file_for_download("assets/unity_tk - Cravath.csv")
     if sl_tk_data_cravath:
-        st.download_button("SL - Cravath", sl_tk_data_cravath, "simplelegal_tk - Cravath.csv", "text/csv")
+        st.download_button("Unity - Cravath", sl_tk_data_cravath, "unity_tk - Cravath.csv", "text/csv")
+
+    sl_tk_data_whitaker = read_file_for_download("assets/unity_tk - Whitaker.csv")
+    if sl_tk_data_whitaker:
+        st.download_button("Unity - Whitaker", sl_tk_data_whitaker, "unity_tk - Whitaker.csv", "text/csv")
 
     # Unity Timekeepers
     #unity_tk_data = read_file_for_download("assets/unity_tk.csv")
@@ -2417,11 +2422,19 @@ with st.sidebar.expander("Timekeeper Downloads"):
     #    st.download_button("Unity", unity_tk_data, "unity_tk.csv", "text/csv")
         
 with st.sidebar.expander("Line Items"):
-    # Custom Line Items File
-    onit_tasks_data = read_file_for_download("assets/custom_tasks.csv")
-    if onit_tasks_data:
-        st.download_button("Line Items File", onit_tasks_data, "custom_tasks.csv", "text/csv")
+    # Custom Line Items Files
+    onit_lit_tasks_data = read_file_for_download("assets/custom_tasks.csv")
+    if onit_lit_tasks_data:
+        st.download_button("Litigation Line Items File", onit_lit_tasks_data, "custom_litigation_tasks.csv", "text/csv")
 
+    onit_pat_tasks_data = read_file_for_download("assets/custom_pat_tasks.csv")
+    if onit_pat_tasks_data:
+        st.download_button("Patent Line Items File", onit_pat_tasks_data, "custom_patent_tasks.csv", "text/csv")
+
+    onit_trade_tasks_data = read_file_for_download("assets/custom_trade_tasks.csv")
+    if onit_trade_tasks_data:
+        st.download_button("Trademark Line Items File", onit_trade_tasks_data, "custom_trademark_tasks.csv", "text/csv")
+    
     # Line Items Template
     sample_custom_df = pd.DataFrame({
         "TASK_CODE": ["L100", "L110"],
