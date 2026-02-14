@@ -326,7 +326,7 @@ BILLING_PROFILES = [("OnitX USD - Nelson",    "A Onit Inc.",   "02-4388252", "Ne
     ("SimpleLegal/Unity - Latham", "Cardinal Company",   "C003",       "Latham & Watkins LLP",               "17"),
     ("SimpleLegal/Unity - Davis", "Owl LLC",   "C001",       "Davis Polk & Wardell LLP (New York)",               "19"),
     ("SimpleLegal/Unity - Cravath", "Eagle LLC",   "C002",       "Cravath, Swaine & Moore LLP",               "11"),
-    ("SimpleLegal/Unity - Whitaker", "Penguin LLC", "C004", "Whitaker & Holbrook LLP", "195",
+    ("SimpleLegal/Unity - Whitaker", "Penguin LLC", "C004", "Whitaker & Holbrook LLP", "195"),
     #("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
 
