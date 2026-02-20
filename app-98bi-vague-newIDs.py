@@ -3203,14 +3203,14 @@ with tab_objects[2]:
         all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
 
         # Determine the items available for selection based on the environment
-        if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
-            available_items = [
-                name for name, details in CONFIG['MANDATORY_ITEMS'].items()
-                if details.get('is_expense') and details.get('expense_code') == 'E110'
-            ]
-            st.info("For the 'SimpleLegal/Unity' environment, only E110 mandatory expenses are available.")
-        else:
-            available_items = all_items
+        #if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
+        #    available_items = [
+        #        name for name, details in CONFIG['MANDATORY_ITEMS'].items()
+        #        if details.get('is_expense') and details.get('expense_code') == 'E110'
+        #    ]
+        #    st.info("For the 'SimpleLegal/Unity' environment, only E110 mandatory expenses are available.")
+        #else:
+        available_items = all_items
 
         # Determine the default selected items
         saved_selection = st.session_state.get("mandatory_items_default")
