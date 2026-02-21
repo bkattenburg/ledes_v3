@@ -3227,10 +3227,10 @@ with tab_objects[2]:
                 default_selection = list(available_items)
         
         # Special rule for 'Unity': ensure 'Partner: Paralegal Task' is pre-selected if available.
-        if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
-            pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
-            if pp_key and pp_key not in default_selection:
-                default_selection.append(pp_key)
+        #if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
+        #    pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
+        #    if pp_key and pp_key not in default_selection:
+        #        default_selection.append(pp_key)
         
         # Render the multiselect widget
         prev_selected_items = st.session_state.get("_mandatory_items_prev", [])
