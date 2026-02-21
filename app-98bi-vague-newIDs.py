@@ -843,6 +843,93 @@ CONFIG = {
         },
     }
 }
+
+
+# --- Airfare E110 helpers: United-served nonstop US destinations from SFO ---
+# Source (update as routes change): FlySFO "Where We Fly - United States"
+# We include destinations where United Airlines is listed.
+SFO_DEPARTURE_CITY = "San Francisco (SFO)"
+
+UA_SFO_US_DESTINATIONS = [
+    "Albuquerque (ABQ)",
+    "Anchorage (ANC)",
+    "Arcata/Eureka (ACV)",
+    "Aspen (ASE)",
+    "Atlanta (ATL)",
+    "Austin (AUS)",
+    "Bakersfield (BFL)",
+    "Baltimore (BWI)",
+    "Bishop (BIH)",
+    "Boise (BOI)",
+    "Boston (BOS)",
+    "Bozeman (BZN)",
+    "Burbank (BUR)",
+    "Carlsbad (CLD)",
+    "Chicago-O'Hare (ORD)",
+    "Cleveland (CLE)",
+    "Columbus (CMH)",
+    "Dallas/Fort Worth (DFW)",
+    "Denver (DEN)",
+    "Detroit (DTW)",
+    "Eugene (EUG)",
+    "Fort Lauderdale (FLL)",
+    "Fresno (FAT)",
+    "Hailey/Sun Valley (SUN)",
+    "Hayden (HDN)",
+    "Honolulu (HNL)",
+    "Houston (IAH)",
+    "Indianapolis (IND)",
+    "Jackson Hole (JAC)",
+    "Kahului/Maui (OGG)",
+    "Kalispell (FCA)",
+    "Kansas City (MCI)",
+    "Kona (KOA)",
+    "Las Vegas (LAS)",
+    "Lihue (LIH)",
+    "Los Angeles (LAX)",
+    "Medford (MFR)",
+    "Miami (MIA)",
+    "Minneapolis/St Paul (MSP)",
+    "Missoula (MSO)",
+    "Monterey (MRY)",
+    "Montrose (MTJ)",
+    "New Orleans (MSY)",
+    "Newark/New York (EWR)",
+    "North Bend (OTH)",
+    "Omaha (OMA)",
+    "Ontario (ONT)",
+    "Orlando (MCO)",
+    "Palm Springs (PSP)",
+    "Pasco (PSC)",
+    "Philadelphia (PHL)",
+    "Phoenix (PHX)",
+    "Pittsburgh (PIT)",
+    "Portland (PDX)",
+    "Portland (PWM)",
+    "Raleigh/Durham (RDU)",
+    "Redding (RDD)",
+    "Redmond/Bend (RDM)",
+    "Reno (RNO)",
+    "Sacramento (SMF)",
+    "St. Louis (STL)",
+    "Salt Lake City (SLC)",
+    "San Antonio (SAT)",
+    "San Diego (SAN)",
+    "San Luis Obispo (SBP)",
+    "Santa Ana/Orange County (SNA)",
+    "Santa Barbara (SBA)",
+    "Seattle (SEA)",
+    "Spokane (GEG)",
+    "Tampa (TPA)",
+    "Tucson (TUS)",
+    "Vail/Eagle (EGE)",
+    "Washington-Dulles (IAD)",
+    "Washington-National (DCA)",
+]
+
+def _pick_ua_sfo_arrival_city() -> str:
+    return random.choice(UA_SFO_US_DESTINATIONS)
+
 EXPENSE_DESCRIPTIONS = list(CONFIG['EXPENSE_CODES'].keys())
 OTHER_EXPENSE_DESCRIPTIONS = [desc for desc in EXPENSE_DESCRIPTIONS if CONFIG['EXPENSE_CODES'][desc] != "E101"]
 
@@ -1705,8 +1792,21 @@ def _ensure_mandatory_lines(
             if item_name == 'Airfare E110':
                 airline = st.session_state.get('airfare_airline', 'N/A')
                 flight_num = st.session_state.get('airfare_flight_number', 'N/A')
-                dep_city = st.session_state.get('airfare_departure_city', 'N/A')
-                arr_city = st.session_state.get('airfare_arrival_city', 'N/A')
+                # Force departure to San Francisco (SFO)
+                st.session_state["airfare_departure_city"] = SFO_DEPARTURE_CITY
+                dep_city = SFO_DEPARTURE_CITY
+
+                # Ensure a valid base arrival city from the UA-from-SFO pool
+                base_arr_city = st.session_state.get('airfare_arrival_city')
+                if base_arr_city not in UA_SFO_US_DESTINATIONS:
+                    base_arr_city = _pick_ua_sfo_arrival_city()
+                    st.session_state["airfare_arrival_city"] = base_arr_city
+
+                # If generating multiple invoices and enabled, randomize arrival city per invoice
+                if st.session_state.get("airfare_randomize_arrival_per_invoice", False) and (randomize_amounts_per_invoice or st.session_state.get("multiple_billing_periods", False)):
+                    arr_city = _pick_ua_sfo_arrival_city()
+                else:
+                    arr_city = base_arr_city
                 is_roundtrip = st.session_state.get('airfare_roundtrip', False)
                 # If generating multiple invoices, optionally randomize the amount per invoice (more realistic).
                 # Respect manual overrides: only randomize when the amount is still marked as "auto".
@@ -3203,14 +3303,14 @@ with tab_objects[2]:
         all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
 
         # Determine the items available for selection based on the environment
-        #if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
-        #    available_items = [
-        #        name for name, details in CONFIG['MANDATORY_ITEMS'].items()
-        #        if details.get('is_expense') and details.get('expense_code') == 'E110'
-        #    ]
-        #    st.info("For the 'SimpleLegal/Unity' environment, only E110 mandatory expenses are available.")
-        #else:
-        available_items = all_items
+        if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
+            available_items = [
+                name for name, details in CONFIG['MANDATORY_ITEMS'].items()
+                if details.get('is_expense') and details.get('expense_code') == 'E110'
+            ]
+            st.info("For the 'SimpleLegal/Unity' environment, only E110 mandatory expenses are available.")
+        else:
+            available_items = all_items
 
         # Determine the default selected items
         saved_selection = st.session_state.get("mandatory_items_default")
@@ -3227,10 +3327,10 @@ with tab_objects[2]:
                 default_selection = list(available_items)
         
         # Special rule for 'Unity': ensure 'Partner: Paralegal Task' is pre-selected if available.
-        #if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
-        #    pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
-        #    if pp_key and pp_key not in default_selection:
-        #        default_selection.append(pp_key)
+        if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
+            pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
+            if pp_key and pp_key not in default_selection:
+                default_selection.append(pp_key)
         
         # Render the multiselect widget
         prev_selected_items = st.session_state.get("_mandatory_items_prev", [])
@@ -3247,6 +3347,17 @@ with tab_objects[2]:
         
         # Conditional UI for Airfare Details
         if 'Airfare E110' in selected_items:
+            # Always force departure city to San Francisco (SFO)
+            st.session_state["airfare_departure_city"] = SFO_DEPARTURE_CITY
+
+            # Auto-pick a United-served nonstop US arrival city from SFO on first select / re-select
+            if ("airfare_arrival_city" not in st.session_state) or ('Airfare E110' not in prev_selected_items):
+                st.session_state["airfare_arrival_city"] = _pick_ua_sfo_arrival_city()
+
+            # If the stored value isn't in the pool (e.g., older sessions), reset it safely
+            if st.session_state.get("airfare_arrival_city") not in UA_SFO_US_DESTINATIONS:
+                st.session_state["airfare_arrival_city"] = _pick_ua_sfo_arrival_city()
+
             # Auto-generate a random airfare amount when Spend Agent is enabled and the item is selected.
             # Generated once on first select (or re-select) and persists unless manually overridden.
             if ("airfare_amount" not in st.session_state) or (
@@ -3260,13 +3371,30 @@ with tab_objects[2]:
 
             st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
             ac1, ac2 = st.columns(2)
+
             with ac1:
                 st.text_input("Airline", key="airfare_airline", value="United Airlines")
-                st.text_input("Departure City", key="airfare_departure_city", value="Newark")
+                st.text_input(
+                    "Departure City",
+                    key="airfare_departure_city",
+                    value=SFO_DEPARTURE_CITY,
+                    disabled=True
+                )
                 st.checkbox("Roundtrip", key="airfare_roundtrip", value=True)
+
             with ac2:
                 st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
-                st.text_input("Arrival City", key="airfare_arrival_city", value="Los Angeles")
+                st.selectbox(
+                    "Arrival City (United nonstop from SFO)",
+                    options=UA_SFO_US_DESTINATIONS,
+                    key="airfare_arrival_city",
+                )
+                st.checkbox(
+                    "Randomize Arrival City per invoice when generating multiple invoices",
+                    key="airfare_randomize_arrival_per_invoice",
+                    value=st.session_state.get("airfare_randomize_arrival_per_invoice", False),
+                    help="If enabled and you generate multiple invoices, a different arrival city will be chosen for each invoice's Airfare E110 line item."
+                )
                 st.number_input(
                     "Amount",
                     min_value=500.00,
@@ -3277,12 +3405,14 @@ with tab_objects[2]:
                     on_change=_mark_airfare_amount_manual,
                     help="This amount will be used for the airfare line item total."
                 )
+
             st.selectbox(
                 "Fare Class",
                 options=["First", "Business", "Premium Economy", "Economy/Coach"],
                 key="airfare_fare_class",
                 help="Select the standard airline fare class (e.g., First, Business, Coach). This will be added to the line item description."
             )
+
 
         # Conditional UI for Uber Details
         if 'Uber E110' in selected_items:
