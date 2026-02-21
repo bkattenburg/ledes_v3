@@ -843,11 +843,9 @@ CONFIG = {
         },
     }
 }
-
-
 # --- Airfare E110 helpers: United-served nonstop US destinations from SFO ---
 # Source (update as routes change): FlySFO "Where We Fly - United States"
-# We include destinations where United Airlines is listed.
+# We include destinations where United Airlines is listed as a nonstop operator from SFO.
 SFO_DEPARTURE_CITY = "San Francisco (SFO)"
 
 UA_SFO_US_DESTINATIONS = [
@@ -928,7 +926,9 @@ UA_SFO_US_DESTINATIONS = [
 ]
 
 def _pick_ua_sfo_arrival_city() -> str:
+    import random
     return random.choice(UA_SFO_US_DESTINATIONS)
+
 
 EXPENSE_DESCRIPTIONS = list(CONFIG['EXPENSE_CODES'].keys())
 OTHER_EXPENSE_DESCRIPTIONS = [desc for desc in EXPENSE_DESCRIPTIONS if CONFIG['EXPENSE_CODES'][desc] != "E101"]
@@ -1792,21 +1792,17 @@ def _ensure_mandatory_lines(
             if item_name == 'Airfare E110':
                 airline = st.session_state.get('airfare_airline', 'N/A')
                 flight_num = st.session_state.get('airfare_flight_number', 'N/A')
-                # Force departure to San Francisco (SFO)
-                st.session_state["airfare_departure_city"] = SFO_DEPARTURE_CITY
                 dep_city = SFO_DEPARTURE_CITY
 
-                # Ensure a valid base arrival city from the UA-from-SFO pool
-                base_arr_city = st.session_state.get('airfare_arrival_city')
-                if base_arr_city not in UA_SFO_US_DESTINATIONS:
-                    base_arr_city = _pick_ua_sfo_arrival_city()
-                    st.session_state["airfare_arrival_city"] = base_arr_city
-
-                # If generating multiple invoices and enabled, randomize arrival city per invoice
-                if st.session_state.get("airfare_randomize_arrival_per_invoice", False) and (randomize_amounts_per_invoice or st.session_state.get("multiple_billing_periods", False)):
+                # Base arrival city comes from the UI selection; if it's missing/invalid, choose a valid UA-from-SFO destination.
+                arr_city = st.session_state.get('airfare_arrival_city', 'N/A')
+                if arr_city not in UA_SFO_US_DESTINATIONS:
                     arr_city = _pick_ua_sfo_arrival_city()
-                else:
-                    arr_city = base_arr_city
+
+                # If multiple invoices are being generated, optionally randomize the arrival city per invoice.
+                if randomize_amounts_per_invoice and st.session_state.get('airfare_randomize_arrival_per_invoice', False):
+                    arr_city = _pick_ua_sfo_arrival_city()
+
                 is_roundtrip = st.session_state.get('airfare_roundtrip', False)
                 # If generating multiple invoices, optionally randomize the amount per invoice (more realistic).
                 # Respect manual overrides: only randomize when the amount is still marked as "auto".
@@ -2717,19 +2713,12 @@ with tab_objects[0]:
         
 
     use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
-    # Persist Data Sources settings for other tabs / generation
-    st.session_state["use_custom_tasks"] = use_custom_tasks
-
     uploaded_custom_tasks_file = None
     if use_custom_tasks:
         uploaded_custom_tasks_file = st.file_uploader("Upload Line Items File", type="csv")
 
     task_activity_desc = CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
-
-    # Track whether an external line-item details CSV is loaded
-    st.session_state["line_item_details_loaded"] = False
-    st.session_state["line_item_details_filename"] = ""
-
+    custom_tasks_data = None
     if use_custom_tasks and uploaded_custom_tasks_file:
         custom_tasks_data = _load_custom_task_activity_data(uploaded_custom_tasks_file)
         if custom_tasks_data is not None:
@@ -2737,12 +2726,6 @@ with tab_objects[0]:
             st.success(f"Loaded {li_count} custom line items.")
             if custom_tasks_data:
                 task_activity_desc = custom_tasks_data
-                st.session_state["line_item_details_loaded"] = True
-                st.session_state["line_item_details_filename"] = getattr(uploaded_custom_tasks_file, "name", "") or ""
-
-    # Persist for invoice generation
-    st.session_state["task_activity_desc"] = task_activity_desc
-
 
 # #############################################################################
 # ##### CORRECTED INVOICE DETAILS TAB #########################################
@@ -3220,14 +3203,6 @@ with tab_objects[1]:
 
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
-    # Warn if no external Line Item Details CSV is loaded
-    if not st.session_state.get("line_item_details_loaded", False):
-        st.warning(
-            "No Line Item Detail CSV has been loaded. If you continue, the invoice will be created with only the "
-            "Expense Line Items and Spend Agent Hard-Coded Fees."
-        )
-        st.caption("You will be asked to confirm this when you click Generate.")
-
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
     vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
 
@@ -3252,29 +3227,22 @@ with tab_objects[2]:
         fees = 0
         expenses = 0
     else:
-        line_item_details_loaded = bool(st.session_state.get("line_item_details_loaded", False))
-
-        if not line_item_details_loaded:
-            max_fees = 0
-            # Force fee slider to 0 whenever no external line-item details are loaded
-            st.session_state["fee_slider"] = 0
-            st.caption("Fee line items are disabled because no Line Item Details CSV is loaded.")
-        else:
-            max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
-            st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
-
+        max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
+        st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
+        
         # Initialize the fee slider's state if it doesn't exist
         if "fee_slider" not in st.session_state:
             st.session_state.fee_slider = PRESETS["Custom"]["fees"]
-
+        
         fees = st.number_input(
             "Number of Fee Line Items",
             min_value=0,
             max_value=max_fees,
             key="fee_slider",
-            disabled=(not line_item_details_loaded),
         )
-        if not line_item_details_loaded:
+        # If no external Line Item Details CSV is loaded, disable fee line item generation.
+        _has_external_line_item_details = bool(globals().get("uploaded_custom_tasks_file"))
+        if not _has_external_line_item_details:
             fees = 0
 
         st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
@@ -3336,12 +3304,10 @@ with tab_objects[2]:
         # Base list of all possible items
         all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
 
-        # Determine the items available for selection based on the environment
-        # All environments: all mandatory items available (SimpleLegal no longer limited)
+        # Determine the items available for selection (no environment restriction)
         available_items = all_items
 
-
-# Determine the default selected items
+        # Determine the default selected items
         saved_selection = st.session_state.get("mandatory_items_default")
         if saved_selection is not None:
             # Use last selection if saved, but only include items currently available
@@ -3373,17 +3339,12 @@ with tab_objects[2]:
         # Persist the user's selection so it survives reruns.
         st.session_state["mandatory_items_default"] = list(selected_items)
         st.session_state["_mandatory_items_prev"] = list(selected_items)
-        
         # Conditional UI for Airfare Details
         if 'Airfare E110' in selected_items:
-            # Always force departure city to San Francisco (SFO)
-            st.session_state["airfare_departure_city"] = SFO_DEPARTURE_CITY
-
-            # Auto-pick a United-served nonstop US arrival city from SFO on first select / re-select
+            # Initialize / reset a default arrival city when first selected (or re-selected)
             if ("airfare_arrival_city" not in st.session_state) or ('Airfare E110' not in prev_selected_items):
                 st.session_state["airfare_arrival_city"] = _pick_ua_sfo_arrival_city()
-
-            # If the stored value isn't in the pool (e.g., older sessions), reset it safely
+            # If older sessions have a value outside the allowed pool, reset safely
             if st.session_state.get("airfare_arrival_city") not in UA_SFO_US_DESTINATIONS:
                 st.session_state["airfare_arrival_city"] = _pick_ua_sfo_arrival_city()
 
@@ -3400,29 +3361,22 @@ with tab_objects[2]:
 
             st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
             ac1, ac2 = st.columns(2)
-
             with ac1:
                 st.text_input("Airline", key="airfare_airline", value="United Airlines")
-                st.text_input(
-                    "Departure City",
-                    key="airfare_departure_city",
-                    value=SFO_DEPARTURE_CITY,
-                    disabled=True
-                )
+                st.text_input("Departure City", key="airfare_departure_city_display", value=SFO_DEPARTURE_CITY, disabled=True)
                 st.checkbox("Roundtrip", key="airfare_roundtrip", value=True)
-
+                st.checkbox(
+                    "Randomize Arrival City per invoice when generating multiple invoices",
+                    key="airfare_randomize_arrival_per_invoice",
+                    value=st.session_state.get("airfare_randomize_arrival_per_invoice", False),
+                    help="If multiple invoices are generated, a different Arrival City will be chosen for each invoice's Airfare E110 line item."
+                )
             with ac2:
                 st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
                 st.selectbox(
                     "Arrival City (United nonstop from SFO)",
                     options=UA_SFO_US_DESTINATIONS,
                     key="airfare_arrival_city",
-                )
-                st.checkbox(
-                    "Randomize Arrival City per invoice when generating multiple invoices",
-                    key="airfare_randomize_arrival_per_invoice",
-                    value=st.session_state.get("airfare_randomize_arrival_per_invoice", False),
-                    help="If enabled and you generate multiple invoices, a different arrival city will be chosen for each invoice's Airfare E110 line item."
                 )
                 st.number_input(
                     "Amount",
@@ -3434,14 +3388,12 @@ with tab_objects[2]:
                     on_change=_mark_airfare_amount_manual,
                     help="This amount will be used for the airfare line item total."
                 )
-
             st.selectbox(
                 "Fare Class",
                 options=["First", "Business", "Premium Economy", "Economy/Coach"],
                 key="airfare_fare_class",
                 help="Select the standard airline fare class (e.g., First, Business, Coach). This will be added to the line item description."
             )
-
 
         # Conditional UI for Uber Details
         if 'Uber E110' in selected_items:
@@ -3592,20 +3544,6 @@ if not invoice_number_base or not matter_number_base:
     st.error("Invoice Number and Matter Number cannot be empty.")
     is_valid_input = False
 
-# Require explicit confirmation when no external Line Item Details CSV is loaded
-if not st.session_state.get("line_item_details_loaded", False):
-    st.warning(
-        "No Line Item Detail CSV has been loaded. If you continue, the invoice will be created with only the "
-        "Expense Line Items and Spend Agent Hard-Coded Fees."
-    )
-    st.checkbox(
-        "I understand — continue without external line item details",
-        key="confirm_no_line_item_details",
-        value=st.session_state.get("confirm_no_line_item_details", False),
-    )
-    if not st.session_state.get("confirm_no_line_item_details", False):
-        is_valid_input = False
-
 # --- 1998BIv2 validation ---
 if st.session_state.get("ledes_version") == "1998BIv2":
     if not st.session_state.get("tax_matter_name", "").strip():
@@ -3621,6 +3559,20 @@ if st.session_state.get("ledes_version") == "1998BIv2":
 if combine_ledes and num_invoices <= 1:
     st.error("Cannot combine LEDES file if only one invoice is being generated.")
     is_valid_input = False
+# --- External Line Item Details confirmation ---
+_has_external_line_item_details = bool(globals().get("uploaded_custom_tasks_file"))
+if not _has_external_line_item_details:
+    st.warning(
+        "No Line Item Details CSV is loaded. If you continue, the invoice will be created with only the Expense Line Items and any Spend Agent hard-coded fees you selected.",
+        icon="⚠️"
+    )
+    confirm_no_line_items = st.checkbox(
+        "I understand — continue without external line item details",
+        key="confirm_no_line_item_details"
+    )
+    if not confirm_no_line_items:
+        is_valid_input = False
+
 st.markdown("---")
 generate_button = st.button("Generate Invoice(s)", disabled=not is_valid_input)
 
@@ -3635,10 +3587,6 @@ def get_mime_type(filename):
 
 # Main App Logic
 if generate_button:
-    # If no external line item details CSV is loaded, generate ONLY expenses + Spend Agent mandatory items
-    if not st.session_state.get("line_item_details_loaded", False):
-        fees = 0
-
     if ledes_version == "XML 2.1":
         st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
         st.stop()
