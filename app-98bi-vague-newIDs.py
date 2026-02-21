@@ -2717,11 +2717,19 @@ with tab_objects[0]:
         
 
     use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
+    # Persist Data Sources settings for other tabs / generation
+    st.session_state["use_custom_tasks"] = use_custom_tasks
+
     uploaded_custom_tasks_file = None
     if use_custom_tasks:
         uploaded_custom_tasks_file = st.file_uploader("Upload Line Items File", type="csv")
 
     task_activity_desc = CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
+
+    # Track whether an external line-item details CSV is loaded
+    st.session_state["line_item_details_loaded"] = False
+    st.session_state["line_item_details_filename"] = ""
+
     if use_custom_tasks and uploaded_custom_tasks_file:
         custom_tasks_data = _load_custom_task_activity_data(uploaded_custom_tasks_file)
         if custom_tasks_data is not None:
@@ -2729,6 +2737,12 @@ with tab_objects[0]:
             st.success(f"Loaded {li_count} custom line items.")
             if custom_tasks_data:
                 task_activity_desc = custom_tasks_data
+                st.session_state["line_item_details_loaded"] = True
+                st.session_state["line_item_details_filename"] = getattr(uploaded_custom_tasks_file, "name", "") or ""
+
+    # Persist for invoice generation
+    st.session_state["task_activity_desc"] = task_activity_desc
+
 
 # #############################################################################
 # ##### CORRECTED INVOICE DETAILS TAB #########################################
@@ -3206,6 +3220,14 @@ with tab_objects[1]:
 
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
+    # Warn if no external Line Item Details CSV is loaded
+    if not st.session_state.get("line_item_details_loaded", False):
+        st.warning(
+            "No Line Item Detail CSV has been loaded. If you continue, the invoice will be created with only the "
+            "Expense Line Items and Spend Agent Hard-Coded Fees."
+        )
+        st.caption("You will be asked to confirm this when you click Generate.")
+
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
     vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
 
@@ -3230,19 +3252,31 @@ with tab_objects[2]:
         fees = 0
         expenses = 0
     else:
-        max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
-        st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
-        
+        line_item_details_loaded = bool(st.session_state.get("line_item_details_loaded", False))
+
+        if not line_item_details_loaded:
+            max_fees = 0
+            # Force fee slider to 0 whenever no external line-item details are loaded
+            st.session_state["fee_slider"] = 0
+            st.caption("Fee line items are disabled because no Line Item Details CSV is loaded.")
+        else:
+            max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
+            st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
+
         # Initialize the fee slider's state if it doesn't exist
         if "fee_slider" not in st.session_state:
             st.session_state.fee_slider = PRESETS["Custom"]["fees"]
-        
+
         fees = st.number_input(
             "Number of Fee Line Items",
             min_value=0,
             max_value=max_fees,
             key="fee_slider",
+            disabled=(not line_item_details_loaded),
         )
+        if not line_item_details_loaded:
+            fees = 0
+
         st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
         with st.expander("Adjust Expense Amounts", expanded=False):
             st.number_input(
@@ -3303,16 +3337,11 @@ with tab_objects[2]:
         all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
 
         # Determine the items available for selection based on the environment
-        if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
-            available_items = [
-                name for name, details in CONFIG['MANDATORY_ITEMS'].items()
-                if details.get('is_expense') and details.get('expense_code') == 'E110'
-            ]
-            st.info("For the 'SimpleLegal/Unity' environment, only E110 mandatory expenses are available.")
-        else:
-            available_items = all_items
+        # All environments: all mandatory items available (SimpleLegal no longer limited)
+        available_items = all_items
 
-        # Determine the default selected items
+
+# Determine the default selected items
         saved_selection = st.session_state.get("mandatory_items_default")
         if saved_selection is not None:
             # Use last selection if saved, but only include items currently available
@@ -3563,6 +3592,20 @@ if not invoice_number_base or not matter_number_base:
     st.error("Invoice Number and Matter Number cannot be empty.")
     is_valid_input = False
 
+# Require explicit confirmation when no external Line Item Details CSV is loaded
+if not st.session_state.get("line_item_details_loaded", False):
+    st.warning(
+        "No Line Item Detail CSV has been loaded. If you continue, the invoice will be created with only the "
+        "Expense Line Items and Spend Agent Hard-Coded Fees."
+    )
+    st.checkbox(
+        "I understand — continue without external line item details",
+        key="confirm_no_line_item_details",
+        value=st.session_state.get("confirm_no_line_item_details", False),
+    )
+    if not st.session_state.get("confirm_no_line_item_details", False):
+        is_valid_input = False
+
 # --- 1998BIv2 validation ---
 if st.session_state.get("ledes_version") == "1998BIv2":
     if not st.session_state.get("tax_matter_name", "").strip():
@@ -3592,6 +3635,10 @@ def get_mime_type(filename):
 
 # Main App Logic
 if generate_button:
+    # If no external line item details CSV is loaded, generate ONLY expenses + Spend Agent mandatory items
+    if not st.session_state.get("line_item_details_loaded", False):
+        fees = 0
+
     if ledes_version == "XML 2.1":
         st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
         st.stop()
