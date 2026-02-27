@@ -1783,6 +1783,30 @@ def _ensure_mandatory_lines(
     skipped_items = []
     faker_local = Faker()
 
+    def _record_partner_paralegal(row_dict: Dict, item_label: str, source: str) -> None:
+        """Store a UI-friendly summary entry for Partner → Paralegal lines."""
+        try:
+            st.session_state.setdefault("pp_partner_paralegal_summary", []).append({
+                "Invoice Number": st.session_state.get("_pp_invoice_number", ""),
+                "Billing Start": st.session_state.get("_pp_billing_start", ""),
+                "Billing End": st.session_state.get("_pp_billing_end", ""),
+                "Mandatory Item": item_label,
+                "Source": source,
+                "Line Item Date": row_dict.get("LINE_ITEM_DATE", ""),
+                "Timekeeper": row_dict.get("TIMEKEEPER_NAME", ""),
+                "Timekeeper Class": row_dict.get("TIMEKEEPER_CLASSIFICATION", ""),
+                "Task Code": row_dict.get("TASK_CODE", ""),
+                "Activity Code": row_dict.get("ACTIVITY_CODE", ""),
+                "Hours": row_dict.get("HOURS", ""),
+                "Rate": row_dict.get("RATE", ""),
+                "Line Total": row_dict.get("LINE_ITEM_TOTAL", ""),
+                "Description": row_dict.get("DESCRIPTION", ""),
+            })
+        except Exception:
+            # Never let summary capture break invoice generation
+            pass
+
+
     for item_name in selected_items:
         random_day_offset = random.randint(0, num_days - 1)
         line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
@@ -1950,6 +1974,7 @@ def _ensure_mandatory_lines(
                         processed_row = _force_timekeeper_on_row(row_template, forced_name, _get_timekeepers())
                         if processed_row:
                             rows.append(processed_row)
+                            _record_partner_paralegal(processed_row, item_name, "CSV Paralegal Pool")
                             added_any = True
                 else:
                     # Fallback: repeat the configured mandatory item fields N times.
@@ -1969,6 +1994,7 @@ def _ensure_mandatory_lines(
                         processed_row = _force_timekeeper_on_row(row_template, forced_name, _get_timekeepers())
                         if processed_row:
                             rows.append(processed_row)
+                            _record_partner_paralegal(processed_row, item_name, "Fallback Mandatory Item")
                             added_any = True
 
                 if not added_any:
@@ -3721,6 +3747,14 @@ def get_mime_type(filename):
 
 # Main App Logic
 if generate_button:
+    # Reset Partner → Paralegal summary for this run
+    st.session_state["pp_partner_paralegal_summary"] = []
+    try:
+        _pp_items_for_flag = st.session_state.get("mandatory_items_multiselect", []) or []
+        st.session_state["_pp_summary_expected"] = bool(spend_agent and any(_is_partner_paralegal_item(it) for it in _pp_items_for_flag))
+    except Exception:
+        st.session_state["_pp_summary_expected"] = False
+
     if ledes_version == "XML 2.1":
         st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
         st.stop()
@@ -3783,6 +3817,26 @@ if generate_button:
                     task_activity_desc, CONFIG['MAJOR_TASK_CODES'], max_daily_hours, num_block_billed, faker,
                     vague_line_items
                 )
+                # Invoice numbering (computed early so Spend Agent summaries can label rows)
+                # - Single invoice: use the base as-is
+                # - Multiple invoices (not Multiple Billing Periods): append -1, -2, ...
+                # - Multiple Billing Periods: keep the base for the current period (i==0),
+                #   and rewrite YYYY-MMM for prior periods while preserving the suffix
+                if multiple_periods:
+                    if i == 0:
+                        current_invoice_number = str(invoice_number_base)
+                    else:
+                        current_invoice_number = _invoice_number_for_period(invoice_number_base, current_end_date)
+                else:
+                    current_invoice_number = (f"{invoice_number_base}-{i+1}" if int(num_invoices) > 1 else str(invoice_number_base))
+                current_matter_number = matter_number_base
+
+                # Store for Partner → Paralegal summary labeling
+                st.session_state["_pp_invoice_number"] = current_invoice_number
+                st.session_state["_pp_billing_start"] = current_start_date.strftime("%Y-%m-%d")
+                st.session_state["_pp_billing_end"] = current_end_date.strftime("%Y-%m-%d")
+
+
 
                 skipped_mandatory_items = []
                 if spend_agent:
@@ -3802,19 +3856,7 @@ if generate_button:
                         f"**Mandatory Items Skipped:** The following items were not added to the invoice because their assigned timekeepers were not found in your CSV file: **{skipped_list}**"
                     )
 
-                # Invoice numbering
-                # - Single invoice: use the base as-is
-                # - Multiple invoices (not Multiple Billing Periods): append -1, -2, ...
-                # - Multiple Billing Periods: keep the base for the current period (i==0),
-                #   and rewrite YYYY-MMM for prior periods while preserving the suffix
-                if multiple_periods:
-                    if i == 0:
-                        current_invoice_number = str(invoice_number_base)
-                    else:
-                        current_invoice_number = _invoice_number_for_period(invoice_number_base, current_end_date)
-                else:
-                    current_invoice_number = (f"{invoice_number_base}-{i+1}" if int(num_invoices) > 1 else str(invoice_number_base))
-                current_matter_number = matter_number_base
+                # Invoice numbering already computed above
                 
                 is_first = (i == 0) and combine_ledes
                 if ledes_version == "1998BIv2":
@@ -3985,3 +4027,34 @@ if "generated_files" in st.session_state and st.session_state.generated_files:
             )
         col_idx += 1
 
+
+
+# --- Partner → Paralegal Summary (shown after generation, if applicable) ---
+_pp_sum = st.session_state.get("pp_partner_paralegal_summary", []) or []
+_pp_expected = bool(st.session_state.get("_pp_summary_expected", False))
+
+if _pp_sum or _pp_expected:
+    with st.expander("Partner → Paralegal Summary", expanded=bool(_pp_sum)):
+        if _pp_sum:
+            try:
+                df_pp = pd.DataFrame(_pp_sum)
+
+                # A quick counts view by invoice number
+                if "Invoice Number" in df_pp.columns:
+                    counts = df_pp.groupby(["Invoice Number"]).size().reset_index(name="Line Count")
+                    st.caption("Counts by invoice")
+                    st.dataframe(counts, use_container_width=True)
+
+                st.caption("Line item details (Partner billing Paralegal-classified work)")
+                # Sort for readability when possible
+                sort_cols = [c for c in ["Invoice Number", "Line Item Date"] if c in df_pp.columns]
+                if sort_cols:
+                    df_pp = df_pp.sort_values(sort_cols)
+                st.dataframe(df_pp, use_container_width=True)
+            except Exception:
+                st.write(_pp_sum)
+        else:
+            st.info(
+                "No Partner → Paralegal lines were generated. This can happen if the mandatory item wasn’t selected, "
+                "no Partner timekeepers were found in the TK CSV, or no Paralegal-tagged rows were found in the line item CSV."
+            )
