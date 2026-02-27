@@ -4034,7 +4034,7 @@ _pp_sum = st.session_state.get("pp_partner_paralegal_summary", []) or []
 _pp_expected = bool(st.session_state.get("_pp_summary_expected", False))
 
 if _pp_sum or _pp_expected:
-    with st.expander("Partner → Paralegal Summary", expanded=bool(_pp_sum)):
+    with st.expander("Partner → Paralegal Summary", expanded=False):
         if _pp_sum:
             try:
                 df_pp = pd.DataFrame(_pp_sum)
@@ -4050,6 +4050,9 @@ if _pp_sum or _pp_expected:
                 sort_cols = [c for c in ["Invoice Number", "Line Item Date"] if c in df_pp.columns]
                 if sort_cols:
                     df_pp = df_pp.sort_values(sort_cols)
+                # Re-number the displayed row index to be a logical 1..N list (after sorting)
+                df_pp = df_pp.reset_index(drop=True)
+                df_pp.index = range(1, len(df_pp) + 1)
                 st.dataframe(df_pp, use_container_width=True)
             except Exception:
                 st.write(_pp_sum)
@@ -4058,3 +4061,4 @@ if _pp_sum or _pp_expected:
                 "No Partner → Paralegal lines were generated. This can happen if the mandatory item wasn’t selected, "
                 "no Partner timekeepers were found in the TK CSV, or no Paralegal-tagged rows were found in the line item CSV."
             )
+
