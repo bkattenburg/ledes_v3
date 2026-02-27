@@ -1781,6 +1781,7 @@ def _ensure_mandatory_lines(
     delta = billing_end_date - billing_start_date
     num_days = max(1, delta.days + 1)
     skipped_items = []
+    faker_local = Faker()
 
     for item_name in selected_items:
         random_day_offset = random.randint(0, num_days - 1)
@@ -1858,13 +1859,123 @@ def _ensure_mandatory_lines(
         else: # Fee items
             # Choose the timekeeper name to force
             forced_name = item['tk_name']  # default from CONFIG
-            
-            # If Unity + Partner: Paralegal Tasks, prefer a Partner from tk_csv
-            if _is_partner_paralegal_item(item_name) and _canonical_env(st.session_state.get("selected_env", "")) == ENV_SIMPLELEGAL_UNITY:
-                tk_match = _find_timekeeper_by_classification(_get_timekeepers(), "Partner")
-                if tk_match:
-                    forced_name = tk_match.get("TIMEKEEPER_NAME", forced_name)
-            
+
+            # --- Partner → Paralegal: add multiple Partner-billed lines using Paralegal-tagged source rows ---
+            if _is_partner_paralegal_item(item_name):
+                # Prefer a Partner from the uploaded TK CSV (if any). This is what triggers the guideline test.
+                partners = [
+                    tk for tk in (_get_timekeepers() or [])
+                    if "partner" in str(tk.get("TIMEKEEPER_CLASSIFICATION", "")).lower()
+                ]
+                if partners:
+                    forced_name = random.choice(partners).get("TIMEKEEPER_NAME", forced_name)
+                else:
+                    tk_match = _find_timekeeper_by_classification(_get_timekeepers(), "Partner")
+                    if tk_match:
+                        forced_name = tk_match.get("TIMEKEEPER_NAME", forced_name)
+
+                # Determine how many Partner → Paralegal lines to add for THIS invoice.
+                n_lines = int(st.session_state.get("_pp_lines_this_invoice", 0) or 0)
+                if n_lines <= 0:
+                    base_n = int(st.session_state.get("pp_lines_per_invoice", 1) or 1)
+                    base_n = max(1, base_n)
+                    if st.session_state.get("pp_randomize_count_per_invoice", False):
+                        n_lines = random.randint(1, base_n)
+                    else:
+                        n_lines = base_n
+
+                # Pull Paralegal-tagged tasks/descriptions from the uploaded line-item CSV (if available).
+                df_src = None
+                try:
+                    df_src = st.session_state.get("custom_fee_df_full") or st.session_state.get("custom_fee_df")
+                except Exception:
+                    df_src = None
+
+                def _col(df, names):
+                    for n in names:
+                        if n in df.columns:
+                            return n
+                    return None
+
+                pool_df = None
+                if df_src is not None:
+                    tkc = _col(df_src, ["TK_CLASSIFICATION", "TIMEKEEPER_CLASSIFICATION", "Timekeeper Classification", "TIMEKEEPER CLASSIFICATION"])
+                    task_c = _col(df_src, ["TASK_CODE", "TASK", "Task Code", "task_code"])
+                    act_c = _col(df_src, ["ACTIVITY_CODE", "ACTIVITY", "Activity Code", "activity_code"])
+                    desc_c = _col(df_src, ["DESCRIPTION", "DESC", "Description", "description"])
+                    if tkc and task_c and act_c and desc_c:
+                        tmp = df_src.copy()
+                        tmp["_tkc_norm"] = tmp[tkc].astype(str).str.strip().str.lower()
+                        tmp = tmp[tmp["_tkc_norm"] == "paralegal"]
+
+                        # Optional: filter out vague and block-billed rows when those columns exist.
+                        if "VAGUE" in tmp.columns:
+                            tmp = tmp[tmp["VAGUE"].astype(str).str.strip().str.upper() != "Y"]
+                        bbcol = _col(tmp, ["Blockbilling", "BLOCKBILLING", "Blockbilled", "BlockBilled"])
+                        if bbcol:
+                            tmp = tmp[tmp[bbcol].astype(str).str.strip().str.upper() != "Y"]
+
+                        if not tmp.empty:
+                            pool_df = tmp
+
+                added_any = False
+
+                if pool_df is not None:
+                    picks = pool_df.sample(
+                        n=n_lines,
+                        replace=(len(pool_df) < n_lines),
+                        random_state=None
+                    )
+                    # Re-resolve columns on the sampled frame (defensive)
+                    task_c = _col(picks, ["TASK_CODE", "TASK", "Task Code", "task_code"])
+                    act_c = _col(picks, ["ACTIVITY_CODE", "ACTIVITY", "Activity Code", "activity_code"])
+                    desc_c = _col(picks, ["DESCRIPTION", "DESC", "Description", "description"])
+
+                    for _, r in picks.iterrows():
+                        random_day_offset = random.randint(0, num_days - 1)
+                        line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
+
+                        desc_raw = str(r.get(desc_c, "")).strip()
+                        row_template = {
+                            "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                            "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": forced_name,
+                            "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "",
+                            "TASK_CODE": str(r.get(task_c, "")).strip(),
+                            "ACTIVITY_CODE": str(r.get(act_c, "")).strip(),
+                            "EXPENSE_CODE": "",
+                            "DESCRIPTION": _process_description(desc_raw, faker_local),
+                            "HOURS": round(random.uniform(0.5, 3.0), 1), "RATE": 0.0
+                        }
+
+                        processed_row = _force_timekeeper_on_row(row_template, forced_name, _get_timekeepers())
+                        if processed_row:
+                            rows.append(processed_row)
+                            added_any = True
+                else:
+                    # Fallback: repeat the configured mandatory item fields N times.
+                    for _ in range(n_lines):
+                        random_day_offset = random.randint(0, num_days - 1)
+                        line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
+
+                        row_template = {
+                            "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
+                            "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": forced_name,
+                            "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": item['task'],
+                            "ACTIVITY_CODE": item['activity'], "EXPENSE_CODE": "",
+                            "DESCRIPTION": _process_description(item.get('desc', ''), faker_local),
+                            "HOURS": round(random.uniform(0.5, 3.0), 1), "RATE": 0.0
+                        }
+
+                        processed_row = _force_timekeeper_on_row(row_template, forced_name, _get_timekeepers())
+                        if processed_row:
+                            rows.append(processed_row)
+                            added_any = True
+
+                if not added_any:
+                    skipped_items.append(item_name)
+                continue
+
+            # --- Default behavior for other mandatory fee items ---
             row_template = {
                 "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
                 "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": forced_name,
@@ -1872,15 +1983,16 @@ def _ensure_mandatory_lines(
                 "ACTIVITY_CODE": item['activity'], "EXPENSE_CODE": "", "DESCRIPTION": item['desc'],
                 "HOURS": round(random.uniform(0.5, 8.0), 1), "RATE": 0.0
             }
-            
+
             processed_row = _force_timekeeper_on_row(row_template, forced_name, _get_timekeepers())
-  
+
             # Only add the row if the timekeeper was found
             if processed_row:
                 rows.append(processed_row)
             else:
                 skipped_items.append(item_name) # Otherwise, log it as skipped
-            
+
+
     return rows, skipped_items
 
 def _validate_image_bytes(image_bytes: bytes) -> bool:
@@ -3339,6 +3451,28 @@ with tab_objects[2]:
         # Persist the user's selection so it survives reruns.
         st.session_state["mandatory_items_default"] = list(selected_items)
         st.session_state["_mandatory_items_prev"] = list(selected_items)
+        
+        # Partner → Paralegal count controls (adds multiple Partner-billed lines using Paralegal-tagged source rows)
+        pp_selected_key = next((k for k in selected_items if _is_partner_paralegal_item(k)), None)
+        if pp_selected_key:
+            st.session_state.setdefault("pp_lines_per_invoice", 3)
+            st.session_state.setdefault("pp_randomize_count_per_invoice", False)
+
+            st.number_input(
+                "Partner → Paralegal lines per invoice",
+                min_value=1,
+                max_value=10,
+                value=int(st.session_state.get("pp_lines_per_invoice", 3)),
+                key="pp_lines_per_invoice",
+                help="Number of fee lines to add per invoice where a Partner bills work tagged as Paralegal in the line-item CSV.",
+            )
+            st.checkbox(
+                "Randomize Partner → Paralegal count per invoice (1..N)",
+                value=bool(st.session_state.get("pp_randomize_count_per_invoice", False)),
+                key="pp_randomize_count_per_invoice",
+                help="When generating multiple invoices, vary how many Partner → Paralegal lines are added to each invoice.",
+            )
+
         # Conditional UI for Airfare Details
         if 'Airfare E110' in selected_items:
             # Initialize / reset a default arrival city when first selected (or re-selected)
@@ -3617,9 +3751,29 @@ if generate_button:
                 
                 current_invoice_desc = descriptions[i] if multiple_periods and i < len(descriptions) else descriptions[0]
                 
-                num_mandatory_fees = sum(1 for item in selected_items if not CONFIG['MANDATORY_ITEMS'][item]['is_expense'])
-                num_mandatory_expenses = len(selected_items) - num_mandatory_fees
-                
+                # Adjust mandatory fee/expense counts so total line counts match user inputs.
+                pp_selected = any(_is_partner_paralegal_item(it) for it in selected_items)
+                pp_lines = 0
+                if pp_selected:
+                    base_n = int(st.session_state.get("pp_lines_per_invoice", 1) or 1)
+                    base_n = max(1, base_n)
+                    # If generating multiple invoices and the user enabled randomization, choose a per-invoice count.
+                    if (int(num_invoices) > 1) and st.session_state.get("pp_randomize_count_per_invoice", False):
+                        pp_lines = random.randint(1, base_n)
+                    else:
+                        pp_lines = base_n
+                st.session_state["_pp_lines_this_invoice"] = int(pp_lines)
+
+                num_mandatory_fees = (
+                    sum(
+                        1
+                        for item in selected_items
+                        if (not CONFIG['MANDATORY_ITEMS'][item]['is_expense']) and (not _is_partner_paralegal_item(item))
+                    )
+                    + (pp_lines if pp_selected else 0)
+                )
+                num_mandatory_expenses = sum(1 for item in selected_items if CONFIG['MANDATORY_ITEMS'][item]['is_expense'])
+
                 fees_to_generate = max(0, fees - num_mandatory_fees)
                 expenses_to_generate = max(0, expenses - num_mandatory_expenses)
 
