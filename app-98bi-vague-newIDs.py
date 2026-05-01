@@ -2668,6 +2668,10 @@ with st.sidebar.expander("Line Items"):
     onit_trade_tasks_data = read_file_for_download("assets/custom_trade_tasks.csv")
     if onit_trade_tasks_data:
         st.download_button("Trademark Line Items File", onit_trade_tasks_data, "custom_trademark_tasks.csv", "text/csv")
+
+    onit_capmkt_tasks_data = read_file_for_download("assets/custom_capital_markets.csv")
+    if onit_capmkt_tasks_data:
+        st.download_button("Capital Market Line Items File", onit_capmkt_tasks_data, "custom_capital_market_tasks.csv", "text/csv")
     
     # Line Items Template
     sample_custom_df = pd.DataFrame({
