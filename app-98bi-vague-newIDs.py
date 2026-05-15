@@ -1749,6 +1749,29 @@ def _append_mismatch_line_items(
         }
         rows.append(row)
 
+        # Capture troubleshooting details so the generated invoice can be reconciled
+        # against invoice-review findings without opening the LEDES/PDF output.
+        try:
+            st.session_state.setdefault("mismatch_line_items_summary", []).append({
+                "Invoice Number": st.session_state.get("_mismatch_invoice_number", st.session_state.get("_pp_invoice_number", "")),
+                "Billing Start": st.session_state.get("_mismatch_billing_start", st.session_state.get("_pp_billing_start", "")),
+                "Billing End": st.session_state.get("_mismatch_billing_end", st.session_state.get("_pp_billing_end", "")),
+                "Source": "Custom Line Item Details CSV",
+                "MISMATCH": "Y",
+                "Line Item Date": row.get("LINE_ITEM_DATE", ""),
+                "Timekeeper": row.get("TIMEKEEPER_NAME", ""),
+                "Timekeeper Class": row.get("TIMEKEEPER_CLASSIFICATION", ""),
+                "Task Code": row.get("TASK_CODE", ""),
+                "Activity Code": row.get("ACTIVITY_CODE", ""),
+                "Hours": row.get("HOURS", ""),
+                "Rate": row.get("RATE", ""),
+                "Line Total": row.get("LINE_ITEM_TOTAL", ""),
+                "Description": row.get("DESCRIPTION", ""),
+            })
+        except Exception:
+            # Summary capture should never block invoice generation.
+            pass
+
     return rows, messages
 
 def _generate_invoice_data(
@@ -3921,13 +3944,18 @@ def get_mime_type(filename):
 
 # Main App Logic
 if generate_button:
-    # Reset Partner → Paralegal summary for this run
+    # Reset troubleshooting summaries for this run
     st.session_state["pp_partner_paralegal_summary"] = []
+    st.session_state["mismatch_line_items_summary"] = []
     try:
         _pp_items_for_flag = st.session_state.get("mandatory_items_multiselect", []) or []
         st.session_state["_pp_summary_expected"] = bool(spend_agent and any(_is_partner_paralegal_item(it) for it in _pp_items_for_flag))
     except Exception:
         st.session_state["_pp_summary_expected"] = False
+    try:
+        st.session_state["_mismatch_summary_expected"] = bool(spend_agent and st.session_state.get("mismatch_line_items", False))
+    except Exception:
+        st.session_state["_mismatch_summary_expected"] = False
 
     if ledes_version == "XML 2.1":
         st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
@@ -4010,10 +4038,13 @@ if generate_button:
                     current_invoice_number = (f"{invoice_number_base}-{i+1}" if int(num_invoices) > 1 else str(invoice_number_base))
                 current_matter_number = matter_number_base
 
-                # Store for Partner → Paralegal summary labeling
+                # Store for troubleshooting summary labeling
                 st.session_state["_pp_invoice_number"] = current_invoice_number
                 st.session_state["_pp_billing_start"] = current_start_date.strftime("%Y-%m-%d")
                 st.session_state["_pp_billing_end"] = current_end_date.strftime("%Y-%m-%d")
+                st.session_state["_mismatch_invoice_number"] = current_invoice_number
+                st.session_state["_mismatch_billing_start"] = current_start_date.strftime("%Y-%m-%d")
+                st.session_state["_mismatch_billing_end"] = current_end_date.strftime("%Y-%m-%d")
 
                 mismatch_warnings = []
                 if spend_agent and st.session_state.get("mismatch_line_items", False):
@@ -4248,5 +4279,38 @@ if _pp_sum or _pp_expected:
             st.info(
                 "No Partner → Paralegal lines were generated. This can happen if the mandatory item wasn’t selected, "
                 "no Partner timekeepers were found in the TK CSV, or no Paralegal-tagged rows were found in the line item CSV."
+            )
+
+
+# --- Mismatch Line Items Summary (shown after generation, if applicable) ---
+_mismatch_sum = st.session_state.get("mismatch_line_items_summary", []) or []
+_mismatch_expected = bool(st.session_state.get("_mismatch_summary_expected", False))
+
+if _mismatch_sum or _mismatch_expected:
+    with st.expander("Mismatch Line Items Summary", expanded=False):
+        if _mismatch_sum:
+            try:
+                df_mismatch = pd.DataFrame(_mismatch_sum)
+
+                # A quick counts view by invoice number for invoice-review troubleshooting.
+                if "Invoice Number" in df_mismatch.columns:
+                    counts = df_mismatch.groupby(["Invoice Number"]).size().reset_index(name="Line Count")
+                    st.caption("Counts by invoice")
+                    st.dataframe(counts, use_container_width=True)
+
+                st.caption("Line item details (MISMATCH = Y rows added by Spend Agent)")
+                sort_cols = [c for c in ["Invoice Number", "Line Item Date"] if c in df_mismatch.columns]
+                if sort_cols:
+                    df_mismatch = df_mismatch.sort_values(sort_cols)
+                df_mismatch = df_mismatch.reset_index(drop=True)
+                df_mismatch.index = range(1, len(df_mismatch) + 1)
+                st.dataframe(df_mismatch, use_container_width=True)
+            except Exception:
+                st.write(_mismatch_sum)
+        else:
+            st.info(
+                "No Mismatch line items were generated. This can happen if Spend Agent > Mismatch was selected "
+                "but no Custom Line Item Details CSV was loaded, the CSV did not include a MISMATCH column, "
+                "no rows had MISMATCH = Y, or no timekeeper data was available."
             )
 
