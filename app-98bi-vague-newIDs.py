@@ -4001,7 +4001,7 @@ if generate_button:
                 st.session_state["_pp_lines_this_invoice"] = int(pp_lines)
 
                 mismatch_selected = bool(spend_agent and st.session_state.get("mismatch_line_items", False))
-                mismatch_lines_to_add = random.randint(10, 50) if (mismatch_selected and _has_mismatch_pool_rows()) else 0
+                mismatch_lines_to_add = random.randint(10, 55) if (mismatch_selected and _has_mismatch_pool_rows()) else 0
                 st.session_state["_mismatch_lines_this_invoice"] = int(mismatch_lines_to_add)
 
                 num_mandatory_fees = (
