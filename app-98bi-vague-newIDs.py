@@ -1606,6 +1606,151 @@ def _append_two_attendee_meeting_rows(rows, timekeeper_data, billing_start_date,
     rows.extend([rp, ra])
     return rows
 
+
+
+def _get_custom_fee_source_df():
+    """Return the uploaded custom line-item DataFrame, if available."""
+    try:
+        df = st.session_state.get("custom_fee_df_full", None)
+        if df is None:
+            df = st.session_state.get("custom_fee_df", None)
+        return df
+    except Exception:
+        return None
+
+
+def _find_first_column(df, candidate_names):
+    """Find the first matching column name from a list of allowed aliases."""
+    if df is None:
+        return None
+    cols_by_upper = {str(c).strip().upper(): c for c in getattr(df, "columns", [])}
+    for name in candidate_names:
+        key = str(name).strip().upper()
+        if key in cols_by_upper:
+            return cols_by_upper[key]
+    return None
+
+
+def _yes_mask(series):
+    """Normalize Y/N style columns and return True where the value is Y."""
+    return series.astype(str).str.strip().str.upper().eq("Y")
+
+
+def _exclude_mismatch_rows(df):
+    """Keep MISMATCH=Y rows out of normal/vague/block-billing generation.
+
+    Those rows are intentionally injected only when the Spend Agent > Mismatch
+    checkbox is selected.
+    """
+    if df is None or getattr(df, "empty", True):
+        return df
+    mismatch_col = _find_first_column(df, ["MISMATCH", "Mismatch", "mismatch"])
+    if not mismatch_col:
+        return df
+    return df[~_yes_mask(df[mismatch_col])]
+
+
+def _get_mismatch_pool_df():
+    """Return custom line-item rows where MISMATCH=Y, plus a user-facing warning if unavailable."""
+    df_src = _get_custom_fee_source_df()
+    if df_src is None or getattr(df_src, "empty", True):
+        return None, "No Custom Line Item Details CSV is loaded, so Mismatch line items could not be added."
+
+    mismatch_col = _find_first_column(df_src, ["MISMATCH", "Mismatch", "mismatch"])
+    if not mismatch_col:
+        return None, "The Custom Line Item Details CSV does not contain a MISMATCH column, so Mismatch line items could not be added."
+
+    required = {
+        "TASK_CODE": _find_first_column(df_src, ["TASK_CODE", "TASK", "Task Code", "task_code"]),
+        "ACTIVITY_CODE": _find_first_column(df_src, ["ACTIVITY_CODE", "ACTIVITY", "Activity Code", "activity_code"]),
+        "DESCRIPTION": _find_first_column(df_src, ["DESCRIPTION", "DESC", "Description", "description"]),
+    }
+    missing = [label for label, col in required.items() if not col]
+    if missing:
+        return None, f"The Custom Line Item Details CSV is missing required column(s) for Mismatch line items: {', '.join(missing)}."
+
+    pool_df = df_src[_yes_mask(df_src[mismatch_col])].copy()
+    if pool_df.empty:
+        return None, "No rows with MISMATCH = Y were found in the Custom Line Item Details CSV."
+    return pool_df, ""
+
+
+def _has_mismatch_pool_rows() -> bool:
+    pool_df, _ = _get_mismatch_pool_df()
+    return pool_df is not None and not pool_df.empty
+
+
+def _append_mismatch_line_items(
+    rows: List[Dict],
+    timekeeper_data: List[Dict],
+    invoice_desc: str,
+    client_id: str,
+    law_firm_id: str,
+    billing_start_date: datetime.date,
+    billing_end_date: datetime.date,
+    faker_instance: Faker,
+    mismatch_count: Optional[int] = None,
+) -> Tuple[List[Dict], List[str]]:
+    """Append 3-10 Spend Agent mismatch fee lines from custom rows where MISMATCH=Y."""
+    messages: List[str] = []
+    pool_df, warning = _get_mismatch_pool_df()
+    if warning:
+        return rows, [warning]
+    if pool_df is None or pool_df.empty:
+        return rows, ["No Mismatch line-item source rows were available."]
+    if not timekeeper_data:
+        return rows, ["No timekeeper data is loaded, so Mismatch fee line items could not be added."]
+
+    try:
+        n_lines = int(mismatch_count) if mismatch_count is not None else random.randint(3, 10)
+    except Exception:
+        n_lines = random.randint(3, 10)
+    n_lines = max(3, min(10, n_lines))
+
+    if len(pool_df) < n_lines:
+        messages.append(
+            f"Requested {n_lines} Mismatch line items but only {len(pool_df)} MISMATCH = Y source row(s) were available; sampling with replacement."
+        )
+
+    picks = pool_df.sample(n=n_lines, replace=(len(pool_df) < n_lines), random_state=None)
+    task_col = _find_first_column(picks, ["TASK_CODE", "TASK", "Task Code", "task_code"])
+    act_col = _find_first_column(picks, ["ACTIVITY_CODE", "ACTIVITY", "Activity Code", "activity_code"])
+    desc_col = _find_first_column(picks, ["DESCRIPTION", "DESC", "Description", "description"])
+    tk_class_col = _find_first_column(picks, ["TK_CLASSIFICATION", "TIMEKEEPER_CLASSIFICATION", "Timekeeper Classification", "TIMEKEEPER CLASSIFICATION"])
+
+    delta_days = max(0, (billing_end_date - billing_start_date).days)
+
+    for _, r in picks.iterrows():
+        line_item_date = billing_start_date + datetime.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
+        target_class = str(r.get(tk_class_col, "")).strip() if tk_class_col else ""
+        tk = _pick_timekeeper_by_class(timekeeper_data, target_class) if target_class else random.choice(timekeeper_data)
+        if not tk:
+            continue
+
+        hours = round(random.uniform(0.5, 3.5), 1)
+        rate = float(tk.get("RATE", 0.0) or 0.0)
+        desc_raw = str(r.get(desc_col, "")).strip()
+        row = {
+            "INVOICE_DESCRIPTION": invoice_desc,
+            "CLIENT_ID": client_id,
+            "LAW_FIRM_ID": law_firm_id,
+            "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"),
+            "TIMEKEEPER_NAME": tk.get("TIMEKEEPER_NAME", ""),
+            "TIMEKEEPER_CLASSIFICATION": tk.get("TIMEKEEPER_CLASSIFICATION", ""),
+            "TIMEKEEPER_ID": tk.get("TIMEKEEPER_ID", ""),
+            "TASK_CODE": str(r.get(task_col, "")).strip(),
+            "ACTIVITY_CODE": str(r.get(act_col, "")).strip(),
+            "EXPENSE_CODE": "",
+            "DESCRIPTION": _process_description(desc_raw, faker_instance),
+            "HOURS": float(hours),
+            "RATE": rate,
+            "LINE_ITEM_TOTAL": round(float(hours) * rate, 2),
+            "_spend_agent_mismatch": True,
+        }
+        rows.append(row)
+
+    return rows, messages
+
 def _generate_invoice_data(
     fee_count: int,
     expense_count: int,
@@ -1633,7 +1778,7 @@ def _generate_invoice_data(
 
     # Get uploaded source
     try:
-        df_src = st.session_state.get("custom_fee_df_full") or st.session_state.get("custom_fee_df")
+        df_src = _get_custom_fee_source_df()
     except Exception:
         df_src = None
 
@@ -1648,6 +1793,11 @@ def _generate_invoice_data(
         else:
             # If no VAGUE column, all items are non-vague
             df_non_vague_pool = df_src
+
+        # MISMATCH=Y rows are reserved for Spend Agent > Mismatch and should not
+        # appear in ordinary generated fee, vague, or block-billed pools.
+        df_non_vague_pool = _exclude_mismatch_rows(df_non_vague_pool)
+        df_vague_pool = _exclude_mismatch_rows(df_vague_pool)
 
 
     # Helper to build a fee row
@@ -1911,7 +2061,7 @@ def _ensure_mandatory_lines(
                 # Pull Paralegal-tagged tasks/descriptions from the uploaded line-item CSV (if available).
                 df_src = None
                 try:
-                    df_src = st.session_state.get("custom_fee_df_full") or st.session_state.get("custom_fee_df")
+                    df_src = _get_custom_fee_source_df()
                 except Exception:
                     df_src = None
 
@@ -2675,15 +2825,17 @@ with st.sidebar.expander("Line Items"):
     
     # Line Items Template
     sample_custom_df = pd.DataFrame({
-        "TASK_CODE": ["L100", "L110"],
-        "ACTIVITY_CODE": ["A101", "A101"],
+        "TASK_CODE": ["L100", "L110", "L120"],
+        "ACTIVITY_CODE": ["A101", "A101", "A102"],
         "DESCRIPTION": [
             "Legal Research: Analyze legal precedents",
-            "Legal Research: Review statutes and regulations"
+            "Legal Research: Review statutes and regulations",
+            "Prepare deposition chronology from client records"
         ],
-        "TK_CLASSIFICATION": ["Associate", "Partner"],
-        "BLOCKBILLING": ["N", "Y"],
-        "VAGUE": ["N", "Y"]
+        "TK_CLASSIFICATION": ["Associate", "Partner", "Associate"],
+        "BLOCKBILLING": ["N", "Y", "N"],
+        "VAGUE": ["N", "Y", "N"],
+        "MISMATCH": ["N", "N", "Y"]
     })
     csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
     st.download_button(
@@ -2771,6 +2923,7 @@ with st.sidebar.expander("How do I format the custom line items CSV?"):
     - `TK_CLASSIFICATION`
     - `BLOCKBILLING` ('Y' or 'N')
     - `VAGUE` ('Y' or 'N')
+    - `MISMATCH` ('Y' or 'N') — used by Spend Agent > Mismatch
 
     **Note:** Use `{NAME_PLACEHOLDER}` in a description to auto-insert a random name.
     """)
@@ -3448,6 +3601,13 @@ with tab_objects[2]:
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
     
     if spend_agent:
+        mismatch_line_items = st.checkbox(
+            "Mismatch",
+            value=False,
+            key="mismatch_line_items",
+            help="Select this when Line Item Description and UTBMS Task Code mismatch is needed."
+        )
+
         st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
         
         # ---- CORRECTED AND CONSOLIDATED MANDATORY ITEMS LOGIC ----
@@ -3595,6 +3755,7 @@ with tab_objects[2]:
 
     else:
         selected_items = []
+        mismatch_line_items = False
 
 
 output_tab_index = tabs.index("Output")
@@ -3811,6 +3972,10 @@ if generate_button:
                         pp_lines = base_n
                 st.session_state["_pp_lines_this_invoice"] = int(pp_lines)
 
+                mismatch_selected = bool(spend_agent and st.session_state.get("mismatch_line_items", False))
+                mismatch_lines_to_add = random.randint(3, 10) if (mismatch_selected and _has_mismatch_pool_rows()) else 0
+                st.session_state["_mismatch_lines_this_invoice"] = int(mismatch_lines_to_add)
+
                 num_mandatory_fees = (
                     sum(
                         1
@@ -3818,6 +3983,7 @@ if generate_button:
                         if (not CONFIG['MANDATORY_ITEMS'][item]['is_expense']) and (not _is_partner_paralegal_item(item))
                     )
                     + (pp_lines if pp_selected else 0)
+                    + mismatch_lines_to_add
                 )
                 num_mandatory_expenses = sum(1 for item in selected_items if CONFIG['MANDATORY_ITEMS'][item]['is_expense'])
 
@@ -3849,7 +4015,13 @@ if generate_button:
                 st.session_state["_pp_billing_start"] = current_start_date.strftime("%Y-%m-%d")
                 st.session_state["_pp_billing_end"] = current_end_date.strftime("%Y-%m-%d")
 
-
+                mismatch_warnings = []
+                if spend_agent and st.session_state.get("mismatch_line_items", False):
+                    rows, mismatch_warnings = _append_mismatch_line_items(
+                        rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id,
+                        current_start_date, current_end_date, faker,
+                        mismatch_count=st.session_state.get("_mismatch_lines_this_invoice") or None,
+                    )
 
                 skipped_mandatory_items = []
                 if spend_agent:
@@ -3868,6 +4040,9 @@ if generate_button:
                     st.warning(
                         f"**Mandatory Items Skipped:** The following items were not added to the invoice because their assigned timekeepers were not found in your CSV file: **{skipped_list}**"
                     )
+
+                if mismatch_warnings:
+                    st.warning("**Mismatch Line Items:** " + " ".join(str(msg) for msg in mismatch_warnings if msg))
 
                 # Invoice numbering already computed above
                 
