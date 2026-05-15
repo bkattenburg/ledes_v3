@@ -1702,10 +1702,10 @@ def _append_mismatch_line_items(
         return rows, ["No timekeeper data is loaded, so Mismatch fee line items could not be added."]
 
     try:
-        n_lines = int(mismatch_count) if mismatch_count is not None else random.randint(3, 10)
+        n_lines = int(mismatch_count) if mismatch_count is not None else random.randint(10, 55)
     except Exception:
-        n_lines = random.randint(3, 10)
-    n_lines = max(3, min(10, n_lines))
+        n_lines = random.randint(10, 10)
+    n_lines = max(10, min(55, n_lines))
 
     if len(pool_df) < n_lines:
         messages.append(
