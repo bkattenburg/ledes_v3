@@ -3621,6 +3621,20 @@ with tab_objects[2]:
             max_value=500,
             key="expense_slider",
         )
+
+        # Warn when Custom is selected but the user leaves both line item counts
+        # at the Custom preset defaults. Spend Agent items may still add lines,
+        # but no standard fee or expense line items will be generated from these settings.
+        if (
+            st.session_state.get("invoice_preset") == "Custom"
+            and int(st.session_state.get("fee_slider", 0) or 0) == 0
+            and int(st.session_state.get("expense_slider", 0) or 0) == 0
+        ):
+            st.warning(
+                "Invoice Size Preset is set to Custom, but Fee Line Items and Expense Line Items are both still 0. "
+                "Update at least one of these values if you want standard fee or expense lines generated.",
+                icon="⚠️",
+            )
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
     
     if spend_agent:
