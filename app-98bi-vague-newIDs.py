@@ -2993,7 +2993,7 @@ if (_prev_profile_for_ledes != _current_profile_for_ledes) or (_prev_env_for_led
     st.session_state["_prev_env_for_ledes"] = _current_env_for_ledes
 
 # Dynamic Tabs
-tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
+tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Files & Receipts"]
 # Insert Tax Fields tab before Output when LEDES 1998BIv2 is selected
 if st.session_state.get("ledes_version") in ("1998BI", "1998BIv2"):
     tabs = tabs[:-1] + ["Tax Fields"] + tabs[-1:]
