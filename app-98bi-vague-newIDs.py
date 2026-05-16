@@ -2769,7 +2769,7 @@ def update_send_email():
     st.session_state.send_email = st.session_state.send_email_checkbox_output
     logging.debug(f"Updated st.session_state.send_email to {st.session_state.send_email}")
 
-st.markdown("<h3 style='color: #1E1E1E;'>Output & Delivery Options</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='color: #1E1E1E;'>Delivery Options</h3>", unsafe_allow_html=True)
 st.checkbox(
     "Send Invoices via Email",
     value=st.session_state.send_email,
