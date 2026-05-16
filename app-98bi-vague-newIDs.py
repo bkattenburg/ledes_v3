@@ -3597,7 +3597,7 @@ with tab_objects[2]:
         
         # Initialize the fee slider's state if it doesn't exist
         if "fee_slider" not in st.session_state:
-            st.session_state.fee_slider = PRESETS["Medium"]["fees"]
+            st.session_state.fee_slider = PRESETS["Custom"]["fees"]
         
         fees = st.number_input(
             "Number of Fee Line Items",
