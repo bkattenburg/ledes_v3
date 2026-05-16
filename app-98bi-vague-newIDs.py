@@ -3545,6 +3545,30 @@ with tab_objects[1]:
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
+
+    # Block-billed controls live with the rest of Fees & Expenses so invoice-content
+    # test settings stay together in the UI.
+    st.session_state.setdefault("include_block_billed", True)
+    st.session_state.setdefault("num_block_billed", 2)
+    include_block_billed = st.checkbox(
+        "Include Block Billed Line Items",
+        key="include_block_billed",
+        help="Include block-billed fee line items from rows marked BLOCKBILLING = Y in the custom line-item CSV.",
+    )
+    num_block_billed = 0
+    if include_block_billed:
+        num_block_billed = st.number_input(
+            "Number of Block Billed Items:",
+            min_value=1,
+            max_value=10,
+            step=1,
+            key="num_block_billed",
+            help="The number of block-billed items to include from the custom line-item CSV.",
+        )
+
+    # Initialize/Reset global block-billing budget whenever the UI value is set.
+    st.session_state["__bb_remaining"] = int(num_block_billed)
+
     vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
 
     multiple_attendees_meeting = st.checkbox(
@@ -3867,14 +3891,6 @@ with tab_objects[output_tab_index]:
             if _k in st.session_state:
                 st.session_state["num_billing_periods"] = st.session_state[_k]
                 break
-
-    include_block_billed = st.checkbox("Include Block Billed Line Items", value=True)
-    num_block_billed = 0
-    if include_block_billed:
-        num_block_billed = st.number_input("Number of Block Billed Items:", min_value=1, max_value=10, value=2, step=1, help="The number of block billed items to create by consolidating multiple tasks from the same timekeeper on the same day.")
-
-    # Initialize/Reset global block-billing budget whenever the UI value is set
-    st.session_state["__bb_remaining"] = int(num_block_billed)
 
     include_pdf = st.checkbox("Include PDF Invoice", value=False)
     
