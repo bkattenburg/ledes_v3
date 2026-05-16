@@ -189,6 +189,20 @@ def _safe_checkbox(label, **kwargs):
 st.checkbox = _safe_checkbox
 # -----------------------------------------------------------------------------
 
+# --- Red warning message styling ---------------------------------------------
+# Streamlit's native st.warning() renders as a yellow alert. This app treats
+# warnings as invoice-generation guardrails, so render warning calls with the
+# red alert treatment while preserving existing st.warning(...) call sites.
+if not hasattr(st, "_orig_warning"):
+    st._orig_warning = st.warning
+
+def _red_warning(body, *args, **kwargs):
+    icon = kwargs.pop("icon", "⚠️")
+    return st.error(body, *args, icon=icon, **kwargs)
+
+st.warning = _red_warning
+# -----------------------------------------------------------------------------
+
 
 # Central boolean for sending email
 st.session_state.setdefault("send_email", False)
