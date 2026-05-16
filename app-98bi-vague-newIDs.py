@@ -3624,54 +3624,94 @@ with tab_objects[2]:
     max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
     
     if spend_agent:
-        mismatch_line_items = st.checkbox(
-            "Mismatch",
-            value=False,
-            key="mismatch_line_items",
-            help="Select this when Line Item Description and UTBMS Task Code mismatch is needed."
-        )
+        st.markdown("<h3 style='color: #1E1E1E;'>Spend Agent Items</h3>", unsafe_allow_html=True)
+        st.caption("Select the invoice review scenarios to include.")
 
-        st.markdown("<h3 style='color: #1E1E1E;'>Mandatory Items</h3>", unsafe_allow_html=True)
-        
-        # ---- CORRECTED AND CONSOLIDATED MANDATORY ITEMS LOGIC ----
-        
-        # Base list of all possible items
-        all_items = list(CONFIG["MANDATORY_ITEMS"].keys())
+        # ---- Unified Spend Agent checkbox grid ----
+        # Mandatory items remain handled by _ensure_mandatory_lines().
+        # Mismatch is now selected from the same Spend Agent grid, but still handled
+        # by _append_mismatch_line_items() because it is sourced from MISMATCH=Y CSV rows.
+        available_items = list(CONFIG["MANDATORY_ITEMS"].keys())
+        mismatch_item_name = "Mismatch"
+        all_spend_agent_items = available_items + [mismatch_item_name]
 
-        # Determine the items available for selection (no environment restriction)
-        available_items = all_items
+        def _spend_agent_checkbox_key(item_name: str) -> str:
+            safe_name = re.sub(r"[^A-Za-z0-9]+", "_", str(item_name)).strip("_").lower()
+            return f"spend_agent_item_{safe_name}"
 
-        # Determine the default selected items
-        saved_selection = st.session_state.get("mandatory_items_default")
-        if saved_selection is not None:
-            # Use last selection if saved, but only include items currently available
-            default_selection = [item for item in saved_selection if item in available_items]
+        def _set_spend_agent_grid_selection(target_items):
+            target_set = set(target_items or [])
+            for _item_name in all_spend_agent_items:
+                st.session_state[_spend_agent_checkbox_key(_item_name)] = _item_name in target_set
+
+        # Determine initial selected items.
+        # Preserve prior checkbox-grid selections when present. Fall back to the prior
+        # multiselect state for backward compatibility. Initial default keeps the old
+        # behavior: all mandatory items selected, Mismatch off unless previously selected.
+        saved_grid_selection = st.session_state.get("spend_agent_items_default")
+        legacy_mandatory_selection = st.session_state.get("mandatory_items_default")
+
+        if saved_grid_selection is not None:
+            default_spend_agent_selection = [item for item in saved_grid_selection if item in all_spend_agent_items]
+        elif legacy_mandatory_selection is not None:
+            default_spend_agent_selection = [item for item in legacy_mandatory_selection if item in available_items]
+            if st.session_state.get("mismatch_line_items", False):
+                default_spend_agent_selection.append(mismatch_item_name)
         else:
-            # Otherwise, determine initial defaults based on environment.
-            if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
-                # For SimpleLegal, all available items are selected by default.
-                default_selection = list(available_items)
-            else:
-                # For other environments, default to all items
-                default_selection = list(available_items)
-        
-        # Special rule for 'Unity': ensure 'Partner: Paralegal Task' is pre-selected if available.
+            default_spend_agent_selection = list(available_items)
+            if st.session_state.get("mismatch_line_items", False):
+                default_spend_agent_selection.append(mismatch_item_name)
+
+        # Special rule for SimpleLegal/Unity: ensure Partner → Paralegal remains pre-selected if available.
         if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
             pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
-            if pp_key and pp_key not in default_selection:
-                default_selection.append(pp_key)
-        
-        # Render the multiselect widget
-        prev_selected_items = st.session_state.get("_mandatory_items_prev", [])
-        selected_items = st.multiselect(
-            "Select Mandatory Items to Include",
-            options=available_items,
-            default=default_selection,
-            key="mandatory_items_multiselect",
-        )
+            if pp_key and pp_key not in default_spend_agent_selection:
+                default_spend_agent_selection.append(pp_key)
 
-        # Persist the user's selection so it survives reruns.
+        action_cols = st.columns([1, 1, 4])
+        with action_cols[0]:
+            if st.button("Select All", key="spend_agent_select_all"):
+                _set_spend_agent_grid_selection(all_spend_agent_items)
+        with action_cols[1]:
+            if st.button("Clear All", key="spend_agent_clear_all"):
+                _set_spend_agent_grid_selection([])
+
+        # Initialize checkbox states before the widgets are rendered.
+        for item_name in all_spend_agent_items:
+            item_key = _spend_agent_checkbox_key(item_name)
+            if item_key not in st.session_state:
+                st.session_state[item_key] = item_name in default_spend_agent_selection
+
+        spend_agent_help = {
+            "KBCG": "Adds the KBCG e-licensing portal / deficiency notice fee line.",
+            "John Doe": "Adds the deposition transcript review and case chronology fee line.",
+            "Uber E110": "Adds an E110 Uber ride expense line and displays the Uber amount controls.",
+            "Partner: Paralegal Tasks": "Adds Partner-billed lines from Paralegal-classified work for guideline testing.",
+            "Airfare E110": "Adds an E110 airfare expense line and displays the airfare detail controls.",
+            mismatch_item_name: "Adds randomly selected custom line items where MISMATCH = Y. Used to test description/task-code mismatch review rules.",
+        }
+
+        selected_spend_agent_items = []
+        grid_cols = st.columns(2)
+        for idx, item_name in enumerate(all_spend_agent_items):
+            with grid_cols[idx % 2]:
+                if st.checkbox(
+                    item_name,
+                    key=_spend_agent_checkbox_key(item_name),
+                    help=spend_agent_help.get(item_name, "Include this Spend Agent test item."),
+                ):
+                    selected_spend_agent_items.append(item_name)
+
+        selected_items = [item for item in selected_spend_agent_items if item in available_items]
+        mismatch_line_items = mismatch_item_name in selected_spend_agent_items
+
+        # Backward-compatible state for the existing generation and summary logic.
+        st.session_state["mismatch_line_items"] = bool(mismatch_line_items)
         st.session_state["mandatory_items_default"] = list(selected_items)
+        st.session_state["spend_agent_items_default"] = list(selected_spend_agent_items)
+        st.session_state["mandatory_items_multiselect"] = list(selected_items)
+
+        prev_selected_items = st.session_state.get("_mandatory_items_prev", [])
         st.session_state["_mandatory_items_prev"] = list(selected_items)
         
         # Partner → Paralegal count controls (adds multiple Partner-billed lines using Paralegal-tagged source rows)
@@ -3779,6 +3819,8 @@ with tab_objects[2]:
     else:
         selected_items = []
         mismatch_line_items = False
+        st.session_state["mismatch_line_items"] = False
+        st.session_state["mandatory_items_multiselect"] = []
 
 
 output_tab_index = tabs.index("Output")
