@@ -3558,7 +3558,7 @@ with tab_objects[2]:
         st.session_state["expense_slider"] = PRESETS[DEFAULT_INVOICE_PRESET]["expenses"]
 
     # Review/test scenario controls should be first so invoice-review options are easy to find.
-    st.markdown("<h4 style='color: #1E1E1E;'>Review Scenario Options</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color: #1E1E1E;'>Invoice Review Scenarios</h4>", unsafe_allow_html=True)
 
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
 
@@ -3594,10 +3594,10 @@ with tab_objects[2]:
     # Initialize/Reset global block-billing budget whenever the UI value is set.
     st.session_state["__bb_remaining"] = int(num_block_billed)
 
-    # Spend Agent Items appear immediately after the Spend Agent checkbox so the
+    # Spend Agent Test Items appear immediately after the Spend Agent checkbox so the
     # related configuration is visible before invoice sizing/count controls.
     if spend_agent:
-        st.markdown("<h3 style='color: #1E1E1E;'>Spend Agent Items</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #1E1E1E;'>Spend Agent Test Items</h3>", unsafe_allow_html=True)
         st.caption("Select the invoice review scenarios to include.")
 
         # ---- Unified Spend Agent checkbox grid ----
@@ -3799,11 +3799,11 @@ with tab_objects[2]:
 
     st.markdown("---")
 
-    # Keep Invoice Size Preset and custom line-item count controls together.
+    # Keep Invoice Size and custom line-item count controls together.
     st.markdown(
         """
         <div style="border: 1px solid #D0D7DE; border-radius: 10px; padding: 14px 16px; margin: 8px 0 16px 0; background-color: #F6F8FA;">
-            <h3 style="color: #1E1E1E; margin: 0 0 4px 0;">Invoice Size Preset</h3>
+            <h3 style="color: #1E1E1E; margin: 0 0 4px 0;">Invoice Size</h3>
             <p style="margin: 0; color: #4B5563;">Set the standard fee and expense line-item volume for this invoice. Select <strong>Custom</strong> to manually define the counts.</p>
         </div>
         """,
@@ -3813,11 +3813,11 @@ with tab_objects[2]:
     preset_col, fee_preview_col, expense_preview_col = st.columns([2.4, 1, 1])
     with preset_col:
         st.selectbox(
-            "Invoice Size Presets",
+            "Preset",
             options=list(PRESETS.keys()),
             key="invoice_preset",
             on_change=apply_preset,
-            help="Select a preset to quickly adjust the number of fee and expense lines below. Choose Custom to edit the counts manually."
+            help="Select an invoice size preset to quickly adjust the number of fee and expense lines below. Choose Custom to edit the counts manually."
         )
     with fee_preview_col:
         st.metric("Fee Lines", int(st.session_state.get("fee_slider", 0) or 0))
@@ -3837,7 +3837,7 @@ with tab_objects[2]:
         if not _has_external_line_item_details:
             fees = 0
     else:
-        st.markdown("<h4 style='color: #1E1E1E;'>Customs Line Items</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #1E1E1E;'>Custom Line Item Counts</h4>", unsafe_allow_html=True)
 
         if timekeeper_data is None:
             st.error("Please upload a valid timekeeper CSV file to configure fee and expense line counts.")
@@ -3872,12 +3872,12 @@ with tab_objects[2]:
                 and int(st.session_state.get("expense_slider", 0) or 0) == 0
             ):
                 st.warning(
-                    "Invoice Size Preset is set to Custom, but Fee Line Items and Expense Line Items are both still 0. "
+                    "Invoice Size is set to Custom, but Fee Line Items and Expense Line Items are both still 0. "
                     "Update at least one of these values if you want standard fee or expense lines generated.",
                     icon="⚠️",
                 )
 
-    st.markdown("<h3 style='color: #1E1E1E;'>Line Item Settings</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #1E1E1E;'>Line Item Rules & Amounts</h3>", unsafe_allow_html=True)
     with st.expander("Adjust Expense Amounts", expanded=False):
         st.number_input(
             "Local Travel (E109) mileage rate ($/mile)",
