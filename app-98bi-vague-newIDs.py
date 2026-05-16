@@ -3548,6 +3548,14 @@ with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
 
+    vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
+
+    multiple_attendees_meeting = st.checkbox(
+        "Multiple Attendees at Same Meeting",
+        value=False,
+        help="If checked, create two identical fee line items from 2 different timekeepers for the same meeting.",
+        key="multiple_attendees_meeting",
+    )
     # Block-billed controls live with the rest of Fees & Expenses so invoice-content
     # test settings stay together in the UI.
     st.session_state.setdefault("include_block_billed", True)
@@ -3570,15 +3578,6 @@ with tab_objects[2]:
 
     # Initialize/Reset global block-billing budget whenever the UI value is set.
     st.session_state["__bb_remaining"] = int(num_block_billed)
-
-    vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
-
-    multiple_attendees_meeting = st.checkbox(
-        "Multiple Attendees at Same Meeting",
-        value=False,
-        help="If checked, create two identical fee line items from 2 different timekeepers for the same meeting.",
-        key="multiple_attendees_meeting",
-    )
 
     # In the "Fees & Expenses" tab, before the sliders
     # Initialize the preset dropdown and related counts before rendering the widget.
