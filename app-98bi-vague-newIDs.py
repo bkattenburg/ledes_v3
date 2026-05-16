@@ -3876,7 +3876,7 @@ with tab_objects[2]:
         st.session_state["mandatory_items_multiselect"] = []
 
 
-output_tab_index = tabs.index("Output")
+output_tab_index = tabs.index("Files & Receipts")
 with tab_objects[output_tab_index]:
     st.markdown("<h3 style='color: #1E1E1E;'>Output</h3>", unsafe_allow_html=True)
     # --- Backward-compatible widget-key aliases ---
