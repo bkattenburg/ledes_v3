@@ -3878,7 +3878,7 @@ with tab_objects[2]:
 
 output_tab_index = tabs.index("Files & Receipts")
 with tab_objects[output_tab_index]:
-    st.markdown("<h3 style='color: #1E1E1E;'>Output</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #1E1E1E;'>PDF Invoice, Multple Invoices, Receipts</h3>", unsafe_allow_html=True)
     # --- Backward-compatible widget-key aliases ---
     # Older versions relied on Streamlit's implicit (label-based) widget keys.
     # Newer versions set explicit keys so other tabs (like Invoice Details) can reliably read these values.
