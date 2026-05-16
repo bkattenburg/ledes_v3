@@ -300,10 +300,10 @@ st.markdown("""
 
 # --- Presets Configuration ---
 PRESETS = {
-    "Custom": {"fees": 20, "expenses": 5},
-    "Small": {"fees": 10, "expenses": 5},
-    "Medium": {"fees": 25, "expenses": 15},
-    "Large": {"fees": 100, "expenses": 25},
+    "Custom": {"fees": 0, "expenses": 0},
+    "Small": {"fees": 25, "expenses": 10},
+    "Medium": {"fees": 50, "expenses": 25},
+    "Large": {"fees": 100, "expenses": 30},
 }
 
 def apply_preset():
