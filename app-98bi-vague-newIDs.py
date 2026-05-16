@@ -3546,6 +3546,45 @@ with tab_objects[1]:
 
 with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
+
+    # Initialize the preset dropdown and related counts before rendering the widget.
+    if "invoice_preset" not in st.session_state:
+        st.session_state["invoice_preset"] = DEFAULT_INVOICE_PRESET
+
+    if "fee_slider" not in st.session_state:
+        st.session_state["fee_slider"] = PRESETS[DEFAULT_INVOICE_PRESET]["fees"]
+
+    if "expense_slider" not in st.session_state:
+        st.session_state["expense_slider"] = PRESETS[DEFAULT_INVOICE_PRESET]["expenses"]
+
+    # Make Invoice Size Presets the first and most visible control on the tab.
+    st.markdown(
+        """
+        <div style="border: 1px solid #D0D7DE; border-radius: 10px; padding: 14px 16px; margin: 8px 0 16px 0; background-color: #F6F8FA;">
+            <h3 style="color: #1E1E1E; margin: 0 0 4px 0;">Invoice Size Preset</h3>
+            <p style="margin: 0; color: #4B5563;">Start here to set the standard fee and expense line-item volume for this invoice.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    preset_col, fee_preview_col, expense_preview_col = st.columns([2.4, 1, 1])
+    with preset_col:
+        st.selectbox(
+            "Invoice Size Presets",
+            options=list(PRESETS.keys()),
+            key="invoice_preset",
+            on_change=apply_preset,
+            help="Select a preset to quickly adjust the number of fee and expense lines below."
+        )
+    with fee_preview_col:
+        st.metric("Fee Lines", int(st.session_state.get("fee_slider", 0) or 0))
+    with expense_preview_col:
+        st.metric("Expense Lines", int(st.session_state.get("expense_slider", 0) or 0))
+
+    st.markdown("---")
+    st.markdown("<h4 style='color: #1E1E1E;'>Review Scenario Options</h4>", unsafe_allow_html=True)
+
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
 
     vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
@@ -3579,25 +3618,9 @@ with tab_objects[2]:
     # Initialize/Reset global block-billing budget whenever the UI value is set.
     st.session_state["__bb_remaining"] = int(num_block_billed)
 
-    # In the "Fees & Expenses" tab, before the sliders
-    # Initialize the preset dropdown and related counts before rendering the widget.
-    if "invoice_preset" not in st.session_state:
-        st.session_state["invoice_preset"] = DEFAULT_INVOICE_PRESET
+    st.markdown("---")
+    st.markdown("<h4 style='color: #1E1E1E;'>Line Item Counts</h4>", unsafe_allow_html=True)
 
-    if "fee_slider" not in st.session_state:
-        st.session_state["fee_slider"] = PRESETS[DEFAULT_INVOICE_PRESET]["fees"]
-
-    if "expense_slider" not in st.session_state:
-        st.session_state["expense_slider"] = PRESETS[DEFAULT_INVOICE_PRESET]["expenses"]
-
-    st.selectbox(
-        "Invoice Size Presets",
-        options=list(PRESETS.keys()),
-        key="invoice_preset",
-        on_change=apply_preset,
-        help="Select a preset to quickly adjust the number of fee and expense lines below."
-    )
-    
     if timekeeper_data is None:
         st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
         fees = 0
