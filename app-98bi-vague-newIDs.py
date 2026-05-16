@@ -320,6 +320,9 @@ PRESETS = {
     "Large": {"fees": 100, "expenses": 30},
 }
 
+# Default invoice size preset used when the app first loads.
+DEFAULT_INVOICE_PRESET = "Medium"
+
 def apply_preset():
     preset_name = st.session_state.invoice_preset
     if preset_name in PRESETS:
@@ -2993,7 +2996,7 @@ if (_prev_profile_for_ledes != _current_profile_for_ledes) or (_prev_env_for_led
     st.session_state["_prev_env_for_ledes"] = _current_env_for_ledes
 
 # Dynamic Tabs
-tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Files & Receipts"]
+tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
 # Insert Tax Fields tab before Output when LEDES 1998BIv2 is selected
 if st.session_state.get("ledes_version") in ("1998BI", "1998BIv2"):
     tabs = tabs[:-1] + ["Tax Fields"] + tabs[-1:]
@@ -3546,16 +3549,7 @@ with tab_objects[2]:
     st.markdown("<h3 style='color: #1E1E1E;'>Fees & Expenses</h3>", unsafe_allow_html=True)
     spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
 
-    vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
-
-    multiple_attendees_meeting = st.checkbox(
-        "Multiple Attendees at Same Meeting",
-        value=False,
-        help="If checked, create two identical fee line items from 2 different timekeepers for the same meeting.",
-        key="multiple_attendees_meeting",
-    )
-
-        # Block-billed controls live with the rest of Fees & Expenses so invoice-content
+    # Block-billed controls live with the rest of Fees & Expenses so invoice-content
     # test settings stay together in the UI.
     st.session_state.setdefault("include_block_billed", True)
     st.session_state.setdefault("num_block_billed", 2)
@@ -3577,8 +3571,27 @@ with tab_objects[2]:
 
     # Initialize/Reset global block-billing budget whenever the UI value is set.
     st.session_state["__bb_remaining"] = int(num_block_billed)
-    
+
+    vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
+
+    multiple_attendees_meeting = st.checkbox(
+        "Multiple Attendees at Same Meeting",
+        value=False,
+        help="If checked, create two identical fee line items from 2 different timekeepers for the same meeting.",
+        key="multiple_attendees_meeting",
+    )
+
     # In the "Fees & Expenses" tab, before the sliders
+    # Initialize the preset dropdown and related counts before rendering the widget.
+    if "invoice_preset" not in st.session_state:
+        st.session_state["invoice_preset"] = DEFAULT_INVOICE_PRESET
+
+    if "fee_slider" not in st.session_state:
+        st.session_state["fee_slider"] = PRESETS[DEFAULT_INVOICE_PRESET]["fees"]
+
+    if "expense_slider" not in st.session_state:
+        st.session_state["expense_slider"] = PRESETS[DEFAULT_INVOICE_PRESET]["expenses"]
+
     st.selectbox(
         "Invoice Size Presets",
         options=list(PRESETS.keys()),
@@ -3595,10 +3608,7 @@ with tab_objects[2]:
         max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
         st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
         
-        # Initialize the fee slider's state if it doesn't exist
-        if "fee_slider" not in st.session_state:
-            st.session_state.fee_slider = PRESETS["Medium"]["fees"]
-        
+        # Fee slider state is initialized with the preset dropdown above.
         fees = st.number_input(
             "Number of Fee Line Items",
             min_value=0,
@@ -3649,10 +3659,7 @@ with tab_objects[2]:
             )
         st.caption("Number of expense line items to generate")
         
-        # Initialize the expense slider's state if it doesn't exist
-        if "expense_slider" not in st.session_state:
-            st.session_state.expense_slider = PRESETS["Medium"]["expenses"]
-        
+        # Expense slider state is initialized with the preset dropdown above.
         expenses = st.number_input(
             "Number of Expense Line Items",
             min_value=0,
@@ -3876,9 +3883,9 @@ with tab_objects[2]:
         st.session_state["mandatory_items_multiselect"] = []
 
 
-output_tab_index = tabs.index("Files & Receipts")
+output_tab_index = tabs.index("Output")
 with tab_objects[output_tab_index]:
-    st.markdown("<h3 style='color: #1E1E1E;'>PDF Invoice, Multple Invoices, Receipts</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #1E1E1E;'>Output</h3>", unsafe_allow_html=True)
     # --- Backward-compatible widget-key aliases ---
     # Older versions relied on Streamlit's implicit (label-based) widget keys.
     # Newer versions set explicit keys so other tabs (like Invoice Details) can reliably read these values.
