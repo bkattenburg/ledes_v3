@@ -3799,12 +3799,12 @@ with tab_objects[2]:
 
     st.markdown("---")
 
-    # Keep Invoice Size Preset and Line Item Counts together as one configuration flow.
+    # Keep Invoice Size Preset and custom line-item count controls together.
     st.markdown(
         """
         <div style="border: 1px solid #D0D7DE; border-radius: 10px; padding: 14px 16px; margin: 8px 0 16px 0; background-color: #F6F8FA;">
             <h3 style="color: #1E1E1E; margin: 0 0 4px 0;">Invoice Size Preset</h3>
-            <p style="margin: 0; color: #4B5563;">Set the standard fee and expense line-item volume for this invoice.</p>
+            <p style="margin: 0; color: #4B5563;">Set the standard fee and expense line-item volume for this invoice. Select <strong>Custom</strong> to manually define the counts.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -3817,96 +3817,111 @@ with tab_objects[2]:
             options=list(PRESETS.keys()),
             key="invoice_preset",
             on_change=apply_preset,
-            help="Select a preset to quickly adjust the number of fee and expense lines below."
+            help="Select a preset to quickly adjust the number of fee and expense lines below. Choose Custom to edit the counts manually."
         )
     with fee_preview_col:
         st.metric("Fee Lines", int(st.session_state.get("fee_slider", 0) or 0))
     with expense_preview_col:
         st.metric("Expense Lines", int(st.session_state.get("expense_slider", 0) or 0))
 
-    st.markdown("<h4 style='color: #1E1E1E;'>Line Item Counts</h4>", unsafe_allow_html=True)
+    _selected_invoice_preset = st.session_state.get("invoice_preset", DEFAULT_INVOICE_PRESET)
+    _has_external_line_item_details = bool(globals().get("uploaded_custom_tasks_file"))
 
-    if timekeeper_data is None:
-        st.error("Please upload a valid timekeeper CSV file to configure fee and expense settings.")
-        fees = 0
-        expenses = 0
-    else:
-        max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
-        st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
-        
-        # Fee slider state is initialized with the preset dropdown above.
-        fees = st.number_input(
-            "Number of Fee Line Items",
-            min_value=0,
-            max_value=max_fees,
-            key="fee_slider",
-        )
-        # If no external Line Item Details CSV is loaded, disable fee line item generation.
-        _has_external_line_item_details = bool(globals().get("uploaded_custom_tasks_file"))
+    # For preset sizes, keep the standard fee/expense counts driven by the preset.
+    # The manual count inputs are only shown when the user selects Custom.
+    if _selected_invoice_preset != "Custom":
+        _preset_values = PRESETS.get(_selected_invoice_preset, PRESETS[DEFAULT_INVOICE_PRESET])
+        fees = int(st.session_state.get("fee_slider", _preset_values["fees"]) or 0)
+        expenses = int(st.session_state.get("expense_slider", _preset_values["expenses"]) or 0)
+        st.caption("Using preset line-item counts. Select Custom if you need to manually enter fee and expense line counts.")
         if not _has_external_line_item_details:
             fees = 0
+    else:
+        st.markdown("<h4 style='color: #1E1E1E;'>Customs Line Items</h4>", unsafe_allow_html=True)
 
-        st.markdown("<h3 style='color: #1E1E1E;'>Expense Settings</h3>", unsafe_allow_html=True)
-        with st.expander("Adjust Expense Amounts", expanded=False):
-            st.number_input(
-                "Local Travel (E109) mileage rate ($/mile)",
-                min_value=0.20, max_value=2.00, value=0.65, step=0.01,
-                key="mileage_rate_e109",
-                help="Used to calculate E109 totals as miles × rate. Miles are stored in the HOURS column."
+        if timekeeper_data is None:
+            st.error("Please upload a valid timekeeper CSV file to configure fee and expense line counts.")
+            fees = 0
+            expenses = 0
+        else:
+            max_fees = _calculate_max_fees(timekeeper_data, billing_start_date, billing_end_date, 16)
+            st.caption(f"Maximum fee lines allowed: {max_fees} (based on timekeepers and billing period)")
+
+            fees = st.number_input(
+                "Number of Fee Line Items",
+                min_value=0,
+                max_value=max_fees,
+                key="fee_slider",
             )
-            st.slider(
-                "Out-of-town Travel (E110) amount range ($)",
-                min_value=10.0, max_value=7500.0, value=(100.0, 800.0), step=10.0,
-                key="travel_range_e110",
-                help="Random amount for each E110 line will be drawn from this range."
+
+            expenses = st.number_input(
+                "Number of Expense Line Items",
+                min_value=0,
+                max_value=500,
+                key="expense_slider",
             )
-            st.slider(
-                "Telephone (E105) amount range ($)",
-                min_value=1.0, max_value=50.0, value=(5.0, 15.0), step=1.0,
-                key="telephone_range_e105",
-                help="Random amount for each E105 line will be drawn from this range."
-            )
-     
-            # 1. Determine the default rate based on the selected LEDES version
-            if st.session_state.get("ledes_version") == "1998BI":
-                default_copy_rate = 0.10
-            else:
-                default_copy_rate = 0.24
-        
-            # 2. Use the variable as the slider's default value
-            st.number_input(
-                "Photocopies (E101) per-page rate ($)",
-                min_value=0.04,
-                max_value=1.50,
-                value=default_copy_rate, 
-                step=0.01,
-                key="copying_rate_e101",
-                help="Per-page rate used for E101 Photocopy expenses."
-            )
-        st.caption("Number of expense line items to generate")
-        
-        # Expense slider state is initialized with the preset dropdown above.
-        expenses = st.number_input(
-            "Number of Expense Line Items",
-            min_value=0,
-            max_value=500,
-            key="expense_slider",
+
+            if not _has_external_line_item_details:
+                fees = 0
+
+            # Warn when Custom is selected but the user leaves both line item counts
+            # at the Custom preset defaults. Spend Agent items may still add lines,
+            # but no standard fee or expense line items will be generated from these settings.
+            if (
+                int(st.session_state.get("fee_slider", 0) or 0) == 0
+                and int(st.session_state.get("expense_slider", 0) or 0) == 0
+            ):
+                st.warning(
+                    "Invoice Size Preset is set to Custom, but Fee Line Items and Expense Line Items are both still 0. "
+                    "Update at least one of these values if you want standard fee or expense lines generated.",
+                    icon="⚠️",
+                )
+
+    st.markdown("<h3 style='color: #1E1E1E;'>Line Item Settings</h3>", unsafe_allow_html=True)
+    with st.expander("Adjust Expense Amounts", expanded=False):
+        st.number_input(
+            "Local Travel (E109) mileage rate ($/mile)",
+            min_value=0.20, max_value=2.00, value=0.65, step=0.01,
+            key="mileage_rate_e109",
+            help="Used to calculate E109 totals as miles × rate. Miles are stored in the HOURS column."
+        )
+        st.slider(
+            "Out-of-town Travel (E110) amount range ($)",
+            min_value=10.0, max_value=7500.0, value=(100.0, 800.0), step=10.0,
+            key="travel_range_e110",
+            help="Random amount for each E110 line will be drawn from this range."
+        )
+        st.slider(
+            "Telephone (E105) amount range ($)",
+            min_value=1.0, max_value=50.0, value=(5.0, 15.0), step=1.0,
+            key="telephone_range_e105",
+            help="Random amount for each E105 line will be drawn from this range."
         )
 
-        # Warn when Custom is selected but the user leaves both line item counts
-        # at the Custom preset defaults. Spend Agent items may still add lines,
-        # but no standard fee or expense line items will be generated from these settings.
-        if (
-            st.session_state.get("invoice_preset") == "Custom"
-            and int(st.session_state.get("fee_slider", 0) or 0) == 0
-            and int(st.session_state.get("expense_slider", 0) or 0) == 0
-        ):
-            st.warning(
-                "Invoice Size Preset is set to Custom, but Fee Line Items and Expense Line Items are both still 0. "
-                "Update at least one of these values if you want standard fee or expense lines generated.",
-                icon="⚠️",
-            )
-    max_daily_hours = st.number_input("Max Daily Timekeeper Hours:", min_value=1, max_value=24, value=16, step=1)
+        # Determine the default rate based on the selected LEDES version.
+        if st.session_state.get("ledes_version") == "1998BI":
+            default_copy_rate = 0.10
+        else:
+            default_copy_rate = 0.24
+
+        st.number_input(
+            "Photocopies (E101) per-page rate ($)",
+            min_value=0.04,
+            max_value=1.50,
+            value=default_copy_rate,
+            step=0.01,
+            key="copying_rate_e101",
+            help="Per-page rate used for E101 Photocopy expenses."
+        )
+
+    max_daily_hours = st.number_input(
+        "Max Daily Timekeeper Hours:",
+        min_value=1,
+        max_value=24,
+        value=16,
+        step=1,
+        help="Maximum number of hours a single timekeeper may bill per day."
+    )
     
 
 
