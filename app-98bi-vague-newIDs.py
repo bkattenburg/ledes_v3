@@ -1525,7 +1525,7 @@ def _generate_expenses(expense_count: int, billing_start_date: datetime.date, bi
             hours = 1
             rate = round(random.uniform(tel_min, tel_max), 2)
             line_item_total = rate
-        elif expense_code == "E107":  # Delivery/messenger
+        elif expense_code == "E107":  # /messenger
             hours = 1
             rate = round(random.uniform(20.0, 100.0), 2)
             line_item_total = rate
@@ -2772,7 +2772,7 @@ def update_send_email():
     st.session_state.send_email = st.session_state.send_email_checkbox_output
     logging.debug(f"Updated st.session_state.send_email to {st.session_state.send_email}")
 
-st.markdown("<h3 style='color: #1E1E1E;'>Delivery Options</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='color: #1E1E1E;'>Email Invoices</h3>", unsafe_allow_html=True)
 st.checkbox(
     "Send Invoices via Email",
     value=st.session_state.send_email,
@@ -2996,11 +2996,10 @@ if (_prev_profile_for_ledes != _current_profile_for_ledes) or (_prev_env_for_led
     st.session_state["_prev_env_for_ledes"] = _current_env_for_ledes
 
 # Dynamic Tabs
-tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Output"]
+tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Files & Receipts"]
 # Insert Tax Fields tab before Output when LEDES 1998BIv2 is selected
 if st.session_state.get("ledes_version") in ("1998BI", "1998BIv2"):
     tabs = tabs[:-1] + ["Tax Fields"] + tabs[-1:]
-# Email settings will live under the Output tab.
 tab_objects = st.tabs(tabs)
 
 with tab_objects[0]:
@@ -3883,9 +3882,9 @@ with tab_objects[2]:
         st.session_state["mandatory_items_multiselect"] = []
 
 
-output_tab_index = tabs.index("Output")
+output_tab_index = tabs.index("Files & Receipts")
 with tab_objects[output_tab_index]:
-    st.markdown("<h3 style='color: #1E1E1E;'>Output</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #1E1E1E;'>PDF Invoice, Multiple Invoices, Receipts</h3>", unsafe_allow_html=True)
     # --- Backward-compatible widget-key aliases ---
     # Older versions relied on Streamlit's implicit (label-based) widget keys.
     # Newer versions set explicit keys so other tabs (like Invoice Details) can reliably read these values.
