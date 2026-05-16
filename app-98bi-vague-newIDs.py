@@ -4015,6 +4015,47 @@ def get_mime_type(filename):
 
 # Main App Logic
 if generate_button:
+    # Generate-time guard: if both main line-item counts are zero, make the user
+    # explicitly aware before creating an invoice. If no alternate line-item source
+    # is selected either, stop generation because the invoice would be empty.
+    _fee_count_for_guard = int(st.session_state.get("fee_slider", fees) or 0)
+    _expense_count_for_guard = int(st.session_state.get("expense_slider", expenses) or 0)
+
+    if _fee_count_for_guard == 0 and _expense_count_for_guard == 0:
+        _has_external_line_items_for_guard = bool(globals().get("uploaded_custom_tasks_file"))
+        _has_block_billed_for_guard = bool(include_block_billed and int(num_block_billed or 0) > 0 and _has_external_line_items_for_guard)
+        _has_vague_for_guard = bool(vague_line_items and _has_external_line_items_for_guard)
+        _has_multiple_attendees_for_guard = bool(st.session_state.get("multiple_attendees_meeting", False))
+        _has_spend_agent_for_guard = bool(
+            spend_agent
+            and (
+                (selected_items if isinstance(selected_items, list) else [])
+                or st.session_state.get("mismatch_line_items", False)
+            )
+        )
+
+        _has_alternate_line_item_source = any([
+            _has_block_billed_for_guard,
+            _has_vague_for_guard,
+            _has_multiple_attendees_for_guard,
+            _has_spend_agent_for_guard,
+        ])
+
+        if not _has_alternate_line_item_source:
+            st.warning(
+                "Fee Line Items and Expense Line Items are both 0, and no other line-item source is selected. "
+                "The generated invoice would not contain any line items. Increase at least one line-item count "
+                "or select a Spend Agent item before generating the invoice.",
+                icon="⚠️",
+            )
+            st.stop()
+
+        st.warning(
+            "Fee Line Items and Expense Line Items are both 0. The invoice will only contain line items from "
+            "the other selected options, such as Spend Agent, block-billed, vague, or multiple-attendee items.",
+            icon="⚠️",
+        )
+
     # Reset troubleshooting summaries for this run
     st.session_state["pp_partner_paralegal_summary"] = []
     st.session_state["mismatch_line_items_summary"] = []
