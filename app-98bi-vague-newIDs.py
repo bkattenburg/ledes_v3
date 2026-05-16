@@ -3745,6 +3745,7 @@ with tab_objects[2]:
         # Partner → Paralegal count controls (adds multiple Partner-billed lines using Paralegal-tagged source rows)
         pp_selected_key = next((k for k in selected_items if _is_partner_paralegal_item(k)), None)
         if pp_selected_key:
+            st.markdown("<h4 style='color: #1E1E1E;'>Partner → Paralegal</h4>", unsafe_allow_html=True)
             st.session_state.setdefault("pp_lines_per_invoice", 3)
             st.session_state.setdefault("pp_randomize_count_per_invoice", False)
 
