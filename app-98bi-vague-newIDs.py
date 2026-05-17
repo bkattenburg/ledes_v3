@@ -4166,6 +4166,7 @@ if generate_button:
         receipt_manifest_rows = []  # mapping receipts back to invoices
         combined_ledes_content = ""
         zip_receipts_enabled = st.session_state.get('zip_receipts', False) if generate_receipts else False
+        generation_status_has_issues = False
 
         with st.status("Generating invoices...") as status:
             current_end_date = billing_end_date
@@ -4260,12 +4261,14 @@ if generate_button:
                 total_amount = df_invoice["LINE_ITEM_TOTAL"].sum()
                 
                 if skipped_mandatory_items:
+                    generation_status_has_issues = True
                     skipped_list = ", ".join(f"'{item}'" for item in skipped_mandatory_items)
                     st.warning(
                         f"**Mandatory Items Skipped:** The following items were not added to the invoice because their assigned timekeepers were not found in your CSV file: **{skipped_list}**"
                     )
 
                 if mismatch_warnings:
+                    generation_status_has_issues = True
                     st.warning("**Mismatch Line Items:** " + " ".join(str(msg) for msg in mismatch_warnings if msg))
 
                 # Invoice numbering already computed above
@@ -4413,12 +4416,20 @@ if generate_button:
                 
                 # Use the files stored in session state for the email
                 if not _send_email_with_attachment(recipient_email, subject, body, st.session_state.generated_files):
+                    generation_status_has_issues = True
                     st.error("Email failed to send. You can download the files below.")
                 else:
                     # Clear the files after successful send so buttons don't linger
                     st.session_state.generated_files = [] 
             
-            status.update(label="Invoice generation complete!", state="complete")
+            if generation_status_has_issues:
+                status.update(
+                    label="Invoice generation complete — review messages",
+                    state="error",
+                    expanded=True,
+                )
+            else:
+                status.update(label="Invoice generation complete!", state="complete", expanded=False)
 
 
 # --- New Display Block (place this AFTER the `if generate_button:` block) ---
