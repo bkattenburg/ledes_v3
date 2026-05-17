@@ -734,14 +734,26 @@ def _resolve_active_profile_id(env: str, client_key: str, vendor_key: str) -> st
 def _ensure_env_profile_state():
     """
     Ensure selected_env (environment), selected_client_profile, selected_vendor_profile,
-    and active_profile_id are all populated in session_state.
+    and active_profile_id are available without rewriting selected_env before its widget
+    is rendered. Rewriting selected_env on every rerun can trigger Streamlit's
+    warning that a keyed widget has both a default value and a Session State value.
     """
     envs = ENVIRONMENTS or [ENV_ONITX, ENV_SIMPLELEGAL_UNITY]
-    # Backward-compat: map legacy env names to canonical names
-    st.session_state["selected_env"] = _canonical_env(st.session_state.get("selected_env", ""))
-    if _canonical_env(st.session_state.get("selected_env")) not in envs:
-        st.session_state["selected_env"] = envs[0] if envs else ENV_ONITX
-    env = _canonical_env(st.session_state.get("selected_env", envs[0] if envs else ENV_ONITX))
+
+    # Use a local normalized environment for downstream defaults. Only write back
+    # to st.session_state["selected_env"] when the stored value is missing/invalid
+    # or a legacy alias must be canonicalized. Avoid assigning the same value on
+    # every rerun, because selected_env is also used as a widget key.
+    raw_env = st.session_state.get("selected_env", None)
+    if raw_env is None or str(raw_env).strip() == "":
+        env = envs[0] if envs else ENV_ONITX
+    else:
+        env = _canonical_env(str(raw_env).strip())
+        if env not in envs:
+            env = envs[0] if envs else ENV_ONITX
+
+    if raw_env is not None and str(raw_env).strip() != env:
+        st.session_state["selected_env"] = env
 
     # Client/Vendor defaults for this environment
     default_client, default_vendor = ENV_DEFAULT_ENTITY_PAIR.get(env, ("", ""))
@@ -3071,7 +3083,11 @@ with tab_objects[1]:
     default_env = st.session_state.get("selected_env", env_names[0] if env_names else "OnitX")
     if env_names and default_env not in env_names:
         default_env = env_names[0]
-    selected_env = st.selectbox("Environment", env_names, index=env_names.index(default_env) if (env_names and default_env in env_names) else 0, key="selected_env")
+
+    env_selectbox_kwargs = {"key": "selected_env"}
+    if "selected_env" not in st.session_state:
+        env_selectbox_kwargs["index"] = env_names.index(default_env) if (env_names and default_env in env_names) else 0
+    selected_env = st.selectbox("Environment", env_names, **env_selectbox_kwargs)
 
     
 
