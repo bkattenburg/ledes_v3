@@ -1085,7 +1085,19 @@ def _load_custom_task_activity_data(uploaded_file: Optional[Any]) -> Optional[Li
             return None
         if df.empty:
             st.warning("Custom Task/Activity CSV file is empty.")
+            try:
+                st.session_state.pop("custom_fee_first_row", None)
+            except Exception:
+                pass
             return []
+
+        # Preserve the first uploaded row before de-duping/shuffling so Spend Agent
+        # test items can intentionally inject a specific source row into the invoice.
+        try:
+            st.session_state["custom_fee_first_row"] = df.iloc[0].to_dict()
+        except Exception:
+            pass
+
         # NEW: remove exact duplicate task/activity/description triples
         df = df.drop_duplicates(subset=["TASK_CODE", "ACTIVITY_CODE", "DESCRIPTION"]).reset_index(drop=True)
         # (Optional but helpful) shuffle once so selection spreads across the file
@@ -1802,6 +1814,104 @@ def _append_mismatch_line_items(
             pass
 
     return rows, messages
+
+
+def _append_missing_attachment_line_item(
+    rows: List[Dict],
+    timekeeper_data: List[Dict],
+    invoice_desc: str,
+    client_id: str,
+    law_firm_id: str,
+    billing_start_date: datetime.date,
+    billing_end_date: datetime.date,
+    faker_instance: Faker,
+) -> Tuple[List[Dict], List[str]]:
+    """Append the first uploaded custom line-item row for Missing Attachment testing.
+
+    The first CSV row is preserved at upload time before the normal generator
+    de-duplicates and shuffles the custom line-item data.
+    """
+    messages: List[str] = []
+    first_row = st.session_state.get("custom_fee_first_row")
+    if not first_row:
+        return rows, ["No Custom Line Item Details CSV is loaded, so the Missing Attachment line item could not be added."]
+
+    try:
+        df_one = pd.DataFrame([first_row])
+    except Exception:
+        return rows, ["The first row of the Custom Line Item Details CSV could not be read for the Missing Attachment line item."]
+
+    task_col = _find_first_column(df_one, ["TASK_CODE", "TASK", "Task Code", "task_code"])
+    act_col = _find_first_column(df_one, ["ACTIVITY_CODE", "ACTIVITY", "Activity Code", "activity_code"])
+    desc_col = _find_first_column(df_one, ["DESCRIPTION", "DESC", "Description", "description"])
+    tk_class_col = _find_first_column(df_one, ["TK_CLASSIFICATION", "TIMEKEEPER_CLASSIFICATION", "Timekeeper Classification", "TIMEKEEPER CLASSIFICATION"])
+
+    missing_cols = [label for label, col in {
+        "TASK_CODE": task_col,
+        "ACTIVITY_CODE": act_col,
+        "DESCRIPTION": desc_col,
+    }.items() if not col]
+    if missing_cols:
+        return rows, [
+            "The Custom Line Item Details CSV is missing required column(s) for the Missing Attachment line item: "
+            + ", ".join(missing_cols)
+            + "."
+        ]
+
+    if not timekeeper_data:
+        return rows, ["No timekeeper data is loaded, so the Missing Attachment fee line item could not be added."]
+
+    r = df_one.iloc[0]
+    target_class = str(r.get(tk_class_col, "")).strip() if tk_class_col else ""
+    tk = _pick_timekeeper_by_class(timekeeper_data, target_class) if target_class else random.choice(timekeeper_data)
+    if not tk:
+        return rows, ["No matching timekeeper was available, so the Missing Attachment fee line item could not be added."]
+
+    delta_days = max(0, (billing_end_date - billing_start_date).days)
+    line_item_date = billing_start_date + datetime.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
+    hours = round(random.uniform(0.5, 3.0), 1)
+    rate = float(tk.get("RATE", 0.0) or 0.0)
+
+    row = {
+        "INVOICE_DESCRIPTION": invoice_desc,
+        "CLIENT_ID": client_id,
+        "LAW_FIRM_ID": law_firm_id,
+        "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"),
+        "TIMEKEEPER_NAME": tk.get("TIMEKEEPER_NAME", ""),
+        "TIMEKEEPER_CLASSIFICATION": tk.get("TIMEKEEPER_CLASSIFICATION", ""),
+        "TIMEKEEPER_ID": tk.get("TIMEKEEPER_ID", ""),
+        "TASK_CODE": str(r.get(task_col, "")).strip(),
+        "ACTIVITY_CODE": str(r.get(act_col, "")).strip(),
+        "EXPENSE_CODE": "",
+        "DESCRIPTION": _process_description(str(r.get(desc_col, "")).strip(), faker_instance),
+        "HOURS": float(hours),
+        "RATE": rate,
+        "LINE_ITEM_TOTAL": round(float(hours) * rate, 2),
+        "_spend_agent_missing_attachment": True,
+    }
+    rows.append(row)
+
+    try:
+        st.session_state.setdefault("missing_attachment_line_items_summary", []).append({
+            "Invoice Number": st.session_state.get("_missing_attachment_invoice_number", st.session_state.get("_pp_invoice_number", "")),
+            "Billing Start": st.session_state.get("_missing_attachment_billing_start", st.session_state.get("_pp_billing_start", "")),
+            "Billing End": st.session_state.get("_missing_attachment_billing_end", st.session_state.get("_pp_billing_end", "")),
+            "Source": "First row of Custom Line Item Details CSV",
+            "Line Item Date": row.get("LINE_ITEM_DATE", ""),
+            "Timekeeper": row.get("TIMEKEEPER_NAME", ""),
+            "Timekeeper Class": row.get("TIMEKEEPER_CLASSIFICATION", ""),
+            "Task Code": row.get("TASK_CODE", ""),
+            "Activity Code": row.get("ACTIVITY_CODE", ""),
+            "Hours": row.get("HOURS", ""),
+            "Rate": row.get("RATE", ""),
+            "Line Total": row.get("LINE_ITEM_TOTAL", ""),
+            "Description": row.get("DESCRIPTION", ""),
+        })
+    except Exception:
+        pass
+
+    return rows, messages
+
 
 def _generate_invoice_data(
     fee_count: int,
@@ -3622,7 +3732,8 @@ with tab_objects[2]:
         # by _append_mismatch_line_items() because it is sourced from MISMATCH=Y CSV rows.
         available_items = list(CONFIG["MANDATORY_ITEMS"].keys())
         mismatch_item_name = "Mismatch"
-        all_spend_agent_items = available_items + [mismatch_item_name]
+        missing_attachment_item_name = "Missing Attachment"
+        all_spend_agent_items = available_items + [mismatch_item_name, missing_attachment_item_name]
 
         def _spend_agent_checkbox_key(item_name: str) -> str:
             safe_name = re.sub(r"[^A-Za-z0-9]+", "_", str(item_name)).strip("_").lower()
@@ -3646,10 +3757,14 @@ with tab_objects[2]:
             default_spend_agent_selection = [item for item in legacy_mandatory_selection if item in available_items]
             if st.session_state.get("mismatch_line_items", False):
                 default_spend_agent_selection.append(mismatch_item_name)
+            if st.session_state.get("missing_attachment_line_item", False):
+                default_spend_agent_selection.append(missing_attachment_item_name)
         else:
             default_spend_agent_selection = list(available_items)
             if st.session_state.get("mismatch_line_items", False):
                 default_spend_agent_selection.append(mismatch_item_name)
+            if st.session_state.get("missing_attachment_line_item", False):
+                default_spend_agent_selection.append(missing_attachment_item_name)
 
         # Special rule for SimpleLegal/Unity: ensure Partner → Paralegal remains pre-selected if available.
         if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
@@ -3678,6 +3793,7 @@ with tab_objects[2]:
             "Partner: Paralegal Tasks": "Adds Partner-billed lines from Paralegal-classified work for guideline testing.",
             "Airfare E110": "Adds an E110 airfare expense line and displays the airfare detail controls.",
             mismatch_item_name: "Adds randomly selected custom line items where MISMATCH = Y. Used to test description/task-code mismatch review rules.",
+            missing_attachment_item_name: "Adds the first uploaded custom line-item row, expected to reference attached expert invoice backup for missing attachment testing.",
         }
 
         selected_spend_agent_items = []
@@ -3693,9 +3809,11 @@ with tab_objects[2]:
 
         selected_items = [item for item in selected_spend_agent_items if item in available_items]
         mismatch_line_items = mismatch_item_name in selected_spend_agent_items
+        missing_attachment_line_item = missing_attachment_item_name in selected_spend_agent_items
 
         # Backward-compatible state for the existing generation and summary logic.
         st.session_state["mismatch_line_items"] = bool(mismatch_line_items)
+        st.session_state["missing_attachment_line_item"] = bool(missing_attachment_line_item)
         st.session_state["mandatory_items_default"] = list(selected_items)
         st.session_state["spend_agent_items_default"] = list(selected_spend_agent_items)
         st.session_state["mandatory_items_multiselect"] = list(selected_items)
@@ -3809,7 +3927,9 @@ with tab_objects[2]:
     else:
         selected_items = []
         mismatch_line_items = False
+        missing_attachment_line_item = False
         st.session_state["mismatch_line_items"] = False
+        st.session_state["missing_attachment_line_item"] = False
         st.session_state["mandatory_items_multiselect"] = []
 
 
@@ -4112,6 +4232,7 @@ if generate_button:
             and (
                 (selected_items if isinstance(selected_items, list) else [])
                 or st.session_state.get("mismatch_line_items", False)
+                or st.session_state.get("missing_attachment_line_item", False)
             )
         )
 
@@ -4140,6 +4261,7 @@ if generate_button:
     # Reset troubleshooting summaries for this run
     st.session_state["pp_partner_paralegal_summary"] = []
     st.session_state["mismatch_line_items_summary"] = []
+    st.session_state["missing_attachment_line_items_summary"] = []
     try:
         _pp_items_for_flag = st.session_state.get("mandatory_items_multiselect", []) or []
         st.session_state["_pp_summary_expected"] = bool(spend_agent and any(_is_partner_paralegal_item(it) for it in _pp_items_for_flag))
@@ -4149,6 +4271,10 @@ if generate_button:
         st.session_state["_mismatch_summary_expected"] = bool(spend_agent and st.session_state.get("mismatch_line_items", False))
     except Exception:
         st.session_state["_mismatch_summary_expected"] = False
+    try:
+        st.session_state["_missing_attachment_summary_expected"] = bool(spend_agent and st.session_state.get("missing_attachment_line_item", False))
+    except Exception:
+        st.session_state["_missing_attachment_summary_expected"] = False
 
     if ledes_version == "XML 2.1":
         st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
@@ -4198,6 +4324,10 @@ if generate_button:
                 mismatch_lines_to_add = random.randint(10, 55) if (mismatch_selected and _has_mismatch_pool_rows()) else 0
                 st.session_state["_mismatch_lines_this_invoice"] = int(mismatch_lines_to_add)
 
+                missing_attachment_selected = bool(spend_agent and st.session_state.get("missing_attachment_line_item", False))
+                missing_attachment_lines_to_add = 1 if missing_attachment_selected else 0
+                st.session_state["_missing_attachment_lines_this_invoice"] = int(missing_attachment_lines_to_add)
+
                 num_mandatory_fees = (
                     sum(
                         1
@@ -4206,6 +4336,7 @@ if generate_button:
                     )
                     + (pp_lines if pp_selected else 0)
                     + mismatch_lines_to_add
+                    + missing_attachment_lines_to_add
                 )
                 num_mandatory_expenses = sum(1 for item in selected_items if CONFIG['MANDATORY_ITEMS'][item]['is_expense'])
 
@@ -4239,6 +4370,9 @@ if generate_button:
                 st.session_state["_mismatch_invoice_number"] = current_invoice_number
                 st.session_state["_mismatch_billing_start"] = current_start_date.strftime("%Y-%m-%d")
                 st.session_state["_mismatch_billing_end"] = current_end_date.strftime("%Y-%m-%d")
+                st.session_state["_missing_attachment_invoice_number"] = current_invoice_number
+                st.session_state["_missing_attachment_billing_start"] = current_start_date.strftime("%Y-%m-%d")
+                st.session_state["_missing_attachment_billing_end"] = current_end_date.strftime("%Y-%m-%d")
 
                 mismatch_warnings = []
                 if spend_agent and st.session_state.get("mismatch_line_items", False):
@@ -4246,6 +4380,13 @@ if generate_button:
                         rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id,
                         current_start_date, current_end_date, faker,
                         mismatch_count=st.session_state.get("_mismatch_lines_this_invoice") or None,
+                    )
+
+                missing_attachment_warnings = []
+                if spend_agent and st.session_state.get("missing_attachment_line_item", False):
+                    rows, missing_attachment_warnings = _append_missing_attachment_line_item(
+                        rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id,
+                        current_start_date, current_end_date, faker,
                     )
 
                 skipped_mandatory_items = []
@@ -4270,6 +4411,10 @@ if generate_button:
                 if mismatch_warnings:
                     generation_status_has_issues = True
                     st.warning("**Mismatch Line Items:** " + " ".join(str(msg) for msg in mismatch_warnings if msg))
+
+                if missing_attachment_warnings:
+                    generation_status_has_issues = True
+                    st.warning("**Missing Attachment Line Item:** " + " ".join(str(msg) for msg in missing_attachment_warnings if msg))
 
                 # Invoice numbering already computed above
                 
