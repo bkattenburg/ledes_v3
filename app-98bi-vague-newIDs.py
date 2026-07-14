@@ -233,6 +233,30 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from PIL import Image as PILImage, ImageDraw, ImageFont, Image
 import zipfile
 from datetime import date, timedelta
+
+# --- Application paths -------------------------------------------------------
+# Resolve bundled files relative to this script instead of the shell's current
+# working directory. This is important when the app is launched by Streamlit
+# Community Cloud, a service manager, or from another folder.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSETS_DIR = os.path.join(SCRIPT_DIR, "assets")
+
+def _asset_path(filename: str) -> str:
+    return os.path.join(ASSETS_DIR, filename)
+
+def _load_help_image(filename: str):
+    """Load an optional sidebar image without crashing the whole app."""
+    path = _asset_path(filename)
+    try:
+        with PILImage.open(path) as img:
+            return img.copy()
+    except Exception as exc:
+        logging.warning("Unable to load help image %s: %s", path, exc)
+        placeholder = PILImage.new("RGB", (900, 120), color="white")
+        draw = ImageDraw.Draw(placeholder)
+        draw.text((20, 45), f"Help image unavailable: {filename}", fill=(80, 80, 80))
+        return placeholder
+
 # --- Invoice number helpers (multiple billing periods) ---
 def _month_stamp_for_date(d: date) -> str:
     """Return YYYY-MMM (MMM is 3-letter month abbreviation, upper-case)."""
@@ -3070,11 +3094,24 @@ st.checkbox(
 
 # Helper function to read file data for buttons
 def read_file_for_download(path):
+    # Existing callers pass values such as "assets/file.csv". Resolve those
+    # paths relative to this app file so launch location does not matter.
+    resolved_path = path
+    if not os.path.isabs(resolved_path):
+        normalized = str(resolved_path).replace("\\", "/")
+        if normalized.startswith("assets/"):
+            resolved_path = _asset_path(normalized.split("/", 1)[1])
+        else:
+            resolved_path = os.path.join(SCRIPT_DIR, resolved_path)
     try:
-        with open(path, "rb") as fp:
+        with open(resolved_path, "rb") as fp:
             return fp.read()
     except FileNotFoundError:
-        st.sidebar.error(f"File not found: {os.path.basename(path)}")
+        st.sidebar.error(f"File not found: {os.path.basename(resolved_path)}")
+        return None
+    except OSError as exc:
+        st.sidebar.error(f"Unable to read {os.path.basename(resolved_path)}: {exc}")
+        logging.error("Asset read failed for %s: %s", resolved_path, exc)
         return None
 
 st.sidebar.markdown("## Downloads")
@@ -3175,11 +3212,11 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("## Help & FAQs")
 
 with st.sidebar.expander("LEDES 1998BI - Matter Setup (VAT Profiles)"):
-    bp = Image.open("assets/BP Error Message.png")
-    good = Image.open("assets/Country Currency Correct.png")
-    bad = Image.open("assets/Country Currency Default.png")
-    matter_good = Image.open("assets/matter_good.png")
-    matter_bad = Image.open("assets/matter_bad.png")
+    bp = _load_help_image("BP Error Message.png")
+    good = _load_help_image("Country Currency Correct.png")
+    bad = _load_help_image("Country Currency Default.png")
+    matter_good = _load_help_image("matter_good.png")
+    matter_bad = _load_help_image("matter_bad.png")
     st.markdown("""   
     How do I create a matter for LEDES 1998BI (VAT) invoices?
     - This applies to VAT-enabled profiles such as **OnitX EUR - Nelson** and **OnitX CAD - SS&E Group**. 
@@ -3202,8 +3239,8 @@ with st.sidebar.expander("LEDES 1998BI - Matter Setup (VAT Profiles)"):
     st.image(matter_good, caption="Updated/Correct Values", use_column_width=True)
     
 with st.sidebar.expander("Using custom Client and Vendor IDs"):
-    client = Image.open("assets/client.png")
-    vendor = Image.open("assets/vendor.png")
+    client = _load_help_image("client.png")
+    vendor = _load_help_image("vendor.png")
     st.markdown("""
     Where do I find Client and Vendor IDs if I need to override the preset profiles?
     - Client Names & IDs can be found in the Legal Entities app.
@@ -3284,9 +3321,13 @@ if (_prev_profile_for_ledes != _current_profile_for_ledes) or (_prev_env_for_led
 
 # Dynamic Tabs
 tabs = ["Data Sources", "Invoice Details", "Fees & Expenses", "Files & Receipts"]
-# Insert Tax Fields tab before Output when LEDES 1998BIv2 is selected
+# Insert Tax Fields before output when a tax-capable LEDES format is selected.
 if st.session_state.get("ledes_version") in ("1998BI", "1998BIv2"):
     tabs = tabs[:-1] + ["Tax Fields"] + tabs[-1:]
+# Email configuration needs its own tab. The previous code reused the final tab,
+# which placed email controls inside Files & Receipts.
+if st.session_state.get("send_email", False):
+    tabs.append("Email Configuration")
 tab_objects = st.tabs(tabs)
 
 with tab_objects[0]:
@@ -4281,7 +4322,7 @@ with tab_objects[output_tab_index]:
 
 # Email Configuration Tab (only created if send_email is True)
 if st.session_state.send_email:
-    email_tab_index = len(tabs) - 1
+    email_tab_index = tabs.index("Email Configuration")
     with tab_objects[email_tab_index]:
         st.markdown("<h2 style='color: #1E1E1E;'>Email Configuration</h2>", unsafe_allow_html=True)
         recipient_email = st.text_input("Recipient Email Address:")
