@@ -1691,6 +1691,65 @@ def _exclude_mismatch_rows(df):
     return df[~_yes_mask(df[mismatch_col])]
 
 
+def _get_prohibited_admin_col(df):
+    """Return the PROHIBITED_ADMIN column name from the custom line-item CSV, if present."""
+    return _find_first_column(df, [
+        "PROHIBITED_ADMIN",
+        "Prohibited_Admin",
+        "Prohibited Admin",
+        "prohibited_admin",
+        "ADMIN_TASK",
+        "ADMIN_TASKS",
+    ])
+
+
+def _exclude_admin_task_rows(df):
+    """Keep PROHIBITED_ADMIN=Y rows out of ordinary line-item generation.
+
+    When the uploaded CSV includes PROHIBITED_ADMIN, ordinary line-item generation
+    should use only rows explicitly marked PROHIBITED_ADMIN=N. Admin-task rows are
+    intentionally injected only when Spend Agent > Admin Tasks is selected. If the
+    uploaded CSV does not include PROHIBITED_ADMIN, return the DataFrame unchanged
+    for backward compatibility.
+    """
+    if df is None or getattr(df, "empty", True):
+        return df
+    admin_col = _get_prohibited_admin_col(df)
+    if not admin_col:
+        return df
+    return df[df[admin_col].astype(str).str.strip().str.upper().eq("N")]
+
+
+def _get_admin_task_pool_df():
+    """Return custom line-item rows where PROHIBITED_ADMIN=Y, plus a warning if unavailable."""
+    df_src = _get_custom_fee_source_df()
+    if df_src is None or getattr(df_src, "empty", True):
+        return None, "No Custom Line Item Details CSV is loaded, so Admin Task line items could not be added."
+
+    admin_col = _get_prohibited_admin_col(df_src)
+    if not admin_col:
+        return None, "The Custom Line Item Details CSV does not contain a PROHIBITED_ADMIN column, so Admin Task line items could not be added."
+
+    required = {
+        "TASK_CODE": _find_first_column(df_src, ["TASK_CODE", "TASK", "Task Code", "task_code"]),
+        "ACTIVITY_CODE": _find_first_column(df_src, ["ACTIVITY_CODE", "ACTIVITY", "Activity Code", "activity_code"]),
+        "DESCRIPTION": _find_first_column(df_src, ["DESCRIPTION", "DESC", "Description", "description"]),
+    }
+    missing = [label for label, col in required.items() if not col]
+    if missing:
+        return None, f"The Custom Line Item Details CSV is missing required column(s) for Admin Task line items: {', '.join(missing)}."
+
+    pool_df = df_src[_yes_mask(df_src[admin_col])].copy()
+    if pool_df.empty:
+        return None, "No rows with PROHIBITED_ADMIN = Y were found in the Custom Line Item Details CSV."
+    return pool_df, ""
+
+
+def _has_admin_task_pool_rows() -> bool:
+    pool_df, _ = _get_admin_task_pool_df()
+    return pool_df is not None and not pool_df.empty
+
+
 def _get_mismatch_pool_df():
     """Return custom line-item rows where MISMATCH=Y, plus a user-facing warning if unavailable."""
     df_src = _get_custom_fee_source_df()
@@ -1713,6 +1772,14 @@ def _get_mismatch_pool_df():
     pool_df = df_src[_yes_mask(df_src[mismatch_col])].copy()
     if pool_df.empty:
         return None, "No rows with MISMATCH = Y were found in the Custom Line Item Details CSV."
+
+    # Keep Admin Task examples dedicated to Spend Agent > Admin Tasks so Mismatch
+    # does not accidentally create prohibited-admin findings.
+    before_admin_filter = len(pool_df)
+    pool_df = _exclude_admin_task_rows(pool_df)
+    if pool_df.empty and before_admin_filter > 0:
+        return None, "Rows with MISMATCH = Y were found, but they were all marked PROHIBITED_ADMIN = Y. Mismatch line items require PROHIBITED_ADMIN = N."
+
     return pool_df, ""
 
 
@@ -1811,6 +1878,98 @@ def _append_mismatch_line_items(
             })
         except Exception:
             # Summary capture should never block invoice generation.
+            pass
+
+    return rows, messages
+
+
+def _append_admin_task_line_items(
+    rows: List[Dict],
+    timekeeper_data: List[Dict],
+    invoice_desc: str,
+    client_id: str,
+    law_firm_id: str,
+    billing_start_date: datetime.date,
+    billing_end_date: datetime.date,
+    faker_instance: Faker,
+    admin_count: Optional[int] = None,
+) -> Tuple[List[Dict], List[str]]:
+    """Append 3-6 Spend Agent Admin Task fee lines from PROHIBITED_ADMIN=Y CSV rows."""
+    messages: List[str] = []
+    pool_df, warning = _get_admin_task_pool_df()
+    if warning:
+        return rows, [warning]
+    if pool_df is None or pool_df.empty:
+        return rows, ["No Admin Task source rows were available."]
+    if not timekeeper_data:
+        return rows, ["No timekeeper data is loaded, so Admin Task fee line items could not be added."]
+
+    try:
+        n_lines = int(admin_count) if admin_count is not None else random.randint(3, 6)
+    except Exception:
+        n_lines = random.randint(3, 6)
+    n_lines = max(3, min(6, n_lines))
+
+    if len(pool_df) < n_lines:
+        messages.append(
+            f"Requested {n_lines} Admin Task line items but only {len(pool_df)} PROHIBITED_ADMIN = Y source row(s) were available; sampling with replacement."
+        )
+
+    picks = pool_df.sample(n=n_lines, replace=(len(pool_df) < n_lines), random_state=None)
+    task_col = _find_first_column(picks, ["TASK_CODE", "TASK", "Task Code", "task_code"])
+    act_col = _find_first_column(picks, ["ACTIVITY_CODE", "ACTIVITY", "Activity Code", "activity_code"])
+    desc_col = _find_first_column(picks, ["DESCRIPTION", "DESC", "Description", "description"])
+    tk_class_col = _find_first_column(picks, ["TK_CLASSIFICATION", "TIMEKEEPER_CLASSIFICATION", "Timekeeper Classification", "TIMEKEEPER CLASSIFICATION"])
+
+    delta_days = max(0, (billing_end_date - billing_start_date).days)
+
+    for _, r in picks.iterrows():
+        line_item_date = billing_start_date + datetime.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
+        target_class = str(r.get(tk_class_col, "")).strip() if tk_class_col else ""
+        tk = _pick_timekeeper_by_class(timekeeper_data, target_class) if target_class else random.choice(timekeeper_data)
+        if not tk:
+            continue
+
+        hours = round(random.uniform(0.5, 3.0), 1)
+        rate = float(tk.get("RATE", 0.0) or 0.0)
+        desc_raw = str(r.get(desc_col, "")).strip()
+        row = {
+            "INVOICE_DESCRIPTION": invoice_desc,
+            "CLIENT_ID": client_id,
+            "LAW_FIRM_ID": law_firm_id,
+            "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"),
+            "TIMEKEEPER_NAME": tk.get("TIMEKEEPER_NAME", ""),
+            "TIMEKEEPER_CLASSIFICATION": tk.get("TIMEKEEPER_CLASSIFICATION", ""),
+            "TIMEKEEPER_ID": tk.get("TIMEKEEPER_ID", ""),
+            "TASK_CODE": str(r.get(task_col, "")).strip(),
+            "ACTIVITY_CODE": str(r.get(act_col, "")).strip(),
+            "EXPENSE_CODE": "",
+            "DESCRIPTION": _process_description(desc_raw, faker_instance),
+            "HOURS": float(hours),
+            "RATE": rate,
+            "LINE_ITEM_TOTAL": round(float(hours) * rate, 2),
+            "_spend_agent_admin_task": True,
+        }
+        rows.append(row)
+
+        try:
+            st.session_state.setdefault("admin_task_line_items_summary", []).append({
+                "Invoice Number": st.session_state.get("_admin_task_invoice_number", st.session_state.get("_pp_invoice_number", "")),
+                "Billing Start": st.session_state.get("_admin_task_billing_start", st.session_state.get("_pp_billing_start", "")),
+                "Billing End": st.session_state.get("_admin_task_billing_end", st.session_state.get("_pp_billing_end", "")),
+                "Source": "Custom Line Item Details CSV",
+                "PROHIBITED_ADMIN": "Y",
+                "Line Item Date": row.get("LINE_ITEM_DATE", ""),
+                "Timekeeper": row.get("TIMEKEEPER_NAME", ""),
+                "Timekeeper Class": row.get("TIMEKEEPER_CLASSIFICATION", ""),
+                "Task Code": row.get("TASK_CODE", ""),
+                "Activity Code": row.get("ACTIVITY_CODE", ""),
+                "Hours": row.get("HOURS", ""),
+                "Rate": row.get("RATE", ""),
+                "Line Total": row.get("LINE_ITEM_TOTAL", ""),
+                "Description": row.get("DESCRIPTION", ""),
+            })
+        except Exception:
             pass
 
     return rows, messages
@@ -1956,10 +2115,11 @@ def _generate_invoice_data(
             # If no VAGUE column, all items are non-vague
             df_non_vague_pool = df_src
 
-        # MISMATCH=Y rows are reserved for Spend Agent > Mismatch and should not
-        # appear in ordinary generated fee, vague, or block-billed pools.
-        df_non_vague_pool = _exclude_mismatch_rows(df_non_vague_pool)
-        df_vague_pool = _exclude_mismatch_rows(df_vague_pool)
+        # MISMATCH=Y and PROHIBITED_ADMIN=Y rows are reserved for their
+        # dedicated Spend Agent test items and should not appear in ordinary
+        # generated fee, vague, or block-billed pools.
+        df_non_vague_pool = _exclude_admin_task_rows(_exclude_mismatch_rows(df_non_vague_pool))
+        df_vague_pool = _exclude_admin_task_rows(_exclude_mismatch_rows(df_vague_pool))
 
 
     # Helper to build a fee row
@@ -2250,6 +2410,9 @@ def _ensure_mandatory_lines(
                         bbcol = _col(tmp, ["Blockbilling", "BLOCKBILLING", "Blockbilled", "BlockBilled"])
                         if bbcol:
                             tmp = tmp[tmp[bbcol].astype(str).str.strip().str.upper() != "Y"]
+
+                        # Keep PROHIBITED_ADMIN=Y rows dedicated to Spend Agent > Admin Tasks.
+                        tmp = _exclude_admin_task_rows(tmp)
 
                         if not tmp.empty:
                             pool_df = tmp
@@ -2997,7 +3160,8 @@ with st.sidebar.expander("Line Items"):
         "TK_CLASSIFICATION": ["Associate", "Partner", "Associate"],
         "BLOCKBILLING": ["N", "Y", "N"],
         "VAGUE": ["N", "Y", "N"],
-        "MISMATCH": ["N", "N", "Y"]
+        "MISMATCH": ["N", "N", "Y"],
+        "PROHIBITED_ADMIN": ["N", "N", "N"]
     })
     csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
     st.download_button(
@@ -3086,6 +3250,7 @@ with st.sidebar.expander("How do I format the custom line items CSV?"):
     - `BLOCKBILLING` ('Y' or 'N')
     - `VAGUE` ('Y' or 'N')
     - `MISMATCH` ('Y' or 'N') — used by Spend Agent > Mismatch
+    - `PROHIBITED_ADMIN` ('Y' or 'N') — used by Spend Agent > Admin Tasks
 
     **Note:** Use `{NAME_PLACEHOLDER}` in a description to auto-insert a random name.
     """)
@@ -3733,7 +3898,8 @@ with tab_objects[2]:
         available_items = list(CONFIG["MANDATORY_ITEMS"].keys())
         mismatch_item_name = "Mismatch"
         missing_attachment_item_name = "Missing Attachment"
-        all_spend_agent_items = available_items + [mismatch_item_name, missing_attachment_item_name]
+        admin_task_item_name = "Admin Tasks"
+        all_spend_agent_items = available_items + [mismatch_item_name, missing_attachment_item_name, admin_task_item_name]
 
         def _spend_agent_checkbox_key(item_name: str) -> str:
             safe_name = re.sub(r"[^A-Za-z0-9]+", "_", str(item_name)).strip("_").lower()
@@ -3759,12 +3925,16 @@ with tab_objects[2]:
                 default_spend_agent_selection.append(mismatch_item_name)
             if st.session_state.get("missing_attachment_line_item", False):
                 default_spend_agent_selection.append(missing_attachment_item_name)
+            if st.session_state.get("admin_task_line_items", False):
+                default_spend_agent_selection.append(admin_task_item_name)
         else:
             default_spend_agent_selection = list(available_items)
             if st.session_state.get("mismatch_line_items", False):
                 default_spend_agent_selection.append(mismatch_item_name)
             if st.session_state.get("missing_attachment_line_item", False):
                 default_spend_agent_selection.append(missing_attachment_item_name)
+            if st.session_state.get("admin_task_line_items", False):
+                default_spend_agent_selection.append(admin_task_item_name)
 
         # Special rule for SimpleLegal/Unity: ensure Partner → Paralegal remains pre-selected if available.
         if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
@@ -3794,6 +3964,7 @@ with tab_objects[2]:
             "Airfare E110": "Adds an E110 airfare expense line and displays the airfare detail controls.",
             mismatch_item_name: "Adds randomly selected custom line items where MISMATCH = Y. Used to test description/task-code mismatch review rules.",
             missing_attachment_item_name: "Adds the first uploaded custom line-item row, expected to reference attached expert invoice backup for missing attachment testing.",
+            admin_task_item_name: "Select to include 3-6 Admin Task line items.",
         }
 
         selected_spend_agent_items = []
@@ -3810,10 +3981,12 @@ with tab_objects[2]:
         selected_items = [item for item in selected_spend_agent_items if item in available_items]
         mismatch_line_items = mismatch_item_name in selected_spend_agent_items
         missing_attachment_line_item = missing_attachment_item_name in selected_spend_agent_items
+        admin_task_line_items = admin_task_item_name in selected_spend_agent_items
 
         # Backward-compatible state for the existing generation and summary logic.
         st.session_state["mismatch_line_items"] = bool(mismatch_line_items)
         st.session_state["missing_attachment_line_item"] = bool(missing_attachment_line_item)
+        st.session_state["admin_task_line_items"] = bool(admin_task_line_items)
         st.session_state["mandatory_items_default"] = list(selected_items)
         st.session_state["spend_agent_items_default"] = list(selected_spend_agent_items)
         st.session_state["mandatory_items_multiselect"] = list(selected_items)
@@ -3930,6 +4103,7 @@ with tab_objects[2]:
         missing_attachment_line_item = False
         st.session_state["mismatch_line_items"] = False
         st.session_state["missing_attachment_line_item"] = False
+        st.session_state["admin_task_line_items"] = False
         st.session_state["mandatory_items_multiselect"] = []
 
 
@@ -4233,6 +4407,7 @@ if generate_button:
                 (selected_items if isinstance(selected_items, list) else [])
                 or st.session_state.get("mismatch_line_items", False)
                 or st.session_state.get("missing_attachment_line_item", False)
+                or st.session_state.get("admin_task_line_items", False)
             )
         )
 
@@ -4262,6 +4437,7 @@ if generate_button:
     st.session_state["pp_partner_paralegal_summary"] = []
     st.session_state["mismatch_line_items_summary"] = []
     st.session_state["missing_attachment_line_items_summary"] = []
+    st.session_state["admin_task_line_items_summary"] = []
     try:
         _pp_items_for_flag = st.session_state.get("mandatory_items_multiselect", []) or []
         st.session_state["_pp_summary_expected"] = bool(spend_agent and any(_is_partner_paralegal_item(it) for it in _pp_items_for_flag))
@@ -4275,6 +4451,10 @@ if generate_button:
         st.session_state["_missing_attachment_summary_expected"] = bool(spend_agent and st.session_state.get("missing_attachment_line_item", False))
     except Exception:
         st.session_state["_missing_attachment_summary_expected"] = False
+    try:
+        st.session_state["_admin_task_summary_expected"] = bool(spend_agent and st.session_state.get("admin_task_line_items", False))
+    except Exception:
+        st.session_state["_admin_task_summary_expected"] = False
 
     if ledes_version == "XML 2.1":
         st.error("LEDES XML 2.1 is not yet implemented. Please switch to 1998B.")
@@ -4328,6 +4508,10 @@ if generate_button:
                 missing_attachment_lines_to_add = 1 if missing_attachment_selected else 0
                 st.session_state["_missing_attachment_lines_this_invoice"] = int(missing_attachment_lines_to_add)
 
+                admin_task_selected = bool(spend_agent and st.session_state.get("admin_task_line_items", False))
+                admin_task_lines_to_add = random.randint(3, 6) if (admin_task_selected and _has_admin_task_pool_rows()) else 0
+                st.session_state["_admin_task_lines_this_invoice"] = int(admin_task_lines_to_add)
+
                 num_mandatory_fees = (
                     sum(
                         1
@@ -4337,6 +4521,7 @@ if generate_button:
                     + (pp_lines if pp_selected else 0)
                     + mismatch_lines_to_add
                     + missing_attachment_lines_to_add
+                    + admin_task_lines_to_add
                 )
                 num_mandatory_expenses = sum(1 for item in selected_items if CONFIG['MANDATORY_ITEMS'][item]['is_expense'])
 
@@ -4373,6 +4558,17 @@ if generate_button:
                 st.session_state["_missing_attachment_invoice_number"] = current_invoice_number
                 st.session_state["_missing_attachment_billing_start"] = current_start_date.strftime("%Y-%m-%d")
                 st.session_state["_missing_attachment_billing_end"] = current_end_date.strftime("%Y-%m-%d")
+                st.session_state["_admin_task_invoice_number"] = current_invoice_number
+                st.session_state["_admin_task_billing_start"] = current_start_date.strftime("%Y-%m-%d")
+                st.session_state["_admin_task_billing_end"] = current_end_date.strftime("%Y-%m-%d")
+
+                admin_task_warnings = []
+                if spend_agent and st.session_state.get("admin_task_line_items", False):
+                    rows, admin_task_warnings = _append_admin_task_line_items(
+                        rows, timekeeper_data, current_invoice_desc, client_id, law_firm_id,
+                        current_start_date, current_end_date, faker,
+                        admin_count=st.session_state.get("_admin_task_lines_this_invoice") or None,
+                    )
 
                 mismatch_warnings = []
                 if spend_agent and st.session_state.get("mismatch_line_items", False):
@@ -4415,6 +4611,10 @@ if generate_button:
                 if missing_attachment_warnings:
                     generation_status_has_issues = True
                     st.warning("**Missing Attachment Line Item:** " + " ".join(str(msg) for msg in missing_attachment_warnings if msg))
+
+                if admin_task_warnings:
+                    generation_status_has_issues = True
+                    st.warning("**Admin Task Line Items:** " + " ".join(str(msg) for msg in admin_task_warnings if msg))
 
                 # Invoice numbering already computed above
                 
@@ -4661,5 +4861,36 @@ if _mismatch_sum or _mismatch_expected:
                 "No Mismatch line items were generated. This can happen if Spend Agent > Mismatch was selected "
                 "but no Custom Line Item Details CSV was loaded, the CSV did not include a MISMATCH column, "
                 "no rows had MISMATCH = Y, or no timekeeper data was available."
+            )
+
+# --- Admin Task Line Items Summary (shown after generation, if applicable) ---
+_admin_task_sum = st.session_state.get("admin_task_line_items_summary", []) or []
+_admin_task_expected = bool(st.session_state.get("_admin_task_summary_expected", False))
+
+if _admin_task_sum or _admin_task_expected:
+    with st.expander("Admin Task Line Items Summary", expanded=False):
+        if _admin_task_sum:
+            try:
+                df_admin_task = pd.DataFrame(_admin_task_sum)
+
+                if "Invoice Number" in df_admin_task.columns:
+                    counts = df_admin_task.groupby(["Invoice Number"]).size().reset_index(name="Line Count")
+                    st.caption("Counts by invoice")
+                    st.dataframe(counts, use_container_width=True)
+
+                st.caption("Line item details (PROHIBITED_ADMIN = Y rows added by Spend Agent)")
+                sort_cols = [c for c in ["Invoice Number", "Line Item Date"] if c in df_admin_task.columns]
+                if sort_cols:
+                    df_admin_task = df_admin_task.sort_values(sort_cols)
+                df_admin_task = df_admin_task.reset_index(drop=True)
+                df_admin_task.index = range(1, len(df_admin_task) + 1)
+                st.dataframe(df_admin_task, use_container_width=True)
+            except Exception:
+                st.write(_admin_task_sum)
+        else:
+            st.info(
+                "No Admin Task line items were generated. This can happen if Spend Agent > Admin Tasks was selected "
+                "but no Custom Line Item Details CSV was loaded, the CSV did not include a PROHIBITED_ADMIN column, "
+                "no rows had PROHIBITED_ADMIN = Y, or no timekeeper data was available."
             )
 
