@@ -3196,27 +3196,31 @@ with st.sidebar.expander("Line Items"):
     onit_capmkt_tasks_data = read_file_for_download("assets/custom_capital_market_tasks_invoice_catalog_100_expenses.csv")
     if onit_capmkt_tasks_data:
         st.download_button("Capital Market Line Items File", onit_capmkt_tasks_data, "custom_capital_market_tasks.csv", "text/csv")
+
+    onit_template_tasks_data = read_file_for_download("assets/sample_invoice_line_item_catalog.csv")
+    if onit_template_tasks_data:
+        st.download_button("Line Item Template", onit_template_tasks_data, "line_item_template.csv", "text/csv")
     
     # Line Items Template
-    sample_custom_df = pd.DataFrame({
-        "LINE_ITEM_TYPE": ["FEE", "FEE", "EXPENSE"],
-        "TASK_CODE": ["L100", "L120", ""],
-        "ACTIVITY_CODE": ["A101", "A102", ""],
-        "EXPENSE_CODE": ["", "", "E110"],
-        "DESCRIPTION": ["Analyze legal precedents", "Prepare deposition chronology", "Approved economy airfare for matter travel"],
-        "TK_CLASSIFICATION": ["Associate", "Associate", ""],
-        "BLOCKBILLING": ["N", "N", "N"], "VAGUE": ["N", "N", "N"],
-        "MISMATCH": ["N", "Y", "N"], "PROHIBITED_ADMIN": ["N", "N", "N"],
-        "MIN_AMOUNT": ["", "", 300], "MAX_AMOUNT": ["", "", 1200],
-        "MIN_UNITS": ["", "", 1], "MAX_UNITS": ["", "", 1], "UNIT_COST": ["", "", ""],
-        "RECEIPT_REQUIRED": ["", "", "Y"], "GENERATE_RECEIPT": ["", "", "Y"],
-    })
-    csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="Line Items Template",
-        data=csv_custom_sample_bytes,
-        file_name="sample_invoice_line_item_catalog_updated.csv",
-        mime="text/csv"
+    #sample_custom_df = pd.DataFrame({
+    #    "LINE_ITEM_TYPE": ["FEE", "FEE", "EXPENSE"],
+    #    "TASK_CODE": ["L100", "L120", ""],
+    #    "ACTIVITY_CODE": ["A101", "A102", ""],
+    #    "EXPENSE_CODE": ["", "", "E110"],
+    #    "DESCRIPTION": ["Analyze legal precedents", "Prepare deposition chronology", "Approved economy airfare for matter travel"],
+    #    "TK_CLASSIFICATION": ["Associate", "Associate", ""],
+    #    "BLOCKBILLING": ["N", "N", "N"], "VAGUE": ["N", "N", "N"],
+    #    "MISMATCH": ["N", "Y", "N"], "PROHIBITED_ADMIN": ["N", "N", "N"],
+    #    "MIN_AMOUNT": ["", "", 300], "MAX_AMOUNT": ["", "", 1200],
+    #    "MIN_UNITS": ["", "", 1], "MAX_UNITS": ["", "", 1], "UNIT_COST": ["", "", ""],
+    #    "RECEIPT_REQUIRED": ["", "", "Y"], "GENERATE_RECEIPT": ["", "", "Y"],
+    #})
+    #csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
+    #st.download_button(
+    #    label="Line Items Template",
+    #    data=csv_custom_sample_bytes,
+    #    file_name="sample_invoice_line_item_catalog.csv",
+    #    mime="text/csv"
     )
 # --- FAQs moved to Sidebar (Corrected) ---
 st.sidebar.markdown("---")
