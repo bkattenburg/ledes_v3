@@ -3215,7 +3215,7 @@ with st.sidebar.expander("Line Items"):
     st.download_button(
         label="Line Items Template",
         data=csv_custom_sample_bytes,
-        file_name="sample_invoice_line_item_catalog.csv",
+        file_name="sample_invoice_line_item_catalog_updated.csv",
         mime="text/csv"
     )
 # --- FAQs moved to Sidebar (Corrected) ---
