@@ -4330,7 +4330,7 @@ with tab_objects[output_tab_index]:
     else:
         combine_ledes = False
 
-    generate_receipts = st.checkbox("Generate Sample Receipts for Expenses", value=False)
+    generate_receipts = st.checkbox("Generate Sample Receipts for Expenses?", value=False)
     single_receipt_file = False
     zip_receipts = False
     if generate_receipts:
@@ -4358,6 +4358,15 @@ with tab_objects[output_tab_index]:
             on_change=_select_zip_receipts,
             disabled=bool(st.session_state.get("single_receipt_file", False)),
             help="Combine all generated receipt image files into a single ZIP file.",
+        )
+        omit_one_required_receipt = st.checkbox(
+            "Omit One Required Receipt",
+            key="omit_one_required_receipt",
+            value=False,
+            help=(
+                "Randomly omit the receipt for one generated expense marked RECEIPT_REQUIRED = Y. "
+                "Use this to test whether Spend Agent detects a required missing receipt."
+            ),
         )
 
 # Email Configuration Tab (only created if send_email is True)
@@ -4554,6 +4563,8 @@ if generate_button:
         combined_ledes_content = ""
         single_receipt_file_enabled = st.session_state.get('single_receipt_file', False) if generate_receipts else False
         zip_receipts_enabled = st.session_state.get('zip_receipts', False) if generate_receipts else False
+        omit_one_required_receipt_enabled = st.session_state.get('omit_one_required_receipt', False) if generate_receipts else False
+        omitted_receipt_summary = None
         generation_status_has_issues = False
 
         with st.status("Generating invoices...") as status:
@@ -4789,12 +4800,21 @@ if generate_button:
                                 unique = uuid.uuid4().hex[:6]
                                 zip_path = f"receipts/{current_invoice_number}/Receipt_L{line_no}_{exp_code}_{dt_str}_{unique}.png"
                                 flat_name = f"{current_invoice_number}__Receipt_L{line_no}_{exp_code}_{dt_str}_{unique}.png"
-                                receipts_by_invoice[current_invoice_number].append({
+                                desc = row.get('DESCRIPTION', '') or row.get('LINE_ITEM_DESCRIPTION', '')
+                                receipt_required = bool(row.get('_receipt_required', False))
+                                receipt_record = {
                                     'zip_path': zip_path,
                                     'flat_name': flat_name,
                                     'data': receipt_data_buf.getvalue(),
-                                })
-                                desc = row.get('DESCRIPTION', '') or row.get('LINE_ITEM_DESCRIPTION', '')
+                                    'invoice_number': current_invoice_number,
+                                    'line_no': line_no,
+                                    'expense_code': exp_code,
+                                    'line_item_date': str(li_date),
+                                    'amount': row.get('LINE_ITEM_TOTAL', ''),
+                                    'description': desc,
+                                    'receipt_required': receipt_required,
+                                }
+                                receipts_by_invoice[current_invoice_number].append(receipt_record)
                                 receipt_manifest_rows.append({
                                     'invoice_number': current_invoice_number,
                                     'zip_path': zip_path,
@@ -4804,7 +4824,51 @@ if generate_button:
                                     'line_item_date': str(li_date),
                                     'amount': row.get('LINE_ITEM_TOTAL', ''),
                                     'description': desc,
+                                    'receipt_required': 'Y' if receipt_required else 'N',
+                                    'receipt_status': 'Generated',
                                 })
+
+            # Missing-receipt Spend Agent test: remove exactly one receipt that is
+            # explicitly required by the source catalog. The removal occurs before
+            # output packaging, so it works identically for separate files, ZIP, and
+            # the combined single-PDF receipt option.
+            if generate_receipts and omit_one_required_receipt_enabled:
+                required_candidates = []
+                for inv_no, files in receipts_by_invoice.items():
+                    for idx, receipt in enumerate(files):
+                        if bool(receipt.get('receipt_required', False)):
+                            required_candidates.append((inv_no, idx, receipt))
+
+                if required_candidates:
+                    omitted_inv_no, omitted_idx, omitted_receipt = random.choice(required_candidates)
+                    receipts_by_invoice[omitted_inv_no].pop(omitted_idx)
+                    omitted_receipt_summary = {
+                        'invoice_number': omitted_receipt.get('invoice_number', omitted_inv_no),
+                        'line_no': omitted_receipt.get('line_no', ''),
+                        'expense_code': omitted_receipt.get('expense_code', ''),
+                        'line_item_date': omitted_receipt.get('line_item_date', ''),
+                        'amount': omitted_receipt.get('amount', ''),
+                        'description': omitted_receipt.get('description', ''),
+                    }
+                    for manifest_row in receipt_manifest_rows:
+                        if (
+                            manifest_row.get('invoice_number') == omitted_receipt.get('invoice_number')
+                            and manifest_row.get('flat_name') == omitted_receipt.get('flat_name')
+                        ):
+                            manifest_row['receipt_status'] = 'Omitted for Missing Receipt Test'
+                            manifest_row['zip_path'] = ''
+                            manifest_row['flat_name'] = ''
+                            break
+                    st.warning(
+                        "Missing Receipt test: omitted one required receipt for "
+                        f"invoice {omitted_receipt_summary['invoice_number']}, line "
+                        f"{omitted_receipt_summary['line_no']} ({omitted_receipt_summary['expense_code']})."
+                    )
+                else:
+                    st.warning(
+                        "Omit One Required Receipt was selected, but no generated expense line was both "
+                        "RECEIPT_REQUIRED = Y and eligible for receipt generation. No receipt was omitted."
+                    )
 
             # Process receipts after loop (across ALL invoices)
             any_receipts = any(files for files in receipts_by_invoice.values())
@@ -4812,6 +4876,12 @@ if generate_button:
                 if single_receipt_file_enabled:
                     combined_receipts_pdf = _create_combined_receipts_pdf(receipts_by_invoice)
                     attachments_list.append(("Receipts_All_Invoices.pdf", combined_receipts_pdf.getvalue()))
+                    if receipt_manifest_rows:
+                        out = io.StringIO()
+                        writer = csv.DictWriter(out, fieldnames=list(receipt_manifest_rows[0].keys()))
+                        writer.writeheader()
+                        writer.writerows(receipt_manifest_rows)
+                        attachments_list.append(("receipt_manifest.csv", out.getvalue().encode("utf-8")))
                 elif zip_receipts_enabled:
                     zip_buf = io.BytesIO()
                     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zip_file:
