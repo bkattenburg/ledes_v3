@@ -3221,7 +3221,7 @@ with st.sidebar.expander("Line Items"):
     #    data=csv_custom_sample_bytes,
     #    file_name="sample_invoice_line_item_catalog.csv",
     #    mime="text/csv"
-    )
+    #)
 # --- FAQs moved to Sidebar (Corrected) ---
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Help & FAQs")
