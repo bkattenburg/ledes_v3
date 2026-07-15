@@ -3009,6 +3009,28 @@ def _send_email_with_attachment(recipient_email: str, subject: str, body: str, a
         logging.error(f"Email sending failed: {e}")
         return False
 
+
+
+def _render_dataframe_without_arrow(df, *, hide_index: bool = False, max_rows: int = 100) -> None:
+    """Render a DataFrame as HTML without Streamlit/PyArrow serialization.
+
+    This avoids native PyArrow crashes observed on some Streamlit Cloud builds.
+    """
+    if df is None:
+        return
+    try:
+        df_show = df.head(max_rows).copy()
+        html = df_show.to_html(index=not hide_index, escape=True, border=0)
+        st.markdown(
+            "<div style='overflow-x:auto; max-height:520px; overflow-y:auto'>" + html + "</div>",
+            unsafe_allow_html=True,
+        )
+        if len(df) > max_rows:
+            st.caption(f"Showing the first {max_rows} of {len(df)} rows.")
+    except Exception as exc:
+        st.code(str(df), language=None)
+        logging.error(f"DataFrame preview fallback failed: {exc}")
+
 # --- Streamlit App ---
 st.markdown("<h1 style='color: #1E1E1E;'>LEDES Invoice Generator</h1>", unsafe_allow_html=True)
 st.markdown("Generate and optionally email LEDES and PDF invoices.", unsafe_allow_html=True)
@@ -3275,7 +3297,7 @@ with tab_objects[0]:
         tk_df_preview.index = tk_df_preview.index + 1
         preview_count = min(10, len(timekeeper_data))
         st.markdown(f"**{preview_count}-Row Preview**")
-        st.dataframe(tk_df_preview, use_container_width=True)
+        _render_dataframe_without_arrow(tk_df_preview)
         # Diagnostics: clean classification counts and Partner count
         with st.expander("Diagnostics: Timekeeper CSV", expanded=False):
             tks = _get_timekeepers()
@@ -3293,7 +3315,7 @@ with tab_objects[0]:
                     .sort_values("Classification", kind="stable")
                     .reset_index(drop=True)
                 )
-                st.dataframe(vc, use_container_width=True, hide_index=True)
+                _render_dataframe_without_arrow(vc, hide_index=True)
                 partner_count = int(vc.loc[vc["Classification"].str.lower() == "partner", "Count"].sum())
                 associate_count = int(vc.loc[vc["Classification"].str.lower() == "associate", "Count"].sum())
                 paralegal_count = int(vc.loc[vc["Classification"].str.lower() == "paralegal", "Count"].sum())
@@ -4789,7 +4811,7 @@ if _pp_sum or _pp_expected:
                 if "Invoice Number" in df_pp.columns:
                     counts = df_pp.groupby(["Invoice Number"]).size().reset_index(name="Line Count")
                     st.caption("Counts by invoice")
-                    st.dataframe(counts, use_container_width=True)
+                    _render_dataframe_without_arrow(counts, hide_index=True)
 
                 st.caption("Line item details (Partner billing Paralegal-classified work)")
                 # Sort for readability when possible
@@ -4799,7 +4821,7 @@ if _pp_sum or _pp_expected:
                 # Re-number the displayed row index to be a logical 1..N list (after sorting)
                 df_pp = df_pp.reset_index(drop=True)
                 df_pp.index = range(1, len(df_pp) + 1)
-                st.dataframe(df_pp, use_container_width=True)
+                _render_dataframe_without_arrow(df_pp, hide_index=True)
             except Exception:
                 st.write(_pp_sum)
         else:
@@ -4823,7 +4845,7 @@ if _mismatch_sum or _mismatch_expected:
                 if "Invoice Number" in df_mismatch.columns:
                     counts = df_mismatch.groupby(["Invoice Number"]).size().reset_index(name="Line Count")
                     st.caption("Counts by invoice")
-                    st.dataframe(counts, use_container_width=True)
+                    _render_dataframe_without_arrow(counts, hide_index=True)
 
                 st.caption("Line item details (MISMATCH = Y rows added by Spend Agent)")
                 sort_cols = [c for c in ["Invoice Number", "Line Item Date"] if c in df_mismatch.columns]
@@ -4831,7 +4853,7 @@ if _mismatch_sum or _mismatch_expected:
                     df_mismatch = df_mismatch.sort_values(sort_cols)
                 df_mismatch = df_mismatch.reset_index(drop=True)
                 df_mismatch.index = range(1, len(df_mismatch) + 1)
-                st.dataframe(df_mismatch, use_container_width=True)
+                _render_dataframe_without_arrow(df_mismatch, hide_index=True)
             except Exception:
                 st.write(_mismatch_sum)
         else:
@@ -4854,7 +4876,7 @@ if _admin_task_sum or _admin_task_expected:
                 if "Invoice Number" in df_admin_task.columns:
                     counts = df_admin_task.groupby(["Invoice Number"]).size().reset_index(name="Line Count")
                     st.caption("Counts by invoice")
-                    st.dataframe(counts, use_container_width=True)
+                    _render_dataframe_without_arrow(counts, hide_index=True)
 
                 st.caption("Line item details (PROHIBITED_ADMIN = Y rows added by Spend Agent)")
                 sort_cols = [c for c in ["Invoice Number", "Line Item Date"] if c in df_admin_task.columns]
@@ -4862,7 +4884,7 @@ if _admin_task_sum or _admin_task_expected:
                     df_admin_task = df_admin_task.sort_values(sort_cols)
                 df_admin_task = df_admin_task.reset_index(drop=True)
                 df_admin_task.index = range(1, len(df_admin_task) + 1)
-                st.dataframe(df_admin_task, use_container_width=True)
+                _render_dataframe_without_arrow(df_admin_task, hide_index=True)
             except Exception:
                 st.write(_admin_task_sum)
         else:
