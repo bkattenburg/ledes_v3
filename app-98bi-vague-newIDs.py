@@ -167,27 +167,8 @@ def _generate_fee_lines_from_source_df(df_source, fee_count, timekeeper_data, bi
 # Baseline so static analyzers see it as defined before any use
 selected_items = []  # baseline for pylance
 
-# --- Streamlit DuplicateWidgetID guard ---------------------------------------
-# If a checkbox is rendered more than once with the same label and no explicit key,
-# Streamlit raises DuplicateWidgetID. This wrapper injects a stable, unique key
-# based on the callsite (file line) when no key is provided.
-import inspect, hashlib as _hashlib
-
-if not hasattr(st, "_orig_checkbox"):
-    st._orig_checkbox = st.checkbox  # preserve original
-
-def _safe_checkbox(label, **kwargs):
-    if "key" not in kwargs or kwargs["key"] is None:
-        # Hash label + call line number for a stable, unique key
-        caller = inspect.currentframe().f_back
-        callsite = f"{label}|{caller.f_lineno}"
-        auto_key = "cb_" + _hashlib.md5(callsite.encode("utf-8")).hexdigest()[:10]
-        kwargs["key"] = auto_key
-    return st._orig_checkbox(label, **kwargs)
-
-# Monkey patch
-st.checkbox = _safe_checkbox
-# -----------------------------------------------------------------------------
+# Streamlit widgets use explicit keys where needed.
+# Avoid monkey-patching st.checkbox across script reruns.
 
 # --- Red warning message styling ---------------------------------------------
 # Streamlit's native st.warning() renders as a yellow alert. This app treats
@@ -3838,7 +3819,12 @@ with tab_objects[2]:
     # Review/test scenario controls should be first so invoice-review options are easy to find.
     st.markdown("<h4 style='color: #1E1E1E;'>Invoice Review Scenarios</h4>", unsafe_allow_html=True)
 
-    spend_agent = st.checkbox("Spend Agent", value=False, help="Ensures selected mandatory line items are included; configure below.")
+    spend_agent = st.checkbox(
+        "Spend Agent",
+        value=False,
+        key="spend_agent_enabled",
+        help="Ensures selected test line items are included; configure below.",
+    )
 
     vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
 
@@ -3915,7 +3901,10 @@ with tab_objects[2]:
             if st.session_state.get("admin_task_line_items", False):
                 default_spend_agent_selection.append(admin_task_item_name)
         else:
-            default_spend_agent_selection = list(available_items)
+            # Start with no scenarios selected. Previously all mandatory scenarios
+            # were enabled at once when Spend Agent was checked, which caused a
+            # large conditional widget tree to render on the same rerun.
+            default_spend_agent_selection = []
             if st.session_state.get("mismatch_line_items", False):
                 default_spend_agent_selection.append(mismatch_item_name)
             if st.session_state.get("missing_attachment_line_item", False):
@@ -3923,11 +3912,7 @@ with tab_objects[2]:
             if st.session_state.get("admin_task_line_items", False):
                 default_spend_agent_selection.append(admin_task_item_name)
 
-        # Special rule for SimpleLegal/Unity: ensure Partner → Paralegal remains pre-selected if available.
-        if _canonical_env(st.session_state.get("selected_env")) == ENV_SIMPLELEGAL_UNITY:
-            pp_key = next((k for k in available_items if _is_partner_paralegal_item(k)), None)
-            if pp_key and pp_key not in default_spend_agent_selection:
-                default_spend_agent_selection.append(pp_key)
+        # Test scenarios are user-selected for all environments.
 
         action_cols = st.columns([1, 1, 4])
         with action_cols[0]:
