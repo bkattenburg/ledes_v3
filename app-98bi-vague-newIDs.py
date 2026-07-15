@@ -2970,6 +2970,68 @@ def _create_receipt_image(expense_row: dict, faker_instance: Faker) -> Tuple[str
 
     filename = f"Receipt_{exp_code}_{line_item_date.strftime('%Y%m%d')}.png"
     return filename, img_buffer
+def _create_combined_receipts_pdf(receipts_by_invoice: Dict[str, List[Dict]]) -> io.BytesIO:
+    """Create one PDF containing all generated receipt images, one receipt per page."""
+    from reportlab.lib.utils import ImageReader
+
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    page_width, page_height = letter
+    margin = 36
+    header_height = 28
+
+    receipt_count = 0
+    for invoice_number, files in (receipts_by_invoice or {}).items():
+        for receipt in files:
+            image_bytes = receipt.get("data")
+            if not image_bytes:
+                continue
+
+            try:
+                pil_img = PILImage.open(io.BytesIO(image_bytes))
+                img_width, img_height = pil_img.size
+                if img_width <= 0 or img_height <= 0:
+                    continue
+
+                available_width = page_width - (2 * margin)
+                available_height = page_height - (2 * margin) - header_height
+                scale = min(available_width / img_width, available_height / img_height)
+                draw_width = img_width * scale
+                draw_height = img_height * scale
+                x = (page_width - draw_width) / 2
+                y = margin + (available_height - draw_height) / 2
+
+                pdf.setFont("Helvetica-Bold", 10)
+                pdf.drawString(margin, page_height - margin + 4, f"Invoice {invoice_number}")
+                pdf.setFont("Helvetica", 8)
+                pdf.drawRightString(
+                    page_width - margin,
+                    page_height - margin + 4,
+                    str(receipt.get("flat_name", "Receipt")),
+                )
+                pdf.drawImage(
+                    ImageReader(io.BytesIO(image_bytes)),
+                    x, y,
+                    width=draw_width,
+                    height=draw_height,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
+                pdf.showPage()
+                receipt_count += 1
+            except Exception as exc:
+                logging.error(f"Unable to add receipt to combined PDF: {exc}")
+
+    if receipt_count == 0:
+        pdf.setFont("Helvetica", 12)
+        pdf.drawString(margin, page_height - margin, "No receipt images were generated.")
+        pdf.showPage()
+
+    pdf.save()
+    buffer.seek(0)
+    return buffer
+
+
 def _customize_email_body(matter_number: str, invoice_number: str) -> Tuple[str, str]:
     """Customize email subject and body with matter and invoice number."""
     subject = st.session_state.get("email_subject", f"LEDES Invoice for {matter_number} (Invoice #{invoice_number})")
@@ -3119,19 +3181,19 @@ with st.sidebar.expander("Timekeeper Downloads"):
         
 with st.sidebar.expander("Line Items"):
     # Custom Line Items Files
-    onit_lit_tasks_data = read_file_for_download("assets/custom_litigation_tasks_invoice_catalog_100_expenses.csv")
+    onit_lit_tasks_data = read_file_for_download("assets/custom_tasks.csv")
     if onit_lit_tasks_data:
         st.download_button("Litigation Line Items File", onit_lit_tasks_data, "custom_litigation_tasks.csv", "text/csv")
 
-    onit_pat_tasks_data = read_file_for_download("assets/custom_patent_tasks_invoice_catalog_100_expenses.csv")
+    onit_pat_tasks_data = read_file_for_download("assets/custom_pat_tasks.csv")
     if onit_pat_tasks_data:
         st.download_button("Patent Line Items File", onit_pat_tasks_data, "custom_patent_tasks.csv", "text/csv")
 
-    onit_trade_tasks_data = read_file_for_download("assets/custom_trademark_tasks_invoice_catalog_100_expenses.csv")
+    onit_trade_tasks_data = read_file_for_download("assets/custom_trade_tasks.csv")
     if onit_trade_tasks_data:
         st.download_button("Trademark Line Items File", onit_trade_tasks_data, "custom_trademark_tasks.csv", "text/csv")
 
-    onit_capmkt_tasks_data = read_file_for_download("assets/custom_capital_market_tasks_invoice_catalog_100_expenses.csv")
+    onit_capmkt_tasks_data = read_file_for_download("assets/custom_capital_markets.csv")
     if onit_capmkt_tasks_data:
         st.download_button("Capital Market Line Items File", onit_capmkt_tasks_data, "custom_capital_market_tasks.csv", "text/csv")
     
@@ -4268,10 +4330,35 @@ with tab_objects[output_tab_index]:
     else:
         combine_ledes = False
 
-    generate_receipts = st.checkbox("Generate Sample Receipts for Expenses?", value=False)
+    generate_receipts = st.checkbox("Generate Sample Receipts for Expenses", value=False)
+    single_receipt_file = False
     zip_receipts = False
     if generate_receipts:
-        zip_receipts = st.checkbox("Zip Receipts", value=True, key="zip_receipts", help="Combine all generated receipt images into a single ZIP file.")
+        st.session_state.setdefault("single_receipt_file", False)
+        st.session_state.setdefault("zip_receipts", False)
+
+        def _select_single_receipt_file():
+            if st.session_state.get("single_receipt_file", False):
+                st.session_state["zip_receipts"] = False
+
+        def _select_zip_receipts():
+            if st.session_state.get("zip_receipts", False):
+                st.session_state["single_receipt_file"] = False
+
+        single_receipt_file = st.checkbox(
+            "Single Receipt File",
+            key="single_receipt_file",
+            on_change=_select_single_receipt_file,
+            disabled=bool(st.session_state.get("zip_receipts", False)),
+            help="Combine all generated receipts into one PDF file, with one receipt per page.",
+        )
+        zip_receipts = st.checkbox(
+            "Zip Receipts",
+            key="zip_receipts",
+            on_change=_select_zip_receipts,
+            disabled=bool(st.session_state.get("single_receipt_file", False)),
+            help="Combine all generated receipt image files into a single ZIP file.",
+        )
 
 # Email Configuration Tab (only created if send_email is True)
 if st.session_state.send_email:
@@ -4465,6 +4552,7 @@ if generate_button:
         receipts_by_invoice = {}  # invoice_number -> list of {"zip_path","flat_name","data"}
         receipt_manifest_rows = []  # mapping receipts back to invoices
         combined_ledes_content = ""
+        single_receipt_file_enabled = st.session_state.get('single_receipt_file', False) if generate_receipts else False
         zip_receipts_enabled = st.session_state.get('zip_receipts', False) if generate_receipts else False
         generation_status_has_issues = False
 
@@ -4721,7 +4809,10 @@ if generate_button:
             # Process receipts after loop (across ALL invoices)
             any_receipts = any(files for files in receipts_by_invoice.values())
             if any_receipts:
-                if zip_receipts_enabled:
+                if single_receipt_file_enabled:
+                    combined_receipts_pdf = _create_combined_receipts_pdf(receipts_by_invoice)
+                    attachments_list.append(("Receipts_All_Invoices.pdf", combined_receipts_pdf.getvalue()))
+                elif zip_receipts_enabled:
                     zip_buf = io.BytesIO()
                     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zip_file:
                         for inv_no, files in receipts_by_invoice.items():
