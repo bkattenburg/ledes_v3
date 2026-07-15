@@ -4330,7 +4330,7 @@ with tab_objects[output_tab_index]:
     else:
         combine_ledes = False
 
-    generate_receipts = st.checkbox("Generate Individual Receipts", value=False)
+    generate_receipts = st.checkbox("Generate Receipts", value=False)
     single_receipt_file = False
     zip_receipts = False
     if generate_receipts:
