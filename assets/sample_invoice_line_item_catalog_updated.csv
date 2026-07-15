@@ -1,0 +1,21 @@
+﻿LINE_ITEM_TYPE,TASK_CODE,ACTIVITY_CODE,EXPENSE_CODE,DESCRIPTION,TK_CLASSIFICATION,BLOCKBILLING,VAGUE,MISMATCH,PROHIBITED_ADMIN,MIN_AMOUNT,MAX_AMOUNT,MIN_UNITS,MAX_UNITS,UNIT_COST,RECEIPT_REQUIRED,GENERATE_RECEIPT
+FEE,L120,A102,,Review vendor invoice and supporting documentation per attached expert invoice backup,Associate,N,N,N,N,,,,,,,
+FEE,L100,A101,,Analyze legal precedents concerning the applicable standard of review,Associate,N,N,N,N,,,,,,,
+FEE,L250,A106,,Prepare deposition outline and review key exhibits for witness {NAME_PLACEHOLDER},Associate,N,N,N,N,,,,,,,
+FEE,L330,A108,,Draft settlement agreement; revise release provisions; confer with client regarding settlement terms,Partner,Y,N,N,N,,,,,,,
+FEE,L120,A102,,Review documents,Associate,N,Y,N,N,,,,,,,
+FEE,L410,A111,,Prepare deposition chronology from client records,Associate,N,N,Y,N,,,,,,,
+FEE,L430,A112,,Schedule deposition with court reporter and circulate calendar notice,Paralegal,N,N,N,Y,,,,,,,
+FEE,L140,A103,,Prepare trial binder including witness lists and exhibit summaries,Paralegal,N,N,N,N,,,,,,,
+FEE,L220,A105,,Draft interrogatories addressing liability and damages issues,Associate,N,N,N,N,,,,,,,
+FEE,L300,A107,,Prepare for and argue motion before the court,Partner,N,N,N,N,,,,,,,
+EXPENSE,,,E101,Black-and-white photocopies of client-requested document set,,N,N,N,N,10,120,25,600,0.18,N,N
+EXPENSE,,,E105,Federal Express overnight delivery of executed documents,,N,N,N,N,28,95,1,1,,Y,Y
+EXPENSE,,,E107,Online legal research database charges for targeted research,,N,N,N,N,35,450,1,1,,Y,Y
+EXPENSE,,,E109,Personal automobile mileage for approved matter travel,,N,N,N,N,20,350,15,400,0.7,N,N
+EXPENSE,,,E110,Economy airfare for approved domestic matter travel,,N,N,N,N,225,950,1,1,,Y,Y
+EXPENSE,,,E110,Rideshare fare for approved matter-related transportation,,N,N,N,N,12,85,1,1,,Y,Y
+EXPENSE,,,E111,Hotel lodging for approved out-of-town matter travel,,N,N,N,N,140,475,1,5,,Y,Y
+EXPENSE,,,E112,Dinner during approved out-of-town matter travel,,N,N,N,N,25,95,1,1,,Y,Y
+EXPENSE,,,E114,Court or agency filing fee for matter submission,,N,N,N,N,25,750,1,1,,Y,Y
+EXPENSE,,,E122,Specialized consultant pass-through charge,,N,N,N,N,250,5000,1,1,,Y,Y
