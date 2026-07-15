@@ -4330,7 +4330,7 @@ with tab_objects[output_tab_index]:
     else:
         combine_ledes = False
 
-    generate_receipts = st.checkbox("Generate Sample Receipts for Expenses?", value=False)
+    generate_receipts = st.checkbox("Generate Individual Receipts", value=False)
     single_receipt_file = False
     zip_receipts = False
     if generate_receipts:
@@ -4346,14 +4346,14 @@ with tab_objects[output_tab_index]:
                 st.session_state["single_receipt_file"] = False
 
         single_receipt_file = st.checkbox(
-            "Single Receipt File",
+            "Generate Single Receipt File",
             key="single_receipt_file",
             on_change=_select_single_receipt_file,
             disabled=bool(st.session_state.get("zip_receipts", False)),
             help="Combine all generated receipts into one PDF file, with one receipt per page.",
         )
         zip_receipts = st.checkbox(
-            "Zip Receipts",
+            "Zip Multiple Receipts",
             key="zip_receipts",
             on_change=_select_zip_receipts,
             disabled=bool(st.session_state.get("single_receipt_file", False)),
