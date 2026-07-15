@@ -3119,19 +3119,19 @@ with st.sidebar.expander("Timekeeper Downloads"):
         
 with st.sidebar.expander("Line Items"):
     # Custom Line Items Files
-    onit_lit_tasks_data = read_file_for_download("assets/custom_tasks.csv")
+    onit_lit_tasks_data = read_file_for_download("assets/custom_litigation_tasks_invoice_catalog_100_expenses.csv")
     if onit_lit_tasks_data:
         st.download_button("Litigation Line Items File", onit_lit_tasks_data, "custom_litigation_tasks.csv", "text/csv")
 
-    onit_pat_tasks_data = read_file_for_download("assets/custom_pat_tasks.csv")
+    onit_pat_tasks_data = read_file_for_download("assets/custom_patent_tasks_invoice_catalog_100_expenses.csv")
     if onit_pat_tasks_data:
         st.download_button("Patent Line Items File", onit_pat_tasks_data, "custom_patent_tasks.csv", "text/csv")
 
-    onit_trade_tasks_data = read_file_for_download("assets/custom_trade_tasks.csv")
+    onit_trade_tasks_data = read_file_for_download("assets/custom_trademark_tasks_invoice_catalog_100_expenses.csv")
     if onit_trade_tasks_data:
         st.download_button("Trademark Line Items File", onit_trade_tasks_data, "custom_trademark_tasks.csv", "text/csv")
 
-    onit_capmkt_tasks_data = read_file_for_download("assets/custom_capital_markets.csv")
+    onit_capmkt_tasks_data = read_file_for_download("assets/custom_capital_market_tasks_invoice_catalog_100_expenses.csv")
     if onit_capmkt_tasks_data:
         st.download_button("Capital Market Line Items File", onit_capmkt_tasks_data, "custom_capital_market_tasks.csv", "text/csv")
     
