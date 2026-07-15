@@ -3197,7 +3197,7 @@ with st.sidebar.expander("Line Items"):
     if onit_capmkt_tasks_data:
         st.download_button("Capital Market Line Items File", onit_capmkt_tasks_data, "custom_capital_market_tasks.csv", "text/csv")
 
-    onit_template_tasks_data = read_file_for_download("assets/sample_invoice_line_item_catalog.csv")
+    onit_template_tasks_data = read_file_for_download("assets/sample_invoice_line_item_catalog_updated.csv")
     if onit_template_tasks_data:
         st.download_button("Line Item Template", onit_template_tasks_data, "line_item_template.csv", "text/csv")
     
