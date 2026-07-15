@@ -1,8 +1,16 @@
 
-streamlit==1.36.0
-pandas
-faker
-lxml
-reportlab
+#streamlit==1.36.0
+#pandas
+#faker
+#lxml
+#reportlab
 
-Pillow
+#Pillow
+
+streamlit==1.38.0
+pandas==2.3.3
+numpy==2.2.6
+pyarrow==17.0.0
+faker==40.31.0
+pillow==10.4.0
+reportlab==4.4.9
