@@ -1074,44 +1074,50 @@ def _load_timekeepers(uploaded_file: Optional[Any]) -> Optional[List[Dict]]:
 
 
 def _load_custom_task_activity_data(uploaded_file: Optional[Any]) -> Optional[List[Tuple[str, str, str]]]:
-    """Load custom task/activity data from CSV."""
+    """Load a combined fee and expense invoice line-item catalog from CSV."""
     if uploaded_file is None:
         return None
     try:
-        df = pd.read_csv(uploaded_file)
-        required_cols = ["TASK_CODE", "ACTIVITY_CODE", "DESCRIPTION"]
-        if not all(col in df.columns for col in required_cols):
-            st.error(f"Custom Task/Activity CSV must contain the following columns: {', '.join(required_cols)}")
+        df = pd.read_csv(uploaded_file).fillna("")
+        if "DESCRIPTION" not in df.columns:
+            st.error("Invoice Line Item Catalog must contain a DESCRIPTION column.")
+            return None
+        if "LINE_ITEM_TYPE" not in df.columns:
+            # Backward compatibility: older catalogs contain fee rows only.
+            df["LINE_ITEM_TYPE"] = "FEE"
+        df["LINE_ITEM_TYPE"] = df["LINE_ITEM_TYPE"].astype(str).str.strip().str.upper()
+        invalid_types = sorted(set(df.loc[~df["LINE_ITEM_TYPE"].isin(["FEE", "EXPENSE"]), "LINE_ITEM_TYPE"]))
+        if invalid_types:
+            st.error("LINE_ITEM_TYPE must contain only FEE or EXPENSE.")
+            return None
+        fee_mask = df["LINE_ITEM_TYPE"].eq("FEE")
+        expense_mask = df["LINE_ITEM_TYPE"].eq("EXPENSE")
+        for col in ["TASK_CODE", "ACTIVITY_CODE"]:
+            if col not in df.columns:
+                df[col] = ""
+        if fee_mask.any() and ((df.loc[fee_mask, "TASK_CODE"].astype(str).str.strip() == "").any() or (df.loc[fee_mask, "ACTIVITY_CODE"].astype(str).str.strip() == "").any()):
+            st.error("FEE rows must contain TASK_CODE and ACTIVITY_CODE values.")
+            return None
+        if "EXPENSE_CODE" not in df.columns:
+            df["EXPENSE_CODE"] = ""
+        if expense_mask.any() and (df.loc[expense_mask, "EXPENSE_CODE"].astype(str).str.strip() == "").any():
+            st.error("EXPENSE rows must contain an EXPENSE_CODE value.")
             return None
         if df.empty:
-            st.warning("Custom Task/Activity CSV file is empty.")
-            try:
-                st.session_state.pop("custom_fee_first_row", None)
-            except Exception:
-                pass
+            st.warning("Invoice Line Item Catalog is empty.")
             return []
-
-        # Preserve the first uploaded row before de-duping/shuffling so Spend Agent
-        # test items can intentionally inject a specific source row into the invoice.
-        try:
-            st.session_state["custom_fee_first_row"] = df.iloc[0].to_dict()
-        except Exception:
-            pass
-
-        # NEW: remove exact duplicate task/activity/description triples
-        df = df.drop_duplicates(subset=["TASK_CODE", "ACTIVITY_CODE", "DESCRIPTION"]).reset_index(drop=True)
-        # (Optional but helpful) shuffle once so selection spreads across the file
-        df = df.sample(frac=1, random_state=None).reset_index(drop=True)
-        # Stash the full (de-duplicated) DataFrame for fee-source usage (including optional Blockbilling logic)
-        try:
-            st.session_state["custom_fee_df"] = df.copy()
-        except Exception:
-            pass
-        custom_tasks = [(str(r["TASK_CODE"]), str(r["ACTIVITY_CODE"]), str(r["DESCRIPTION"])) for _, r in df.iterrows()]
-        return custom_tasks
+        fee_first = df[fee_mask]
+        if not fee_first.empty:
+            st.session_state["custom_fee_first_row"] = fee_first.iloc[0].to_dict()
+        dedupe_cols = ["LINE_ITEM_TYPE", "TASK_CODE", "ACTIVITY_CODE", "EXPENSE_CODE", "DESCRIPTION"]
+        df = df.drop_duplicates(subset=dedupe_cols).sample(frac=1, random_state=None).reset_index(drop=True)
+        st.session_state["custom_fee_df"] = df.copy()
+        st.session_state["custom_fee_df_full"] = df.copy()
+        fee_df = df[df["LINE_ITEM_TYPE"].eq("FEE")]
+        return [(str(r["TASK_CODE"]), str(r["ACTIVITY_CODE"]), str(r["DESCRIPTION"])) for _, r in fee_df.iterrows()]
     except Exception as e:
-        st.error(f"Error loading custom tasks file: {e}")
-        logging.error(f"Custom tasks load error: {e}")
+        st.error(f"Error loading invoice line-item catalog: {e}")
+        logging.error(f"Invoice catalog load error: {e}")
         return None
 
 
@@ -1486,96 +1492,62 @@ def _generate_fees(fee_count: int, timekeeper_data: List[Dict], billing_start_da
     return rows
 
 
+def _catalog_float(value, default=0.0):
+    try:
+        if value is None or str(value).strip() == "":
+            return float(default)
+        return float(value)
+    except Exception:
+        return float(default)
+
+
 def _generate_expenses(expense_count: int, billing_start_date: datetime.date, billing_end_date: datetime.date, client_id: str, law_firm_id: str, invoice_desc: str) -> List[Dict]:
-    """Generate expense line items for an invoice with realistic amounts."""
+    """Generate expense rows exclusively from EXPENSE entries in the uploaded invoice catalog."""
     rows: List[Dict] = []
-    delta = billing_end_date - billing_start_date
-    num_days = max(1, delta.days + 1)
-    # Read tunable expense settings from UI
-    try:
-        import streamlit as st
-    except Exception:
-        st = None
-    mileage_rate_cfg = float(st.session_state.get("mileage_rate_e109", 0.65)) if st else 0.65
-    travel_rng = st.session_state.get("travel_range_e110", (100.0, 800.0)) if st else (100.0, 800.0)
-    tel_rng = st.session_state.get("telephone_range_e105", (5.0, 15.0)) if st else (5.0, 15.0)
-    copying_rate = float(st.session_state.get("copying_rate_e101", 0.24)) if st else 0.24
-    try:
-        travel_min, travel_max = float(travel_rng[0]), float(travel_rng[1])
-    except Exception:
-        travel_min, travel_max = 100.0, 800.0
-    try:
-        tel_min, tel_max = float(tel_rng[0]), float(tel_rng[1])
-    except Exception:
-        tel_min, tel_max = 5.0, 15.0
-
-
-    # Always include some Copying (E101)
-    e101_actual_count = random.randint(1, min(3, expense_count))
-    for _ in range(e101_actual_count):
-        description = "Photocopies"
-        expense_code = "E101"
-        hours = random.randint(50, 300)  # number of pages
-        rate = round(copying_rate, 2)  # per-page
-        random_day_offset = random.randint(0, num_days - 1)
-        line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
-        line_item_total = round(hours * rate, 2)
-        row = {
-            "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-            "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
-            "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "",
-            "TASK_CODE": "", "ACTIVITY_CODE": "", "EXPENSE_CODE": expense_code, "DESCRIPTION": description,
-            "HOURS": hours, "RATE": rate, "LINE_ITEM_TOTAL": line_item_total
-        }
-        rows.append(row)
-
-    # Remaining expenses with category-aware amounts
-    for _ in range(max(0, expense_count - e101_actual_count)):
-        description = random.choice(OTHER_EXPENSE_DESCRIPTIONS)
-        expense_code = CONFIG['EXPENSE_CODES'][description]
-        random_day_offset = random.randint(0, num_days - 1)
-        line_item_date = billing_start_date + datetime.timedelta(days=random_day_offset)
-
-        if expense_code == "E109":  # Local travel (mileage)
-            miles = random.randint(5, 50)
-            hours = miles  # store miles in HOURS
-            rate = mileage_rate_cfg  # mileage rate from UI
-            line_item_total = round(miles * rate, 2)
-        elif expense_code == "E110":  # Out-of-town travel (ticket/transport)
-            hours = 1
-            rate = round(random.uniform(travel_min, travel_max), 2)
-            line_item_total = rate
-        elif expense_code == "E105":  # Telephone
-            hours = 1
-            rate = round(random.uniform(tel_min, tel_max), 2)
-            line_item_total = rate
-        elif expense_code == "E107":  # /messenger
-            hours = 1
-            rate = round(random.uniform(20.0, 100.0), 2)
-            line_item_total = rate
-        elif expense_code == "E108":  # Postage
-            hours = 1
-            rate = round(random.uniform(5.0, 50.0), 2)
-            line_item_total = rate
-        elif expense_code == "E111":  # Meals
-            hours = 1
-            rate = round(random.uniform(15.0, 150.0), 2)
-            line_item_total = rate
+    if expense_count <= 0:
+        return rows
+    df_src = _filter_line_item_type(_get_custom_fee_source_df(), "EXPENSE")
+    if df_src is None or df_src.empty:
+        st.warning("The uploaded Invoice Line Item Catalog contains no EXPENSE rows, so standard expense lines were not generated.")
+        return rows
+    # Reserved test rows should never enter ordinary expense generation.
+    df_src = _exclude_admin_task_rows(_exclude_mismatch_rows(df_src))
+    if df_src.empty:
+        return rows
+    picks = df_src.sample(n=expense_count, replace=(len(df_src) < expense_count), random_state=None)
+    delta_days = max(0, (billing_end_date - billing_start_date).days)
+    for _, r in picks.iterrows():
+        code = str(r.get("EXPENSE_CODE", "")).strip()
+        desc = str(r.get("DESCRIPTION", "")).strip()
+        min_units = max(1.0, _catalog_float(r.get("MIN_UNITS", ""), 1.0))
+        max_units = max(min_units, _catalog_float(r.get("MAX_UNITS", ""), min_units))
+        unit_cost = _catalog_float(r.get("UNIT_COST", ""), 0.0)
+        min_amount = max(0.01, _catalog_float(r.get("MIN_AMOUNT", ""), 10.0))
+        max_amount = max(min_amount, _catalog_float(r.get("MAX_AMOUNT", ""), min_amount))
+        if float(min_units).is_integer() and float(max_units).is_integer():
+            units = random.randint(int(min_units), int(max_units))
         else:
-            hours = random.randint(1, 5)
-            rate = round(random.uniform(10.0, 150.0), 2)
-            line_item_total = round(hours * rate, 2)
-
-        row = {
+            units = round(random.uniform(min_units, max_units), 1)
+        if unit_cost > 0:
+            rate = round(unit_cost, 2)
+            total = round(float(units) * rate, 2)
+        else:
+            total = round(random.uniform(min_amount, max_amount), 2)
+            rate = round(total / float(units), 2) if units else total
+            total = round(float(units) * rate, 2)
+        day = billing_start_date + datetime.timedelta(days=random.randint(0, delta_days) if delta_days else 0)
+        rows.append({
             "INVOICE_DESCRIPTION": invoice_desc, "CLIENT_ID": client_id, "LAW_FIRM_ID": law_firm_id,
-            "LINE_ITEM_DATE": line_item_date.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
-            "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "",
-            "TASK_CODE": "", "ACTIVITY_CODE": "", "EXPENSE_CODE": expense_code, "DESCRIPTION": description,
-            "HOURS": hours, "RATE": rate, "LINE_ITEM_TOTAL": line_item_total
-        }
-        rows.append(row)
-
+            "LINE_ITEM_DATE": day.strftime("%Y-%m-%d"), "TIMEKEEPER_NAME": "",
+            "TIMEKEEPER_CLASSIFICATION": "", "TIMEKEEPER_ID": "", "TASK_CODE": "",
+            "ACTIVITY_CODE": "", "EXPENSE_CODE": code, "DESCRIPTION": desc,
+            "HOURS": units, "RATE": rate, "LINE_ITEM_TOTAL": total,
+            "_receipt_required": str(r.get("RECEIPT_REQUIRED", "N")).strip().upper() == "Y",
+            "_generate_receipt": str(r.get("GENERATE_RECEIPT", "N")).strip().upper() == "Y",
+            "_catalog_expense": True,
+        })
     return rows
+
 
 def _append_two_attendee_meeting_rows(rows, timekeeper_data, billing_start_date, faker_instance, client_id, law_firm_id, invoice_desc):
     """
@@ -1677,6 +1649,16 @@ def _yes_mask(series):
     return series.astype(str).str.strip().str.upper().eq("Y")
 
 
+def _filter_line_item_type(df, line_type: str):
+    """Filter a combined catalog to FEE or EXPENSE rows; old catalogs are treated as fee-only."""
+    if df is None or getattr(df, "empty", True):
+        return df
+    type_col = _find_first_column(df, ["LINE_ITEM_TYPE", "LINE TYPE", "TYPE"])
+    if not type_col:
+        return df if str(line_type).upper() == "FEE" else df.iloc[0:0]
+    return df[df[type_col].astype(str).str.strip().str.upper().eq(str(line_type).upper())]
+
+
 def _exclude_mismatch_rows(df):
     """Keep MISMATCH=Y rows out of normal/vague/block-billing generation.
 
@@ -1722,13 +1704,13 @@ def _exclude_admin_task_rows(df):
 
 def _get_admin_task_pool_df():
     """Return custom line-item rows where PROHIBITED_ADMIN=Y, plus a warning if unavailable."""
-    df_src = _get_custom_fee_source_df()
+    df_src = _filter_line_item_type(_get_custom_fee_source_df(), "FEE")
     if df_src is None or getattr(df_src, "empty", True):
-        return None, "No Custom Line Item Details CSV is loaded, so Admin Task line items could not be added."
+        return None, "No fee rows are loaded in the Invoice Line Item Catalog, so Admin Task line items could not be added."
 
     admin_col = _get_prohibited_admin_col(df_src)
     if not admin_col:
-        return None, "The Custom Line Item Details CSV does not contain a PROHIBITED_ADMIN column, so Admin Task line items could not be added."
+        return None, "The Invoice Line Item Catalog does not contain a PROHIBITED_ADMIN column, so Admin Task line items could not be added."
 
     required = {
         "TASK_CODE": _find_first_column(df_src, ["TASK_CODE", "TASK", "Task Code", "task_code"]),
@@ -1737,11 +1719,11 @@ def _get_admin_task_pool_df():
     }
     missing = [label for label, col in required.items() if not col]
     if missing:
-        return None, f"The Custom Line Item Details CSV is missing required column(s) for Admin Task line items: {', '.join(missing)}."
+        return None, f"The Invoice Line Item Catalog is missing required column(s) for Admin Task line items: {', '.join(missing)}."
 
     pool_df = df_src[_yes_mask(df_src[admin_col])].copy()
     if pool_df.empty:
-        return None, "No rows with PROHIBITED_ADMIN = Y were found in the Custom Line Item Details CSV."
+        return None, "No rows with PROHIBITED_ADMIN = Y were found in the Invoice Line Item Catalog."
     return pool_df, ""
 
 
@@ -1752,13 +1734,13 @@ def _has_admin_task_pool_rows() -> bool:
 
 def _get_mismatch_pool_df():
     """Return custom line-item rows where MISMATCH=Y, plus a user-facing warning if unavailable."""
-    df_src = _get_custom_fee_source_df()
+    df_src = _filter_line_item_type(_get_custom_fee_source_df(), "FEE")
     if df_src is None or getattr(df_src, "empty", True):
-        return None, "No Custom Line Item Details CSV is loaded, so Mismatch line items could not be added."
+        return None, "No fee rows are loaded in the Invoice Line Item Catalog, so Mismatch line items could not be added."
 
     mismatch_col = _find_first_column(df_src, ["MISMATCH", "Mismatch", "mismatch"])
     if not mismatch_col:
-        return None, "The Custom Line Item Details CSV does not contain a MISMATCH column, so Mismatch line items could not be added."
+        return None, "The Invoice Line Item Catalog does not contain a MISMATCH column, so Mismatch line items could not be added."
 
     required = {
         "TASK_CODE": _find_first_column(df_src, ["TASK_CODE", "TASK", "Task Code", "task_code"]),
@@ -1767,11 +1749,11 @@ def _get_mismatch_pool_df():
     }
     missing = [label for label, col in required.items() if not col]
     if missing:
-        return None, f"The Custom Line Item Details CSV is missing required column(s) for Mismatch line items: {', '.join(missing)}."
+        return None, f"The Invoice Line Item Catalog is missing required column(s) for Mismatch line items: {', '.join(missing)}."
 
     pool_df = df_src[_yes_mask(df_src[mismatch_col])].copy()
     if pool_df.empty:
-        return None, "No rows with MISMATCH = Y were found in the Custom Line Item Details CSV."
+        return None, "No rows with MISMATCH = Y were found in the Invoice Line Item Catalog."
 
     # Keep Admin Task examples dedicated to Spend Agent > Admin Tasks so Mismatch
     # does not accidentally create prohibited-admin findings.
@@ -1864,7 +1846,7 @@ def _append_mismatch_line_items(
                 "Invoice Number": st.session_state.get("_mismatch_invoice_number", st.session_state.get("_pp_invoice_number", "")),
                 "Billing Start": st.session_state.get("_mismatch_billing_start", st.session_state.get("_pp_billing_start", "")),
                 "Billing End": st.session_state.get("_mismatch_billing_end", st.session_state.get("_pp_billing_end", "")),
-                "Source": "Custom Line Item Details CSV",
+                "Source": "Invoice Line Item Catalog",
                 "MISMATCH": "Y",
                 "Line Item Date": row.get("LINE_ITEM_DATE", ""),
                 "Timekeeper": row.get("TIMEKEEPER_NAME", ""),
@@ -1957,7 +1939,7 @@ def _append_admin_task_line_items(
                 "Invoice Number": st.session_state.get("_admin_task_invoice_number", st.session_state.get("_pp_invoice_number", "")),
                 "Billing Start": st.session_state.get("_admin_task_billing_start", st.session_state.get("_pp_billing_start", "")),
                 "Billing End": st.session_state.get("_admin_task_billing_end", st.session_state.get("_pp_billing_end", "")),
-                "Source": "Custom Line Item Details CSV",
+                "Source": "Invoice Line Item Catalog",
                 "PROHIBITED_ADMIN": "Y",
                 "Line Item Date": row.get("LINE_ITEM_DATE", ""),
                 "Timekeeper": row.get("TIMEKEEPER_NAME", ""),
@@ -1993,12 +1975,12 @@ def _append_missing_attachment_line_item(
     messages: List[str] = []
     first_row = st.session_state.get("custom_fee_first_row")
     if not first_row:
-        return rows, ["No Custom Line Item Details CSV is loaded, so the Missing Attachment line item could not be added."]
+        return rows, ["No Invoice Line Item Catalog is loaded, so the Missing Attachment line item could not be added."]
 
     try:
         df_one = pd.DataFrame([first_row])
     except Exception:
-        return rows, ["The first row of the Custom Line Item Details CSV could not be read for the Missing Attachment line item."]
+        return rows, ["The first row of the Invoice Line Item Catalog could not be read for the Missing Attachment line item."]
 
     task_col = _find_first_column(df_one, ["TASK_CODE", "TASK", "Task Code", "task_code"])
     act_col = _find_first_column(df_one, ["ACTIVITY_CODE", "ACTIVITY", "Activity Code", "activity_code"])
@@ -2012,7 +1994,7 @@ def _append_missing_attachment_line_item(
     }.items() if not col]
     if missing_cols:
         return rows, [
-            "The Custom Line Item Details CSV is missing required column(s) for the Missing Attachment line item: "
+            "The Invoice Line Item Catalog is missing required column(s) for the Missing Attachment line item: "
             + ", ".join(missing_cols)
             + "."
         ]
@@ -2055,7 +2037,7 @@ def _append_missing_attachment_line_item(
             "Invoice Number": st.session_state.get("_missing_attachment_invoice_number", st.session_state.get("_pp_invoice_number", "")),
             "Billing Start": st.session_state.get("_missing_attachment_billing_start", st.session_state.get("_pp_billing_start", "")),
             "Billing End": st.session_state.get("_missing_attachment_billing_end", st.session_state.get("_pp_billing_end", "")),
-            "Source": "First row of Custom Line Item Details CSV",
+            "Source": "First row of Invoice Line Item Catalog",
             "Line Item Date": row.get("LINE_ITEM_DATE", ""),
             "Timekeeper": row.get("TIMEKEEPER_NAME", ""),
             "Timekeeper Class": row.get("TIMEKEEPER_CLASSIFICATION", ""),
@@ -2103,10 +2085,12 @@ def _generate_invoice_data(
     except Exception:
         df_src = None
 
-    # Split source df into vague and non-vague pools
+    # Split source df into fee-only vague and non-vague pools.
+    # EXPENSE rows are handled separately by _generate_expenses().
     df_non_vague_pool = None
     df_vague_pool = None
     if df_src is not None:
+        df_src = _filter_line_item_type(df_src, "FEE")
         if "VAGUE" in df_src.columns:
             is_vague_mask = df_src["VAGUE"].astype(str).str.strip().str.upper() == "Y"
             df_vague_pool = df_src[is_vague_mask]
@@ -2383,7 +2367,7 @@ def _ensure_mandatory_lines(
                 # Pull Paralegal-tagged tasks/descriptions from the uploaded line-item CSV (if available).
                 df_src = None
                 try:
-                    df_src = _get_custom_fee_source_df()
+                    df_src = _filter_line_item_type(_get_custom_fee_source_df(), "FEE")
                 except Exception:
                     df_src = None
 
@@ -3150,24 +3134,23 @@ with st.sidebar.expander("Line Items"):
     
     # Line Items Template
     sample_custom_df = pd.DataFrame({
-        "TASK_CODE": ["L100", "L110", "L120"],
-        "ACTIVITY_CODE": ["A101", "A101", "A102"],
-        "DESCRIPTION": [
-            "Legal Research: Analyze legal precedents",
-            "Legal Research: Review statutes and regulations",
-            "Prepare deposition chronology from client records"
-        ],
-        "TK_CLASSIFICATION": ["Associate", "Partner", "Associate"],
-        "BLOCKBILLING": ["N", "Y", "N"],
-        "VAGUE": ["N", "Y", "N"],
-        "MISMATCH": ["N", "N", "Y"],
-        "PROHIBITED_ADMIN": ["N", "N", "N"]
+        "LINE_ITEM_TYPE": ["FEE", "FEE", "EXPENSE"],
+        "TASK_CODE": ["L100", "L120", ""],
+        "ACTIVITY_CODE": ["A101", "A102", ""],
+        "EXPENSE_CODE": ["", "", "E110"],
+        "DESCRIPTION": ["Analyze legal precedents", "Prepare deposition chronology", "Approved economy airfare for matter travel"],
+        "TK_CLASSIFICATION": ["Associate", "Associate", ""],
+        "BLOCKBILLING": ["N", "N", "N"], "VAGUE": ["N", "N", "N"],
+        "MISMATCH": ["N", "Y", "N"], "PROHIBITED_ADMIN": ["N", "N", "N"],
+        "MIN_AMOUNT": ["", "", 300], "MAX_AMOUNT": ["", "", 1200],
+        "MIN_UNITS": ["", "", 1], "MAX_UNITS": ["", "", 1], "UNIT_COST": ["", "", ""],
+        "RECEIPT_REQUIRED": ["", "", "Y"], "GENERATE_RECEIPT": ["", "", "Y"],
     })
     csv_custom_sample_bytes = sample_custom_df.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="Line Items Template",
         data=csv_custom_sample_bytes,
-        file_name="sample_custom_tasks.csv",
+        file_name="sample_invoice_line_item_catalog.csv",
         mime="text/csv"
     )
 # --- FAQs moved to Sidebar (Corrected) ---
@@ -3240,17 +3223,21 @@ with st.sidebar.expander("How do I format the timekeeper CSV?"):
     - `RATE`
     """)
 
-with st.sidebar.expander("How do I format the custom line items CSV?"):
+with st.sidebar.expander("How do I format the invoice line-item catalog CSV?"):
     st.markdown("""
-    The CSV requires the following columns:
-    - `TASK_CODE`
-    - `ACTIVITY_CODE`
+    The combined catalog supports fee and expense rows using:
+    - `LINE_ITEM_TYPE` (`FEE` or `EXPENSE`)
+    - `TASK_CODE` (required for fee rows)
+    - `ACTIVITY_CODE` (required for fee rows)
+    - `EXPENSE_CODE` (required for expense rows)
     - `DESCRIPTION`
     - `TK_CLASSIFICATION`
     - `BLOCKBILLING` ('Y' or 'N')
     - `VAGUE` ('Y' or 'N')
     - `MISMATCH` ('Y' or 'N') — used by Spend Agent > Mismatch
     - `PROHIBITED_ADMIN` ('Y' or 'N') — used by Spend Agent > Admin Tasks
+    - `MIN_AMOUNT`, `MAX_AMOUNT`, `MIN_UNITS`, `MAX_UNITS`, and `UNIT_COST` — expense generation ranges
+    - `RECEIPT_REQUIRED` and `GENERATE_RECEIPT` ('Y' or 'N') — expense receipt behavior
 
     **Note:** Use `{NAME_PLACEHOLDER}` in a description to auto-insert a random name.
     """)
@@ -3333,10 +3320,10 @@ with tab_objects[0]:
                 st.info("No timekeepers loaded yet.")
         
 
-    use_custom_tasks = st.checkbox("Use Custom Line Item Details?", value=True)
+    use_custom_tasks = st.checkbox("Use Invoice Line Item Catalog?", value=True)
     uploaded_custom_tasks_file = None
     if use_custom_tasks:
-        uploaded_custom_tasks_file = st.file_uploader("Upload Line Items File", type="csv")
+        uploaded_custom_tasks_file = st.file_uploader("Upload Invoice Line Item Catalog", type="csv")
 
     task_activity_desc = CONFIG['DEFAULT_TASK_ACTIVITY_DESC']
     custom_tasks_data = None
@@ -3344,7 +3331,7 @@ with tab_objects[0]:
         custom_tasks_data = _load_custom_task_activity_data(uploaded_custom_tasks_file)
         if custom_tasks_data is not None:
             li_count = len(custom_tasks_data)
-            st.success(f"Loaded {li_count} custom line items.")
+            st.success(f"Loaded {li_count} invoice catalog rows.")
             if custom_tasks_data:
                 task_activity_desc = custom_tasks_data
 
@@ -4689,7 +4676,13 @@ if generate_button:
                 if generate_receipts:
                     receipts_by_invoice.setdefault(current_invoice_number, [])
                     for line_no, (_, row) in enumerate(df_invoice.iterrows(), start=1):
-                        if row.get('EXPENSE_CODE') and row.get('EXPENSE_CODE') != 'E101':
+                        exp_code_for_receipt = str(row.get('EXPENSE_CODE', '')).strip()
+                        catalog_receipt_setting = row.get('_generate_receipt', None)
+                        if catalog_receipt_setting is None:
+                            should_generate_receipt = bool(exp_code_for_receipt) and exp_code_for_receipt not in {'E101', 'E103', 'E104', 'E105'}
+                        else:
+                            should_generate_receipt = bool(exp_code_for_receipt) and bool(catalog_receipt_setting)
+                        if should_generate_receipt:
                             _unused_name, receipt_data_buf = _create_receipt_image(row.to_dict(), faker)
                             if receipt_data_buf:
                                 exp_code = str(row.get('EXPENSE_CODE','')).strip()
@@ -4859,7 +4852,7 @@ if _mismatch_sum or _mismatch_expected:
         else:
             st.info(
                 "No Mismatch line items were generated. This can happen if Spend Agent > Mismatch was selected "
-                "but no Custom Line Item Details CSV was loaded, the CSV did not include a MISMATCH column, "
+                "but no Invoice Line Item Catalog was loaded, the CSV did not include a MISMATCH column, "
                 "no rows had MISMATCH = Y, or no timekeeper data was available."
             )
 
@@ -4890,7 +4883,7 @@ if _admin_task_sum or _admin_task_expected:
         else:
             st.info(
                 "No Admin Task line items were generated. This can happen if Spend Agent > Admin Tasks was selected "
-                "but no Custom Line Item Details CSV was loaded, the CSV did not include a PROHIBITED_ADMIN column, "
+                "but no Invoice Line Item Catalog was loaded, the CSV did not include a PROHIBITED_ADMIN column, "
                 "no rows had PROHIBITED_ADMIN = Y, or no timekeeper data was available."
             )
 
