@@ -1,0 +1,381 @@
+LINE_ITEM_TYPE,TASK_CODE,ACTIVITY_CODE,EXPENSE_CODE,DESCRIPTION,TK_CLASSIFICATION,BLOCKBILLING,VAGUE,MISMATCH,PROHIBITED_ADMIN,MIN_AMOUNT,MAX_AMOUNT,MIN_UNITS,MAX_UNITS,UNIT_COST,RECEIPT_REQUIRED,GENERATE_RECEIPT
+FEE,L170,A101,,Advise client on transaction structure for IPO,Partner,N,N,N,N,,,,,,,
+FEE,L110,A102,,Participate in strategy call with client executives regarding IPO,Partner,N,N,N,N,,,,,,,
+FEE,L170,A103,,Review principal legal issues affecting IPO,Partner,N,N,N,N,,,,,,,
+FEE,L160,A104,,Draft transaction timeline and work plan for IPO,Associate,N,N,N,N,,,,,,,
+FEE,L120,A105,,Review company charter documents in connection with IPO,Associate,N,N,N,N,,,,,,,
+FEE,L120,A106,,Analyze material contracts for disclosure issues in IPO,Associate,N,N,N,N,,,,,,,
+FEE,L160,A107,,Organize signature pages for IPO,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A108,,Compile due diligence index for IPO,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A109,,Advise client on transaction structure for follow on equity offering,Partner,N,N,N,N,,,,,,,
+FEE,L110,A110,,Participate in strategy call with client executives regarding follow on equity offering,Partner,N,N,N,N,,,,,,,
+FEE,L170,A111,,Review principal legal issues affecting follow on equity offering,Partner,N,N,N,N,,,,,,,
+FEE,L160,A112,,Draft transaction timeline and work plan for follow on equity offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A113,,Review company charter documents in connection with follow on equity offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A114,,Analyze material contracts for disclosure issues in follow on equity offering,Associate,N,N,N,N,,,,,,,
+FEE,L160,A115,,Organize signature pages for follow on equity offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A116,,Compile due diligence index for follow on equity offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A117,,Advise client on transaction structure for at the market program,Partner,N,N,N,N,,,,,,,
+FEE,L110,A118,,Participate in strategy call with client executives regarding at the market program,Partner,N,N,N,N,,,,,,,
+FEE,L170,A119,,Review principal legal issues affecting at the market program,Partner,N,N,N,N,,,,,,,
+FEE,L160,A120,,Draft transaction timeline and work plan for at the market program,Associate,N,N,N,N,,,,,,,
+FEE,L120,A121,,Review company charter documents in connection with at the market program,Associate,N,N,N,N,,,,,,,
+FEE,L120,A122,,Analyze material contracts for disclosure issues in at the market program,Associate,N,N,N,N,,,,,,,
+FEE,L160,A123,,Organize signature pages for at the market program,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A124,,Compile due diligence index for at the market program,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A125,,Advise client on transaction structure for registered direct offering,Partner,N,N,N,N,,,,,,,
+FEE,L110,A126,,Participate in strategy call with client executives regarding registered direct offering,Partner,N,N,N,N,,,,,,,
+FEE,L170,A127,,Review principal legal issues affecting registered direct offering,Partner,N,N,N,N,,,,,,,
+FEE,L160,A128,,Draft transaction timeline and work plan for registered direct offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A129,,Review company charter documents in connection with registered direct offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A130,,Analyze material contracts for disclosure issues in registered direct offering,Associate,N,N,N,N,,,,,,,
+FEE,L160,A131,,Organize signature pages for registered direct offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A132,,Compile due diligence index for registered direct offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A133,,Advise client on transaction structure for private placement,Partner,N,N,N,N,,,,,,,
+FEE,L110,A134,,Participate in strategy call with client executives regarding private placement,Partner,N,N,N,N,,,,,,,
+FEE,L170,A135,,Review principal legal issues affecting private placement,Partner,N,N,N,N,,,,,,,
+FEE,L160,A136,,Draft transaction timeline and work plan for private placement,Associate,N,N,N,N,,,,,,,
+FEE,L120,A137,,Review company charter documents in connection with private placement,Associate,N,N,N,N,,,,,,,
+FEE,L120,A138,,Analyze material contracts for disclosure issues in private placement,Associate,N,N,N,N,,,,,,,
+FEE,L160,A139,,Organize signature pages for private placement,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A140,,Compile due diligence index for private placement,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A141,,Advise client on transaction structure for Rule 144A offering,Partner,N,N,N,N,,,,,,,
+FEE,L110,A142,,Participate in strategy call with client executives regarding Rule 144A offering,Partner,N,N,N,N,,,,,,,
+FEE,L170,A143,,Review principal legal issues affecting Rule 144A offering,Partner,N,N,N,N,,,,,,,
+FEE,L160,A144,,Draft transaction timeline and work plan for Rule 144A offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A145,,Review company charter documents in connection with Rule 144A offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A146,,Analyze material contracts for disclosure issues in Rule 144A offering,Associate,N,N,N,N,,,,,,,
+FEE,L160,A147,,Organize signature pages for Rule 144A offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A148,,Compile due diligence index for Rule 144A offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A149,,Advise client on transaction structure for Regulation S offering,Partner,N,N,N,N,,,,,,,
+FEE,L110,A150,,Participate in strategy call with client executives regarding Regulation S offering,Partner,N,N,N,N,,,,,,,
+FEE,L170,A151,,Review principal legal issues affecting Regulation S offering,Partner,N,N,N,N,,,,,,,
+FEE,L160,A152,,Draft transaction timeline and work plan for Regulation S offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A153,,Review company charter documents in connection with Regulation S offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A154,,Analyze material contracts for disclosure issues in Regulation S offering,Associate,N,N,N,N,,,,,,,
+FEE,L160,A155,,Organize signature pages for Regulation S offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A156,,Compile due diligence index for Regulation S offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A157,,Advise client on transaction structure for convertible notes offering,Partner,N,N,N,N,,,,,,,
+FEE,L110,A158,,Participate in strategy call with client executives regarding convertible notes offering,Partner,N,N,N,N,,,,,,,
+FEE,L170,A159,,Review principal legal issues affecting convertible notes offering,Partner,N,N,N,N,,,,,,,
+FEE,L160,A160,,Draft transaction timeline and work plan for convertible notes offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A161,,Review company charter documents in connection with convertible notes offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A162,,Analyze material contracts for disclosure issues in convertible notes offering,Associate,N,N,N,N,,,,,,,
+FEE,L160,A163,,Organize signature pages for convertible notes offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A164,,Compile due diligence index for convertible notes offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A165,,Advise client on transaction structure for high yield notes offering,Partner,N,N,N,N,,,,,,,
+FEE,L110,A166,,Participate in strategy call with client executives regarding high yield notes offering,Partner,N,N,N,N,,,,,,,
+FEE,L170,A167,,Review principal legal issues affecting high yield notes offering,Partner,N,N,N,N,,,,,,,
+FEE,L160,A168,,Draft transaction timeline and work plan for high yield notes offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A169,,Review company charter documents in connection with high yield notes offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A170,,Analyze material contracts for disclosure issues in high yield notes offering,Associate,N,N,N,N,,,,,,,
+FEE,L160,A171,,Organize signature pages for high yield notes offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A172,,Compile due diligence index for high yield notes offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A173,,Advise client on transaction structure for investment grade notes offering,Partner,N,N,N,N,,,,,,,
+FEE,L110,A174,,Participate in strategy call with client executives regarding investment grade notes offering,Partner,N,N,N,N,,,,,,,
+FEE,L170,A175,,Review principal legal issues affecting investment grade notes offering,Partner,N,N,N,N,,,,,,,
+FEE,L160,A176,,Draft transaction timeline and work plan for investment grade notes offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A177,,Review company charter documents in connection with investment grade notes offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A178,,Analyze material contracts for disclosure issues in investment grade notes offering,Associate,N,N,N,N,,,,,,,
+FEE,L160,A179,,Organize signature pages for investment grade notes offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A180,,Compile due diligence index for investment grade notes offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A181,,Advise client on transaction structure for de-SPAC transaction,Partner,N,N,N,N,,,,,,,
+FEE,L110,A182,,Participate in strategy call with client executives regarding de-SPAC transaction,Partner,N,N,N,N,,,,,,,
+FEE,L170,A183,,Review principal legal issues affecting de-SPAC transaction,Partner,N,N,N,N,,,,,,,
+FEE,L160,A184,,Draft transaction timeline and work plan for de-SPAC transaction,Associate,N,N,N,N,,,,,,,
+FEE,L120,A185,,Review company charter documents in connection with de-SPAC transaction,Associate,N,N,N,N,,,,,,,
+FEE,L120,A186,,Analyze material contracts for disclosure issues in de-SPAC transaction,Associate,N,N,N,N,,,,,,,
+FEE,L160,A187,,Organize signature pages for de-SPAC transaction,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A188,,Compile due diligence index for de-SPAC transaction,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A189,,Advise client on transaction structure for secondary share sale,Partner,N,N,N,N,,,,,,,
+FEE,L110,A190,,Participate in strategy call with client executives regarding secondary share sale,Partner,N,N,N,N,,,,,,,
+FEE,L170,A191,,Review principal legal issues affecting secondary share sale,Partner,N,N,N,N,,,,,,,
+FEE,L160,A192,,Draft transaction timeline and work plan for secondary share sale,Associate,N,N,N,N,,,,,,,
+FEE,L120,A193,,Review company charter documents in connection with secondary share sale,Associate,N,N,N,N,,,,,,,
+FEE,L120,A194,,Analyze material contracts for disclosure issues in secondary share sale,Associate,N,N,N,N,,,,,,,
+FEE,L160,A195,,Organize signature pages for secondary share sale,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A196,,Compile due diligence index for secondary share sale,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A197,,Advise client on transaction structure for preferred stock financing,Partner,N,N,N,N,,,,,,,
+FEE,L110,A198,,Participate in strategy call with client executives regarding preferred stock financing,Partner,N,N,N,N,,,,,,,
+FEE,L170,A199,,Review principal legal issues affecting preferred stock financing,Partner,N,N,N,N,,,,,,,
+FEE,L160,A200,,Draft transaction timeline and work plan for preferred stock financing,Associate,N,N,N,N,,,,,,,
+FEE,L120,A201,,Review company charter documents in connection with preferred stock financing,Associate,N,N,N,N,,,,,,,
+FEE,L120,A202,,Analyze material contracts for disclosure issues in preferred stock financing,Associate,N,N,N,N,,,,,,,
+FEE,L160,A203,,Organize signature pages for preferred stock financing,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A204,,Compile due diligence index for preferred stock financing,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A205,,Advise client on transaction structure for rights offering,Partner,N,N,N,N,,,,,,,
+FEE,L110,A206,,Participate in strategy call with client executives regarding rights offering,Partner,N,N,N,N,,,,,,,
+FEE,L170,A207,,Review principal legal issues affecting rights offering,Partner,N,N,N,N,,,,,,,
+FEE,L160,A208,,Draft transaction timeline and work plan for rights offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A209,,Review company charter documents in connection with rights offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A210,,Analyze material contracts for disclosure issues in rights offering,Associate,N,N,N,N,,,,,,,
+FEE,L160,A211,,Organize signature pages for rights offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A212,,Compile due diligence index for rights offering,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A213,,Advise client on transaction structure for shelf takedown,Partner,N,N,N,N,,,,,,,
+FEE,L110,A214,,Participate in strategy call with client executives regarding shelf takedown,Partner,N,N,N,N,,,,,,,
+FEE,L170,A215,,Review principal legal issues affecting shelf takedown,Partner,N,N,N,N,,,,,,,
+FEE,L160,A216,,Draft transaction timeline and work plan for shelf takedown,Associate,N,N,N,N,,,,,,,
+FEE,L120,A217,,Review company charter documents in connection with shelf takedown,Associate,N,N,N,N,,,,,,,
+FEE,L120,A218,,Analyze material contracts for disclosure issues in shelf takedown,Associate,N,N,N,N,,,,,,,
+FEE,L160,A219,,Organize signature pages for shelf takedown,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A220,,Compile due diligence index for shelf takedown,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A221,,Advise client on transaction structure for tender offer,Partner,N,N,N,N,,,,,,,
+FEE,L110,A222,,Participate in strategy call with client executives regarding tender offer,Partner,N,N,N,N,,,,,,,
+FEE,L170,A223,,Review principal legal issues affecting tender offer,Partner,N,N,N,N,,,,,,,
+FEE,L160,A224,,Draft transaction timeline and work plan for tender offer,Associate,N,N,N,N,,,,,,,
+FEE,L120,A225,,Review company charter documents in connection with tender offer,Associate,N,N,N,N,,,,,,,
+FEE,L120,A226,,Analyze material contracts for disclosure issues in tender offer,Associate,N,N,N,N,,,,,,,
+FEE,L160,A227,,Organize signature pages for tender offer,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A228,,Compile due diligence index for tender offer,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A229,,Advise client on transaction structure for exchange offer,Partner,N,N,N,N,,,,,,,
+FEE,L110,A230,,Participate in strategy call with client executives regarding exchange offer,Partner,N,N,N,N,,,,,,,
+FEE,L170,A231,,Review principal legal issues affecting exchange offer,Partner,N,N,N,N,,,,,,,
+FEE,L160,A232,,Draft transaction timeline and work plan for exchange offer,Associate,N,N,N,N,,,,,,,
+FEE,L120,A233,,Review company charter documents in connection with exchange offer,Associate,N,N,N,N,,,,,,,
+FEE,L120,A234,,Analyze material contracts for disclosure issues in exchange offer,Associate,N,N,N,N,,,,,,,
+FEE,L160,A235,,Organize signature pages for exchange offer,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A236,,Compile due diligence index for exchange offer,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A237,,Advise client on transaction structure for PIPE transaction,Partner,N,N,N,N,,,,,,,
+FEE,L110,A238,,Participate in strategy call with client executives regarding PIPE transaction,Partner,N,N,N,N,,,,,,,
+FEE,L170,A239,,Review principal legal issues affecting PIPE transaction,Partner,N,N,N,N,,,,,,,
+FEE,L160,A240,,Draft transaction timeline and work plan for PIPE transaction,Associate,N,N,N,N,,,,,,,
+FEE,L120,A241,,Review company charter documents in connection with PIPE transaction,Associate,N,N,N,N,,,,,,,
+FEE,L120,A242,,Analyze material contracts for disclosure issues in PIPE transaction,Associate,N,N,N,N,,,,,,,
+FEE,L160,A243,,Organize signature pages for PIPE transaction,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A244,,Compile due diligence index for PIPE transaction,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A245,,Advise client on transaction structure for block trade,Partner,N,N,N,N,,,,,,,
+FEE,L110,A246,,Participate in strategy call with client executives regarding block trade,Partner,N,N,N,N,,,,,,,
+FEE,L170,A247,,Review principal legal issues affecting block trade,Partner,N,N,N,N,,,,,,,
+FEE,L160,A248,,Draft transaction timeline and work plan for block trade,Associate,N,N,N,N,,,,,,,
+FEE,L120,A249,,Review company charter documents in connection with block trade,Associate,N,N,N,N,,,,,,,
+FEE,L120,A250,,Analyze material contracts for disclosure issues in block trade,Associate,N,N,N,N,,,,,,,
+FEE,L160,A251,,Organize signature pages for block trade,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A252,,Compile due diligence index for block trade,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A253,,Advise client on transaction structure for warrant issuance,Partner,N,N,N,N,,,,,,,
+FEE,L110,A254,,Participate in strategy call with client executives regarding warrant issuance,Partner,N,N,N,N,,,,,,,
+FEE,L170,A255,,Review principal legal issues affecting warrant issuance,Partner,N,N,N,N,,,,,,,
+FEE,L160,A256,,Draft transaction timeline and work plan for warrant issuance,Associate,N,N,N,N,,,,,,,
+FEE,L120,A257,,Review company charter documents in connection with warrant issuance,Associate,N,N,N,N,,,,,,,
+FEE,L120,A258,,Analyze material contracts for disclosure issues in warrant issuance,Associate,N,N,N,N,,,,,,,
+FEE,L160,A259,,Organize signature pages for warrant issuance,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A260,,Compile due diligence index for warrant issuance,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A261,,Advise client on transaction structure for green bond issuance,Partner,N,N,N,N,,,,,,,
+FEE,L110,A262,,Participate in strategy call with client executives regarding green bond issuance,Partner,N,N,N,N,,,,,,,
+FEE,L170,A263,,Review principal legal issues affecting green bond issuance,Partner,N,N,N,N,,,,,,,
+FEE,L160,A264,,Draft transaction timeline and work plan for green bond issuance,Associate,N,N,N,N,,,,,,,
+FEE,L120,A265,,Review company charter documents in connection with green bond issuance,Associate,N,N,N,N,,,,,,,
+FEE,L120,A266,,Analyze material contracts for disclosure issues in green bond issuance,Associate,N,N,N,N,,,,,,,
+FEE,L160,A267,,Organize signature pages for green bond issuance,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A268,,Compile due diligence index for green bond issuance,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A269,,Advise client on transaction structure for medium term notes program,Partner,N,N,N,N,,,,,,,
+FEE,L110,A270,,Participate in strategy call with client executives regarding medium term notes program,Partner,N,N,N,N,,,,,,,
+FEE,L170,A271,,Review principal legal issues affecting medium term notes program,Partner,N,N,N,N,,,,,,,
+FEE,L160,A272,,Draft transaction timeline and work plan for medium term notes program,Associate,N,N,N,N,,,,,,,
+FEE,L120,A273,,Review company charter documents in connection with medium term notes program,Associate,N,N,N,N,,,,,,,
+FEE,L120,A274,,Analyze material contracts for disclosure issues in medium term notes program,Associate,N,N,N,N,,,,,,,
+FEE,L160,A275,,Organize signature pages for medium term notes program,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A276,,Compile due diligence index for medium term notes program,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A277,,Advise client on transaction structure for commercial paper program,Partner,N,N,N,N,,,,,,,
+FEE,L110,A278,,Participate in strategy call with client executives regarding commercial paper program,Partner,N,N,N,N,,,,,,,
+FEE,L170,A279,,Review principal legal issues affecting commercial paper program,Partner,N,N,N,N,,,,,,,
+FEE,L160,A280,,Draft transaction timeline and work plan for commercial paper program,Associate,N,N,N,N,,,,,,,
+FEE,L120,A281,,Review company charter documents in connection with commercial paper program,Associate,N,N,N,N,,,,,,,
+FEE,L120,A282,,Analyze material contracts for disclosure issues in commercial paper program,Associate,N,N,N,N,,,,,,,
+FEE,L160,A283,,Organize signature pages for commercial paper program,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A284,,Compile due diligence index for commercial paper program,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A285,,Advise client on transaction structure for dual listing project,Partner,N,N,N,N,,,,,,,
+FEE,L110,A286,,Participate in strategy call with client executives regarding dual listing project,Partner,N,N,N,N,,,,,,,
+FEE,L170,A287,,Review principal legal issues affecting dual listing project,Partner,N,N,N,N,,,,,,,
+FEE,L160,A288,,Draft transaction timeline and work plan for dual listing project,Associate,N,N,N,N,,,,,,,
+FEE,L120,A289,,Review company charter documents in connection with dual listing project,Associate,N,N,N,N,,,,,,,
+FEE,L120,A290,,Analyze material contracts for disclosure issues in dual listing project,Associate,N,N,N,N,,,,,,,
+FEE,L160,A291,,Organize signature pages for dual listing project,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A292,,Compile due diligence index for dual listing project,Paralegal,N,N,N,N,,,,,,,
+FEE,L170,A293,,Advise client on transaction structure for uplisting transaction,Partner,N,N,N,N,,,,,,,
+FEE,L110,A294,,Participate in strategy call with client executives regarding uplisting transaction,Partner,N,N,N,N,,,,,,,
+FEE,L170,A295,,Review principal legal issues affecting uplisting transaction,Partner,N,N,N,N,,,,,,,
+FEE,L160,A296,,Draft transaction timeline and work plan for uplisting transaction,Associate,N,N,N,N,,,,,,,
+FEE,L120,A297,,Review company charter documents in connection with uplisting transaction,Associate,N,N,N,N,,,,,,,
+FEE,L120,A298,,Analyze material contracts for disclosure issues in uplisting transaction,Associate,N,N,N,N,,,,,,,
+FEE,L160,A299,,Organize signature pages for uplisting transaction,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A300,,Compile due diligence index for uplisting transaction,Paralegal,N,N,N,N,,,,,,,
+FEE,L130,A301,,Negotiate key legal terms for IPO,Partner,N,N,N,N,,,,,,,
+FEE,L110,A302,,Review board approval strategy for IPO,Partner,N,N,N,N,,,,,,,
+FEE,L170,A303,,Analyze securities law implications of investor communications for IPO,Partner,N,N,N,N,,,,,,,
+FEE,L130,A304,,Review final legal opinion framework for IPO,Partner,N,N,N,N,,,,,,,
+FEE,L170,A305,,Advise on underwriter and placement agent obligations for IPO,Partner,N,N,N,N,,,,,,,
+FEE,L150,A306,,Review disclosure risk allocation for IPO,Partner,N,N,N,N,,,,,,,
+FEE,L160,A307,,Discuss timing and execution risks for IPO,Partner,N,N,N,N,,,,,,,
+FEE,L130,A308,,Prepare initial draft of transaction agreement for IPO,Associate,N,N,N,N,,,,,,,
+FEE,L130,A309,,Revise purchase agreement based on client comments for IPO,Associate,N,N,N,N,,,,,,,
+FEE,L150,A310,,Draft risk factor updates for IPO,Associate,N,N,N,N,,,,,,,
+FEE,L120,A311,,Prepare responses to diligence questions for IPO,Associate,N,N,N,N,,,,,,,
+FEE,L150,A312,,Review financial statement references in offering materials for IPO,Associate,N,N,N,N,,,,,,,
+FEE,L170,A313,,Research SEC guidance relevant to IPO,Associate,N,N,N,N,,,,,,,
+FEE,L160,A314,,Prepare draft closing checklist for IPO,Associate,N,N,N,N,,,,,,,
+FEE,L130,A315,,Review lock up agreement comments for IPO,Associate,N,N,N,N,,,,,,,
+FEE,L160,A316,,Draft officer certificate for IPO,Associate,N,N,N,N,,,,,,,
+FEE,L150,A317,,Prepare backup support for disclosure statements in IPO,Associate,N,N,N,N,,,,,,,
+FEE,L170,A318,,Review investor presentation for securities law compliance in IPO,Associate,N,N,N,N,,,,,,,
+FEE,L180,A319,,Analyze exchange listing rules applicable to IPO,Associate,N,N,N,N,,,,,,,
+FEE,L140,A320,,Prepare EDGAR filing package for IPO,Paralegal,N,N,N,N,,,,,,,
+FEE,L160,A321,,Coordinate document execution logistics for IPO,Paralegal,N,N,N,N,,,,,,,
+FEE,L160,A322,,Maintain closing checklist status for IPO,Paralegal,N,N,N,N,,,,,,,
+FEE,L160,A323,,Collect officer and secretary certificates for IPO,Paralegal,N,N,N,N,,,,,,,
+FEE,L160,A324,,Assemble closing binder materials for IPO,Paralegal,N,N,N,N,,,,,,,
+FEE,L160,A325,,Circulate draft document set for internal review for IPO,Paralegal,N,N,N,N,,,,,,,
+FEE,L120,A326,,Prepare capitalization table backup folder for IPO,Paralegal,N,N,N,N,,,,,,,
+FEE,L160,A327,,Track comments received from transaction parties for IPO,Paralegal,N,N,N,N,,,,,,,
+FEE,L130,A328,,Negotiate key legal terms for follow on equity offering,Partner,N,N,N,N,,,,,,,
+FEE,L110,A329,,Review board approval strategy for follow on equity offering,Partner,N,N,N,N,,,,,,,
+FEE,L170,A330,,Analyze securities law implications of investor communications for follow on equity offering,Partner,N,N,N,N,,,,,,,
+FEE,L130,A331,,Review final legal opinion framework for follow on equity offering,Partner,N,N,N,N,,,,,,,
+FEE,L170,A332,,Advise on underwriter and placement agent obligations for follow on equity offering,Partner,N,N,N,N,,,,,,,
+FEE,L150,A333,,Review disclosure risk allocation for follow on equity offering,Partner,N,N,N,N,,,,,,,
+FEE,L160,A334,,Discuss timing and execution risks for follow on equity offering,Partner,N,N,N,N,,,,,,,
+FEE,L130,A335,,Prepare initial draft of transaction agreement for follow on equity offering,Associate,N,N,N,N,,,,,,,
+FEE,L130,A336,,Revise purchase agreement based on client comments for follow on equity offering,Associate,N,N,N,N,,,,,,,
+FEE,L150,A337,,Draft risk factor updates for follow on equity offering,Associate,N,N,N,N,,,,,,,
+FEE,L120,A338,,Prepare responses to diligence questions for follow on equity offering,Associate,N,N,N,N,,,,,,,
+FEE,L150,A339,,Review financial statement references in offering materials for follow on equity offering,Associate,N,N,N,N,,,,,,,
+FEE,L170,A340,,Research SEC guidance relevant to follow on equity offering,Associate,N,N,N,N,,,,,,,
+FEE,L110,A1000,,Draft registration statement; review risk factors; coordinate with client and underwriters; revise disclosures based on feedback,Partner,Y,N,N,N,,,,,,,
+FEE,L110,A1001,,Conduct due diligence review; analyze agreements; prepare diligence memo; participate in diligence calls with stakeholders,Partner,Y,N,N,N,,,,,,,
+FEE,L110,A1002,,Draft underwriting agreement; negotiate key terms; revise based on counterparty comments; finalize execution version,Partner,Y,N,N,N,,,,,,,
+FEE,L110,A1003,,Prepare SEC filing documents; review compliance requirements; coordinate EDGAR submission; confirm acceptance,Partner,Y,N,N,N,,,,,,,
+FEE,L110,A1004,,Manage transaction closing process; prepare closing checklist; coordinate signatures; distribute executed documents,Partner,Y,N,N,N,,,,,,,
+FEE,L110,A1005,,Review prospectus; verify financial disclosures; coordinate revisions; prepare final filing materials,Partner,Y,N,N,N,,,,,,,
+FEE,L110,A1006,,Advise on securities compliance; review communications; revise materials; ensure regulatory alignment,Partner,Y,N,N,N,,,,,,,
+FEE,L110,A1007,,Prepare board and shareholder approvals; draft resolutions; revise documentation; finalize approvals for execution,Partner,Y,N,N,N,,,,,,,
+FEE,L110,A1008,,Coordinate blue sky compliance; prepare filings; review state requirements; confirm completion across jurisdictions,Partner,Y,N,N,N,,,,,,,
+FEE,L110,A1009,,Draft legal opinion; review supporting documents; revise opinion language; finalize for transaction closing,Partner,Y,N,N,N,,,,,,,
+FEE,L120,A341,,Draft underwriting agreement for Rule 144A senior notes offering,Associate,N,N,Y,N,,,,,,,
+FEE,L180,A342,,Analyze material customer and supplier contracts for disclosure issues in IPO due diligence,Associate,N,N,Y,N,,,,,,,
+FEE,L160,A343,,Prepare EDGAR filing package for shelf registration statement,Paralegal,N,N,Y,N,,,,,,,
+FEE,L110,A344,,Draft risk factor disclosure updates for at the market offering program,Associate,N,N,Y,N,,,,,,,
+FEE,L140,A345,,Advise issuer on transaction structure for convertible notes offering,Partner,N,N,Y,N,,,,,,,
+FEE,L150,A346,,Maintain closing checklist and track completion items for private placement,Paralegal,N,N,Y,N,,,,,,,
+FEE,L130,A347,,Research NYSE listing standards applicable to proposed uplisting transaction,Associate,N,N,Y,N,,,,,,,
+FEE,L170,A348,,Negotiate purchase agreement terms for follow on equity offering,Partner,N,N,Y,N,,,,,,,
+FEE,L140,A349,,Compile due diligence index for preferred stock financing,Paralegal,N,N,Y,N,,,,,,,
+FEE,L160,A350,,Review investor presentation for securities law compliance in registered direct offering,Associate,N,N,Y,N,,,,,,,
+FEE,L160,A351,,Schedule IPO diligence calls and circulate calendar invitations to transaction participants,Paralegal,N,N,N,Y,,,,,,,
+FEE,L160,A352,,Create and update distribution list for issuer underwriters auditors and financial printer,Paralegal,N,N,N,Y,,,,,,,
+FEE,L160,A353,,Rename executed signature page files and upload them to the transaction workspace,Paralegal,N,N,N,Y,,,,,,,
+FEE,L140,A354,,Download EDGAR filing acceptance notice and save copy to the matter folder,Paralegal,N,N,N,Y,,,,,,,
+FEE,L150,A355,,Convert final prospectus to PDF and add bookmarks for internal filing,Paralegal,N,N,N,Y,,,,,,,
+FEE,L160,A356,,Assemble electronic closing binder by copying final documents into indexed folders,Paralegal,N,N,N,Y,,,,,,,
+FEE,L160,A357,,Update transaction checklist status based solely on routine email confirmations,Paralegal,N,N,N,Y,,,,,,,
+FEE,L130,A358,,Run document comparison software and save redline copies of offering agreements,Paralegal,N,N,N,Y,,,,,,,
+FEE,L120,A359,,Organize due diligence data room folders and standardize uploaded file names,Paralegal,N,N,N,Y,,,,,,,
+FEE,L160,A360,,Arrange courier delivery of original note certificates for transaction closing,Paralegal,N,N,N,Y,,,,,,,
+FEE,L110,A361,,Reserve conference room and set up dial in details for offering drafting session,Paralegal,N,N,N,Y,,,,,,,
+FEE,L160,A362,,Track receipt of signature pages in an administrative spreadsheet,Paralegal,N,N,N,Y,,,,,,,
+FEE,L160,A363,,Send routine reminder emails for outstanding signature pages and certificates,Paralegal,N,N,N,Y,,,,,,,
+FEE,L120,A364,,Upload diligence documents to secure data room without substantive review,Paralegal,N,N,N,Y,,,,,,,
+FEE,L110,A365,,Print and bind board approval materials for the proposed securities offering,Paralegal,N,N,N,Y,,,,,,,
+FEE,L160,A366,,Scan executed officer certificates and save them to the closing folder,Paralegal,N,N,N,Y,,,,,,,
+FEE,L110,A367,,Create contact sheet listing transaction participants and telephone numbers,Paralegal,N,N,N,Y,,,,,,,
+FEE,L140,A368,,Calendar SEC filing deadlines and stock exchange notification dates,Paralegal,N,N,N,Y,,,,,,,
+FEE,L160,A369,,Process financial printer invoice and route it for internal payment approval,Paralegal,N,N,N,Y,,,,,,,
+FEE,L160,A370,,Archive routine transaction emails and final executed documents in the matter file,Paralegal,N,N,N,Y,,,,,,,
+EXPENSE,,,E101,Black-and-white photocopies of client-requested document set,,N,N,N,N,10.0,120.0,25.0,600.0,0.18,N,N
+EXPENSE,,,E101,Color photocopies of presentation and meeting materials,,N,N,N,N,15.0,180.0,10.0,250.0,0.65,N,N
+EXPENSE,,,E101,Oversize document reproduction for matter materials,,N,N,N,N,25.0,250.0,5.0,80.0,2.5,N,N
+EXPENSE,,,E102,Scanning and optical character recognition of matter documents,,N,N,N,N,20.0,300.0,50.0,1500.0,0.12,N,N
+EXPENSE,,,E102,High-resolution scanning of signed and executed originals,,N,N,N,N,15.0,175.0,10.0,250.0,0.55,N,N
+EXPENSE,,,E103,Local telephone conference charges attributable to matter,,N,N,N,N,5.0,45.0,1.0,1.0,,N,N
+EXPENSE,,,E104,Domestic facsimile transmission charges for matter documents,,N,N,N,N,5.0,40.0,1.0,20.0,1.5,N,N
+EXPENSE,,,E105,Federal Express overnight delivery of executed documents,,N,N,N,N,28.0,95.0,1.0,1.0,,Y,Y
+EXPENSE,,,E105,UPS priority delivery of original signature pages,,N,N,N,N,22.0,85.0,1.0,1.0,,Y,Y
+EXPENSE,,,E105,Local courier delivery of documents to client offices,,N,N,N,N,18.0,75.0,1.0,1.0,,Y,Y
+EXPENSE,,,E105,Messenger delivery of time-sensitive documents to opposing counsel,,N,N,N,N,25.0,120.0,1.0,1.0,,Y,Y
+EXPENSE,,,E105,International courier shipment of original legal documents,,N,N,N,N,65.0,275.0,1.0,1.0,,Y,Y
+EXPENSE,,,E106,Certified mail with return receipt for formal correspondence,,N,N,N,N,8.0,35.0,1.0,5.0,,Y,Y
+EXPENSE,,,E106,Priority Mail shipment of matter documents,,N,N,N,N,12.0,55.0,1.0,3.0,,Y,Y
+EXPENSE,,,E106,Postage for bulk mailing of matter-related notices,,N,N,N,N,15.0,180.0,25.0,500.0,0.68,N,N
+EXPENSE,,,E107,Online legal research database charges for targeted research,,N,N,N,N,35.0,450.0,1.0,1.0,,Y,Y
+EXPENSE,,,E107,Specialized regulatory research database access charge,,N,N,N,N,50.0,600.0,1.0,1.0,,Y,Y
+EXPENSE,,,E107,Public records database search charge,,N,N,N,N,20.0,250.0,1.0,1.0,,Y,Y
+EXPENSE,,,E108,Certified copy fee for official public record,,N,N,N,N,15.0,125.0,1.0,5.0,,Y,Y
+EXPENSE,,,E108,Government agency document retrieval charge,,N,N,N,N,20.0,200.0,1.0,1.0,,Y,Y
+EXPENSE,,,E109,Personal automobile mileage for approved matter travel,,N,N,N,N,20.0,350.0,15.0,400.0,0.7,N,N
+EXPENSE,,,E109,Mileage for travel to client meeting,,N,N,N,N,15.0,180.0,10.0,200.0,0.7,N,N
+EXPENSE,,,E109,Mileage for travel to government or court office,,N,N,N,N,15.0,220.0,10.0,250.0,0.7,N,N
+EXPENSE,,,E110,Economy airfare for approved domestic matter travel,,N,N,N,N,225.0,950.0,1.0,1.0,,Y,Y
+EXPENSE,,,E110,Economy airfare for approved international matter travel,,N,N,N,N,650.0,3500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E110,Rail fare for approved intercity matter travel,,N,N,N,N,45.0,450.0,1.0,1.0,,Y,Y
+EXPENSE,,,E110,Taxi fare for approved matter-related ground transportation,,N,N,N,N,15.0,95.0,1.0,1.0,,Y,Y
+EXPENSE,,,E110,Rideshare fare for approved matter-related transportation,,N,N,N,N,12.0,85.0,1.0,1.0,,Y,Y
+EXPENSE,,,E110,Airport shuttle fare for approved matter travel,,N,N,N,N,18.0,75.0,1.0,1.0,,Y,Y
+EXPENSE,,,E110,Rental car charge for approved matter travel,,N,N,N,N,65.0,425.0,1.0,4.0,,Y,Y
+EXPENSE,,,E111,Hotel lodging for approved out-of-town matter travel,,N,N,N,N,140.0,475.0,1.0,5.0,,Y,Y
+EXPENSE,,,E111,Hotel internet charge during approved matter travel,,N,N,N,N,10.0,45.0,1.0,5.0,,Y,Y
+EXPENSE,,,E112,Breakfast during approved out-of-town matter travel,,N,N,N,N,12.0,40.0,1.0,1.0,,Y,Y
+EXPENSE,,,E112,Lunch during approved out-of-town matter travel,,N,N,N,N,15.0,55.0,1.0,1.0,,Y,Y
+EXPENSE,,,E112,Dinner during approved out-of-town matter travel,,N,N,N,N,25.0,95.0,1.0,1.0,,Y,Y
+EXPENSE,,,E113,Parking charge for approved matter-related travel,,N,N,N,N,8.0,75.0,1.0,1.0,,Y,Y
+EXPENSE,,,E113,Airport parking for approved matter travel,,N,N,N,N,25.0,180.0,1.0,5.0,,Y,Y
+EXPENSE,,,E113,Road tolls incurred during approved matter travel,,N,N,N,N,5.0,45.0,1.0,6.0,,Y,Y
+EXPENSE,,,E114,Court or agency filing fee for matter submission,,N,N,N,N,25.0,750.0,1.0,1.0,,Y,Y
+EXPENSE,,,E115,Process service fee for formal delivery of legal documents,,N,N,N,N,45.0,225.0,1.0,1.0,,Y,Y
+EXPENSE,,,E116,Witness fee and statutory mileage reimbursement,,N,N,N,N,40.0,250.0,1.0,1.0,,Y,Y
+EXPENSE,,,E117,Court reporter appearance charge,,N,N,N,N,150.0,750.0,1.0,1.0,,Y,Y
+EXPENSE,,,E118,Outside document processing vendor charge,,N,N,N,N,75.0,850.0,1.0,1.0,,Y,Y
+EXPENSE,,,E119,Temporary secure data storage charge for matter materials,,N,N,N,N,25.0,350.0,1.0,1.0,,Y,Y
+EXPENSE,,,E120,Translation service for matter-related documents,,N,N,N,N,100.0,1800.0,1.0,1.0,,Y,Y
+EXPENSE,,,E120,Interpretation service for matter-related meeting,,N,N,N,N,150.0,1200.0,1.0,1.0,,Y,Y
+EXPENSE,,,E121,Notary fee for execution of matter documents,,N,N,N,N,10.0,75.0,1.0,5.0,,Y,Y
+EXPENSE,,,E122,Specialized consultant pass-through charge,,N,N,N,N,250.0,5000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E123,Secure virtual data room user or storage charge,,N,N,N,N,75.0,1500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E124,Miscellaneous government certification or authentication fee,,N,N,N,N,20.0,350.0,1.0,1.0,,Y,Y
+EXPENSE,,,E114,SEC registration statement filing fee,,N,N,N,N,500.0,25000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E114,SEC transaction filing fee adjustment,,N,N,N,N,250.0,15000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E114,FINRA corporate financing filing fee,,N,N,N,N,500.0,10000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E114,Stock exchange initial listing application fee,,N,N,N,N,5000.0,50000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E114,Stock exchange supplemental listing fee,,N,N,N,N,1000.0,15000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E114,State blue sky notice filing fee,,N,N,N,N,50.0,1500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E114,State securities registration filing fee,,N,N,N,N,100.0,2500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,EDGAR filing agent conversion and submission charge,,N,N,N,N,500.0,5000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,EDGAR filing agent rush submission surcharge,,N,N,N,N,250.0,2500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Financial printer typesetting and document production charge,,N,N,N,N,1000.0,15000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Financial printer overnight revision cycle charge,,N,N,N,N,500.0,7500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Prospectus printing and distribution vendor charge,,N,N,N,N,1000.0,20000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Roadshow presentation production vendor charge,,N,N,N,N,1000.0,15000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Virtual roadshow hosting platform charge,,N,N,N,N,500.0,7500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,CUSIP number assignment service fee,,N,N,N,N,100.0,1000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,ISIN identifier assignment service fee,,N,N,N,N,100.0,1200.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,LEI registration or renewal service fee,,N,N,N,N,75.0,500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Transfer agent document processing charge,,N,N,N,N,250.0,3500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Trustee document review and transaction setup charge,,N,N,N,N,500.0,7500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Depositary or paying agent transaction setup charge,,N,N,N,N,500.0,7500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,DTC eligibility processing charge,,N,N,N,N,500.0,5000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,UCC lien search vendor charge,,N,N,N,N,75.0,750.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Good standing certificate service provider charge,,N,N,N,N,50.0,500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Lien and judgment search package charge,,N,N,N,N,150.0,1500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,OFAC and sanctions screening vendor charge,,N,N,N,N,100.0,1200.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Beneficial ownership verification vendor charge,,N,N,N,N,100.0,1500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Auditor comfort letter support vendor charge,,N,N,N,N,500.0,5000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Independent verification agent charge,,N,N,N,N,500.0,7500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Capitalization table verification service charge,,N,N,N,N,500.0,5000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E122,Securities holder mailing list processing charge,,N,N,N,N,250.0,3500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E123,Secure transaction virtual data room charge,,N,N,N,N,500.0,10000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E123,Virtual data room additional storage charge,,N,N,N,N,100.0,2500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E123,Electronic signature platform transaction room charge,,N,N,N,N,100.0,1500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E120,Translation of offering memorandum for foreign investors,,N,N,N,N,1000.0,10000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E120,Translation of investor presentation materials,,N,N,N,N,500.0,5000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E120,Certified translation of foreign issuer corporate records,,N,N,N,N,300.0,3500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E108,Certified charter document retrieval charge,,N,N,N,N,25.0,300.0,1.0,1.0,,Y,Y
+EXPENSE,,,E108,Certified good standing certificate government fee,,N,N,N,N,25.0,250.0,1.0,1.0,,Y,Y
+EXPENSE,,,E108,Certified UCC filing record retrieval charge,,N,N,N,N,25.0,250.0,1.0,1.0,,Y,Y
+EXPENSE,,,E121,Notarization of closing signature documents,,N,N,N,N,25.0,250.0,1.0,10.0,,Y,Y
+EXPENSE,,,E124,Apostille of transaction closing documents,,N,N,N,N,75.0,750.0,1.0,1.0,,Y,Y
+EXPENSE,,,E105,Same-day courier of original closing documents,,N,N,N,N,50.0,250.0,1.0,1.0,,Y,Y
+EXPENSE,,,E105,International courier of executed transaction documents,,N,N,N,N,75.0,400.0,1.0,1.0,,Y,Y
+EXPENSE,,,E101,Printing of transaction closing sets,,N,N,N,N,100.0,1500.0,1.0,10.0,,Y,Y
+EXPENSE,,,E101,Bound closing book production charge,,N,N,N,N,150.0,2500.0,1.0,10.0,,Y,Y
+EXPENSE,,,E118,Electronic closing book compilation vendor charge,,N,N,N,N,500.0,5000.0,1.0,1.0,,Y,Y
+EXPENSE,,,E118,XBRL tagging and validation service charge,,N,N,N,N,500.0,7500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E118,Inline XBRL document conversion service charge,,N,N,N,N,500.0,7500.0,1.0,1.0,,Y,Y
+EXPENSE,,,E107,Securities law research database transaction charge,,N,N,N,N,100.0,1200.0,1.0,1.0,,Y,Y
+EXPENSE,,,E119,Encrypted storage media for transaction archive,,N,N,N,N,75.0,350.0,1.0,1.0,,Y,Y
