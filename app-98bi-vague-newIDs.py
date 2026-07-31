@@ -319,12 +319,12 @@ BILLING_PROFILES = [("OnitX USD - Nelson",    "A Onit Inc.",   "02-4388252", "Ne
     ("OnitX CAD - SS&E Group", "A Onit Inc.", "02-4388252", "Simpson Schneider and Ellis Group", "879376127RT0002"),
     ("OnitX EUR - Nelson", "Onit LLC - Belgium", "00-4100871", "Nelson and Murdock - Belgium", "3233384400"),
     ("OnitX GBP - Nelson", "Onit - UK", "23058", "Nelson and Murdock - Belgium", "3233384400"),
-    ("SimpleLegal/Unity - JDC", "Penguin LLC",   "C004",       "JDC",               "JDC001"),
-    ("SimpleLegal/Unity - Kirkland", "Penguin LLC",   "C004",       "Kirkland & Ellis LLP",               "18"),
-    ("SimpleLegal/Unity - Latham", "Cardinal Company",   "C003",       "Latham & Watkins LLP",               "17"),
-    ("SimpleLegal/Unity - Davis", "Owl LLC",   "C001",       "Davis Polk & Wardell LLP (New York)",               "19"),
-    ("SimpleLegal/Unity - Cravath", "Eagle LLC",   "C002",       "Cravath, Swaine & Moore LLP",               "11"),
-    ("SimpleLegal/Unity - Whitaker", "Penguin LLC", "C004", "Whitaker & Holbrook LLP", "195"),
+    ("Unity - JDC", "Penguin LLC",   "C004",       "JDC",               "JDC001"),
+    ("Unity - Kirkland", "Penguin LLC",   "C004",       "Kirkland & Ellis LLP",               "18"),
+    ("Unity - Latham", "Cardinal Company",   "C003",       "Latham & Watkins LLP",               "17"),
+    ("Unity - Davis", "Owl LLC",   "C001",       "Davis Polk & Wardell LLP (New York)",               "19"),
+    ("Unity - Cravath", "Eagle LLC",   "C002",       "Cravath, Swaine & Moore LLP",               "11"),
+    ("Unity - Whitaker", "Penguin LLC", "C004", "Whitaker & Holbrook LLP", "195"),
     #("Unity",       "Unity Demo",    "uniti-demo", "Gold USD",          "Gold USD"),
 ]
 
@@ -559,13 +559,14 @@ def _build_entity_catalogs():
 
 CLIENT_CATALOG, VENDOR_CATALOG, ENV_DEFAULTS = _build_entity_catalogs()
 
-# --- Environment indexes (SimpleLegal/Unity vs OnitX) ---------------------------------
+# --- Environment indexes (Unity vs OnitX) ---------------------------------
 # Canonical environment names + backward-compatible aliases
 ENV_ONITX = "OnitX"
-ENV_SIMPLELEGAL_UNITY = "SimpleLegal/Unity"
+ENV_SIMPLELEGAL_UNITY = "Unity"
 _ENV_ALIASES = {
-    "SimpleLegal": ENV_SIMPLELEGAL_UNITY,  # legacy
-    "Unity": ENV_SIMPLELEGAL_UNITY,        # legacy
+    "SimpleLegal/Unity": ENV_SIMPLELEGAL_UNITY,  # legacy UI value
+    "SimpleLegal": ENV_SIMPLELEGAL_UNITY,        # legacy
+    "Unity": ENV_SIMPLELEGAL_UNITY,              # canonical
 }
 
 def _canonical_env(env: str) -> str:
@@ -576,7 +577,7 @@ def _env_ledes_version_default(env: str):
     """Return a forced/default LEDES version for an environment, or None.
 
     Business rules:
-    - SimpleLegal/Unity: default/reset to 1998B
+    - Unity: default/reset to 1998B
     """
     env = _canonical_env(env)
     if env == ENV_SIMPLELEGAL_UNITY:
@@ -584,7 +585,7 @@ def _env_ledes_version_default(env: str):
     return None
 
 # The UI uses st.session_state["selected_env"] as a HIGH-LEVEL environment name
-# (e.g., "OnitX" or "SimpleLegal/Unity"). The detailed defaults (currency, LEDES default, etc.)
+# (e.g., "OnitX" or "Unity"). The detailed defaults (currency, LEDES default, etc.)
 # are driven by an "active" profile id derived from Environment + selected Client/Vendor pair.
 def _infer_environment(profile_id: str, prof_detail=None) -> str:
     """Return environment name for a profile id (prefers explicit prof_detail['environment'])."""
@@ -596,7 +597,7 @@ def _infer_environment(profile_id: str, prof_detail=None) -> str:
     s = str(profile_id or "").strip()
     if not s:
         return ""
-    # Convention: first token is the environment (e.g., "OnitX", "SimpleLegal/Unity")
+    # Convention: first token is the environment (e.g., "OnitX", "Unity")
     return _canonical_env(s.split()[0].strip())
 
 def _build_env_indexes():
@@ -3316,7 +3317,7 @@ _ensure_env_profile_state()
 
 # --- LEDES version defaulting / resetting ---
 # Apply environment rules when the ACTIVE profile OR selected environment changes:
-# - SimpleLegal/Unity: default/reset to 1998B
+# - Unity: default/reset to 1998B
 # Otherwise, use profile-level ledes_default (if present), else fall back to 1998B.
 _current_profile_for_ledes = st.session_state.get("active_profile_id", "")
 _prev_profile_for_ledes = st.session_state.get("_prev_profile_for_ledes")
@@ -3410,7 +3411,7 @@ with tab_objects[0]:
 with tab_objects[1]:
     # ===== 1. GET USER INPUT THAT DRIVES LOGIC =====
     st.markdown("<h3 style='color: #1E1E1E;'>Billing Profiles</h3>", unsafe_allow_html=True)
-    env_names = ENVIRONMENTS or ["OnitX", "SimpleLegal/Unity"]
+    env_names = ENVIRONMENTS or ["OnitX", "Unity"]
     default_env = st.session_state.get("selected_env", env_names[0] if env_names else "OnitX")
     if env_names and default_env not in env_names:
         default_env = env_names[0]
@@ -3453,24 +3454,46 @@ with tab_objects[1]:
         _cur_vendor = _env_default_vendor
 
     # UI widgets
+    # Do not pass an explicit index when the widget key already exists in
+    # st.session_state. Streamlit treats those as two competing default-value
+    # sources and displays a warning. The state-validation logic above ensures
+    # that any stored value is valid for the current environment.
+    client_selectbox_kwargs = {
+        "key": "selected_client_profile",
+        "disabled": _override_now,
+        "help": "Select the Client (Legal Entity) to populate Client fields on the Tax Fields tab for LEDES 1998BI/1998BIv2.",
+    }
+    if "selected_client_profile" not in st.session_state:
+        client_selectbox_kwargs["index"] = (
+            _client_options.index(_cur_client)
+            if (_client_options and _cur_client in _client_options)
+            else 0
+        )
+
+    vendor_selectbox_kwargs = {
+        "key": "selected_vendor_profile",
+        "disabled": _override_now,
+        "help": "Select the Vendor/Law Firm profile to populate Law Firm fields on the Tax Fields tab for LEDES 1998BI/1998BIv2.",
+    }
+    if "selected_vendor_profile" not in st.session_state:
+        vendor_selectbox_kwargs["index"] = (
+            _vendor_options.index(_cur_vendor)
+            if (_vendor_options and _cur_vendor in _vendor_options)
+            else 0
+        )
+
     csel1, csel2 = st.columns(2)
     with csel1:
         st.selectbox(
             "Client Profile (Legal Entity)",
             _client_options,
-            index=_client_options.index(_cur_client) if (_client_options and _cur_client in _client_options) else 0,
-            key="selected_client_profile",
-            disabled=_override_now,
-            help="Select the Client (Legal Entity) to populate Client fields on the Tax Fields tab for LEDES 1998BI/1998BIv2."
+            **client_selectbox_kwargs,
         )
     with csel2:
         st.selectbox(
             "Vendor / Law Firm Profile",
             _vendor_options,
-            index=_vendor_options.index(_cur_vendor) if (_vendor_options and _cur_vendor in _vendor_options) else 0,
-            key="selected_vendor_profile",
-            disabled=_override_now,
-            help="Select the Vendor/Law Firm profile to populate Law Firm fields on the Tax Fields tab for LEDES 1998BI/1998BIv2."
+            **vendor_selectbox_kwargs,
         )
 
 # ===== 2. PERFORM ALL LOGIC AND STATE MODIFICATIONS =====
@@ -3655,7 +3678,13 @@ with tab_objects[1]:
         st.session_state["_entity_defaults_sig"] = None
 
 # ===== 3. CREATE WIDGETS (now that all state is set) =====
-    st.checkbox("Override values for this invoice", value=False, help="When checked, you can enter other Client & Vendor IDs without changing stored profiles. See 'Using custom Client and Vendor IDs' in the FAQ for more details", key="allow_override")    
+    # allow_override is initialized in session state above, so do not also pass
+    # value=False here. The widget should use the existing session-state value.
+    st.checkbox(
+        "Override values for this invoice",
+        help="When checked, you can enter other Client & Vendor IDs without changing stored profiles. See 'Using custom Client and Vendor IDs' in the FAQ for more details",
+        key="allow_override",
+    )
 
     allow_override = bool(st.session_state.get("allow_override", False))
     # Only show these fields when override is enabled. When override is OFF, force them
@@ -3691,21 +3720,22 @@ with tab_objects[1]:
         # Names
         c1, c2 = st.columns(2)
         with c1:
-            client_name = st.text_input("Client Name", value=prof_client_name, key="client_name")
+            client_name = st.text_input("Client Name", key="client_name")
         with c2:
-            law_firm_name = st.text_input("Law Firm Name", value=prof_law_firm_name, key="law_firm_name")
+            law_firm_name = st.text_input("Law Firm Name", key="law_firm_name")
 
-        # IDs (no format restrictions)
+        # IDs (no format restrictions). These values are already initialized in
+        # session state, so no competing widget defaults are supplied.
         c3, c4 = st.columns(2)
         with c3:
-            client_id = st.text_input("Client ID", value=prof_client_id, key="client_id")
+            client_id = st.text_input("Client ID", key="client_id")
         with c4:
-            law_firm_id = st.text_input("Law Firm ID", value=prof_law_firm_id, key="law_firm_id")
+            law_firm_id = st.text_input("Law Firm ID", key="law_firm_id")
 
         st.markdown("<h3 style='color: #1E1E1E;'>Numbers & Version</h3>", unsafe_allow_html=True)
 
     # Environment-specific defaults:
-    # - SimpleLegal/Unity: Matter Number defaults to "saturn-xxxx"; Invoice Number defaults to "YYYY-MMM-Saturn-XXXXXX"
+    # - Unity: Matter Number defaults to "saturn-xxxx"; Invoice Number defaults to "YYYY-MMM-Saturn-XXXXXX"
     # - OnitX: keep existing defaults
     _env_token = _canonical_env(st.session_state.get("selected_env", ""))
     _is_sl_unity = (_env_token == ENV_SIMPLELEGAL_UNITY)
@@ -3720,7 +3750,7 @@ with tab_objects[1]:
     # Compute the dynamic default: YYYY-MMM-... based on PRIOR month
     stamp = prior_month_stamp(date.today())
 
-    # Matter Number default: "saturn-xxxx" for SimpleLegal/Unity, otherwise keep existing
+    # Matter Number default: "saturn-xxxx" for Unity, otherwise keep existing
     matter_default = "saturn-xxxx" if _is_sl_unity else "2025-XXXXXX"
     if "matter_number_base" not in st.session_state:
         st.session_state["matter_number_base"] = matter_default
@@ -3737,7 +3767,7 @@ with tab_objects[1]:
     matter_number_base = st.text_input(
         "Matter Number:",
         key="matter_number_base",
-        help=("Default is saturn-xxxx for SimpleLegal/Unity." if _is_sl_unity else "Default is 2025-XXXXXX.")
+        help=("Default is saturn-xxxx for Unity." if _is_sl_unity else "Default is 2025-XXXXXX.")
     )
 
     # Keep Tax Fields -> Client Matter ID synced with Invoice Details -> Matter Number
