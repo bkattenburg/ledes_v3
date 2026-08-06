@@ -1774,10 +1774,10 @@ def _append_mismatch_line_items(
         return rows, ["No timekeeper data is loaded, so Mismatch fee line items could not be added."]
 
     try:
-        n_lines = int(mismatch_count) if mismatch_count is not None else random.randint(10, 55)
+        n_lines = int(mismatch_count) if mismatch_count is not None else random.randint(3, 10)
     except Exception:
-        n_lines = random.randint(10, 10)
-    n_lines = max(10, min(55, n_lines))
+        n_lines = random.randint(3, 10)
+    n_lines = max(3, min(10, n_lines))
 
     if len(pool_df) < n_lines:
         messages.append(
@@ -4628,7 +4628,7 @@ if generate_button:
                 st.session_state["_pp_lines_this_invoice"] = int(pp_lines)
 
                 mismatch_selected = bool(spend_agent and st.session_state.get("mismatch_line_items", False))
-                mismatch_lines_to_add = random.randint(10, 55) if (mismatch_selected and _has_mismatch_pool_rows()) else 0
+                mismatch_lines_to_add = random.randint(3, 10) if (mismatch_selected and _has_mismatch_pool_rows()) else 0
                 st.session_state["_mismatch_lines_this_invoice"] = int(mismatch_lines_to_add)
 
                 missing_attachment_selected = bool(spend_agent and st.session_state.get("missing_attachment_line_item", False))
