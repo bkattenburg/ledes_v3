@@ -2263,16 +2263,59 @@ def _ensure_mandatory_lines(
                     arr_city = _pick_ua_sfo_arrival_city()
 
                 # If multiple invoices are being generated, optionally randomize the arrival city per invoice.
-                if randomize_amounts_per_invoice and st.session_state.get('airfare_randomize_arrival_per_invoice', False):
-                    arr_city = _pick_ua_sfo_arrival_city()
-
+                randomize_airfare_city = (
+                    randomize_amounts_per_invoice
+                    and st.session_state.get(
+                        "airfare_randomize_arrival_per_invoice",
+                        False,
+                    )
+                )
+                
+                if randomize_airfare_city:
+                    used_cities = set(
+                        st.session_state.get("_used_airfare_cities", [])
+                    )
+                
+                    available_cities = [
+                        city
+                        for city in UA_SFO_US_DESTINATIONS
+                        if city not in used_cities
+                    ]
+                
+                    if available_cities:
+                        arr_city = random.choice(available_cities)
+                    else:
+                        # Defensive fallback if more invoices are requested than cities.
+                        arr_city = _pick_ua_sfo_arrival_city()
+                
+                    used_cities.add(arr_city)
+                    st.session_state["_used_airfare_cities"] = list(used_cities)
                 is_roundtrip = st.session_state.get('airfare_roundtrip', False)
                 # If generating multiple invoices, optionally randomize the amount per invoice (more realistic).
                 # Respect manual overrides: only randomize when the amount is still marked as "auto".
-                if randomize_amounts_per_invoice and st.session_state.get('airfare_amount_auto', True):
-                    amount = round(random.uniform(500.00, 14000.00), 2)
+                if (
+                    randomize_amounts_per_invoice
+                    and st.session_state.get("airfare_amount_auto", True)
+                ):
+                    used_amounts = set(
+                        st.session_state.get("_used_airfare_amounts", [])
+                    )
+                
+                    # Generate an amount that has not already been used in this batch.
+                    for _ in range(100):
+                        amount = round(random.uniform(500.00, 14000.00), 2)
+                        if amount not in used_amounts:
+                            break
+                    else:
+                        # Extremely unlikely fallback.
+                        amount = round(random.uniform(500.00, 14000.00), 2)
+                
+                    used_amounts.add(amount)
+                    st.session_state["_used_airfare_amounts"] = list(used_amounts)
                 else:
-                    amount = float(st.session_state.get('airfare_amount', 0.0))
+                    amount = float(
+                        st.session_state.get("airfare_amount", 0.0)
+                    )
                 fare_class = st.session_state.get('airfare_fare_class', 'Economy/Coach')
                 trip_type = " (Roundtrip)" if is_roundtrip else ""
                 description = f"Airfare ({fare_class}): {airline} {flight_num}, {dep_city} to {arr_city}{trip_type}"
@@ -4125,6 +4168,22 @@ with tab_objects[2]:
 
             def _mark_airfare_amount_manual():
                 st.session_state["airfare_amount_auto"] = False
+            # Automatically enable airfare randomization when Multiple Billing Periods
+            # is newly selected. The user can still uncheck it afterward.
+            multiple_periods_now = bool(
+                st.session_state.get("multiple_billing_periods", False)
+            )
+            multiple_periods_was_on = bool(
+                st.session_state.get("_previous_multiple_periods_for_airfare", False)
+            )
+            
+            if multiple_periods_now and not multiple_periods_was_on:
+                st.session_state["airfare_randomize_arrival_per_invoice"] = True
+            
+                # Ensure each invoice also receives an automatically generated amount.
+                st.session_state["airfare_amount_auto"] = True
+            
+            st.session_state["_previous_multiple_periods_for_airfare"] = multiple_periods_now
 
             st.markdown("<h4 style='color: #1E1E1E;'>Airfare Details</h4>", unsafe_allow_html=True)
             ac1, ac2 = st.columns(2)
@@ -4133,11 +4192,13 @@ with tab_objects[2]:
                 st.text_input("Departure City", key="airfare_departure_city_display", value=SFO_DEPARTURE_CITY, disabled=True)
                 st.checkbox("Roundtrip", key="airfare_roundtrip", value=True)
                 st.checkbox(
-                    "Randomize Arrival City per invoice when generating multiple invoices",
-                    key="airfare_randomize_arrival_per_invoice",
-                    value=st.session_state.get("airfare_randomize_arrival_per_invoice", False),
-                    help="If multiple invoices are generated, a different Arrival City will be chosen for each invoice's Airfare E110 line item."
-                )
+                "Randomize Arrival City per invoice when generating multiple invoices",
+                key="airfare_randomize_arrival_per_invoice",
+                help=(
+                    "If multiple invoices are generated, a different Arrival City "
+                    "will be chosen for each invoice's Airfare E110 line item."
+                ),
+            )
             with ac2:
                 st.text_input("Flight Number", key="airfare_flight_number", value="UA123")
                 st.selectbox(
@@ -4605,6 +4666,10 @@ if generate_button:
             current_end_date = billing_end_date
             current_start_date = billing_start_date
             
+            # Start a fresh uniqueness tracker for this invoice batch.
+            st.session_state["_used_airfare_cities"] = []
+            st.session_state["_used_airfare_amounts"] = []
+
             for i in range(num_invoices):
                 if multiple_periods and i > 0:
                     current_end_date = current_start_date - datetime.timedelta(days=1)
