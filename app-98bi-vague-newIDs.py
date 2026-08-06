@@ -3987,6 +3987,28 @@ with tab_objects[2]:
         help="Ensures selected test line items are included; configure below.",
     )
 
+    # Apply environment-specific defaults when Spend Agent is first enabled
+    # or when the selected environment changes while Spend Agent is enabled.
+    _current_spend_agent_env = _canonical_env(
+        st.session_state.get("selected_env", "")
+    )
+    
+    _previous_spend_agent_enabled = bool(
+        st.session_state.get("_previous_spend_agent_enabled", False)
+    )
+    
+    _previous_spend_agent_env = st.session_state.get(
+        "_previous_spend_agent_env"
+    )
+    
+    _apply_spend_agent_defaults = bool(spend_agent) and (
+        not _previous_spend_agent_enabled
+        or _previous_spend_agent_env != _current_spend_agent_env
+    )
+    
+    st.session_state["_previous_spend_agent_enabled"] = bool(spend_agent)
+    st.session_state["_previous_spend_agent_env"] = _current_spend_agent_env
+
     vague_line_items = st.checkbox("Vague Line Items", value=False, help="Randomly include 1 to 5 line items that have vague line item descriptions.")
 
     multiple_attendees_meeting = st.checkbox(
@@ -4044,6 +4066,31 @@ with tab_objects[2]:
             for _item_name in all_spend_agent_items:
                 st.session_state[_spend_agent_checkbox_key(_item_name)] = _item_name in target_set
 
+        # Environment-specific default Spend Agent selections.
+        if _apply_spend_agent_defaults:
+            if _current_spend_agent_env == ENV_SIMPLELEGAL_UNITY:
+                # Unity: select everything except KBCG and John Doe.
+                environment_default_items = [
+                    item
+                    for item in all_spend_agent_items
+                    if item not in {"KBCG", "John Doe"}
+                ]
+            else:
+                # OnitX: select every Spend Agent test item.
+                environment_default_items = list(all_spend_agent_items)
+        
+            _set_spend_agent_grid_selection(environment_default_items)
+        
+            # Keep backward-compatible state synchronized.
+            st.session_state["spend_agent_items_default"] = list(
+                environment_default_items
+            )
+            st.session_state["mandatory_items_default"] = [
+                item
+                for item in environment_default_items
+                if item in available_items
+            ]
+
         # Determine initial selected items.
         # Preserve prior checkbox-grid selections when present. Fall back to the prior
         # multiselect state for backward compatibility. Initial default keeps the old
@@ -4073,7 +4120,8 @@ with tab_objects[2]:
             if st.session_state.get("admin_task_line_items", False):
                 default_spend_agent_selection.append(admin_task_item_name)
 
-        # Test scenarios are user-selected for all environments.
+        # Environment defaults are applied when Spend Agent is enabled.
+        # Users may modify the selections afterward.
 
         action_cols = st.columns([1, 1, 4])
         with action_cols[0]:
