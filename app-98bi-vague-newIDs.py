@@ -1043,11 +1043,19 @@ def _load_timekeepers(uploaded_file: Optional[Any]) -> Optional[List[Dict]]:
     if uploaded_file is None:
         return None
     try:
-        df = pd.read_csv(uploaded_file)
+        # Keep TIMEKEEPER_ID as text so numeric-looking IDs (including leading zeros)
+        # are not converted to int/float values that can later break PDF Paragraphs.
+        df = pd.read_csv(uploaded_file, dtype={"TIMEKEEPER_ID": "string"})
         required_cols = ["TIMEKEEPER_NAME", "TIMEKEEPER_CLASSIFICATION", "TIMEKEEPER_ID", "RATE"]
         if not all(col in df.columns for col in required_cols):
             st.error(f"Timekeeper CSV must contain the following columns: {', '.join(required_cols)}")
             return None
+
+        df = df.fillna("")
+        df["TIMEKEEPER_ID"] = df["TIMEKEEPER_ID"].astype(str).str.strip()
+        df["TIMEKEEPER_NAME"] = df["TIMEKEEPER_NAME"].astype(str).str.strip()
+        df["TIMEKEEPER_CLASSIFICATION"] = df["TIMEKEEPER_CLASSIFICATION"].astype(str).str.strip()
+        df["RATE"] = pd.to_numeric(df["RATE"], errors="coerce").fillna(0.0)
         return df.to_dict(orient='records')
     except Exception as e:
         st.error(f"Error loading timekeeper file: {e}")
@@ -2660,21 +2668,45 @@ def _create_pdf_invoice(
         Paragraph("Total", table_header_style),
     ]]
 
+    # ReportLab Paragraph expects text. Pandas can surface blank/mixed CSV values as
+    # NaN/NA or preserve numeric-looking IDs as numbers, so normalize values first.
+    from xml.sax.saxutils import escape as _xml_escape
+
+    def _pdf_text(value, default="") -> str:
+        if value is None:
+            return default
+        try:
+            if pd.isna(value):
+                return default
+        except Exception:
+            pass
+        return str(value)
+
     # **CHANGE 2: Loop through rows and populate new data structure**
     for _, row in df.iterrows():
-        is_expense = bool(row.get("EXPENSE_CODE"))
+        expense_code_text = _pdf_text(row.get("EXPENSE_CODE", "")).strip()
+        is_expense = bool(expense_code_text)
 
         # Logic for all columns based on your requests
-        date = row["LINE_ITEM_DATE"]
+        date = _pdf_text(row.get("LINE_ITEM_DATE", ""))
         line_type = "E" if is_expense else "F"
-        task_code = row.get("TASK_CODE", "") if not is_expense else ""
-        activity_code = row.get("ACTIVITY_CODE", "") if not is_expense else ""
-        expense_code = row.get("EXPENSE_CODE", "") if is_expense else ""
-        timekeeper_id = Paragraph(row.get("TIMEKEEPER_ID", "") if not is_expense else "N/A", table_data_style)
-        description = Paragraph(row["DESCRIPTION"], table_data_style)
-        hours = f"{row['HOURS']:.1f}" if not is_expense else f"{int(row['HOURS'])}"
-        rate = f"${row['RATE']:.2f}" if row["RATE"] else "N/A"
-        total = f"${row['LINE_ITEM_TOTAL']:.2f}"
+        task_code = _pdf_text(row.get("TASK_CODE", "")) if not is_expense else ""
+        activity_code = _pdf_text(row.get("ACTIVITY_CODE", "")) if not is_expense else ""
+        expense_code = expense_code_text if is_expense else ""
+        timekeeper_id_text = "N/A" if is_expense else _pdf_text(row.get("TIMEKEEPER_ID", ""))
+        timekeeper_id = Paragraph(_xml_escape(timekeeper_id_text), table_data_style)
+        description = Paragraph(_xml_escape(_pdf_text(row.get("DESCRIPTION", ""))), table_data_style)
+
+        hours_value = pd.to_numeric(row.get("HOURS", 0), errors="coerce")
+        rate_value = pd.to_numeric(row.get("RATE", 0), errors="coerce")
+        total_value = pd.to_numeric(row.get("LINE_ITEM_TOTAL", 0), errors="coerce")
+        hours_value = 0.0 if pd.isna(hours_value) else float(hours_value)
+        rate_value = 0.0 if pd.isna(rate_value) else float(rate_value)
+        total_value = 0.0 if pd.isna(total_value) else float(total_value)
+
+        hours = f"{hours_value:.1f}" if not is_expense else f"{int(hours_value)}"
+        rate = f"${rate_value:.2f}" if rate_value else "N/A"
+        total = f"${total_value:.2f}"
         
         data.append([
             date,
