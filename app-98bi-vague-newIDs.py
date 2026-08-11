@@ -4489,7 +4489,7 @@ with tab_objects[output_tab_index]:
     logo_height = None
     
     if include_pdf:
-        include_logo = st.checkbox("Include Logo in PDF", value=True, help="Uncheck to exclude logo from PDF header, using only law firm text.")
+        include_logo = st.checkbox("Include Logo in PDF", value=False, help="Check to include logo in PDF header.")
     
     generate_multiple = st.checkbox("Generate Multiple Invoices", key="generate_multiple_invoices", help="Create more than one invoice.")
     num_invoices = 1
