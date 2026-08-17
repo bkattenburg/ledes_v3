@@ -3269,6 +3269,10 @@ with st.sidebar.expander("Line Items"):
     if onit_trade_tasks_data:
         st.download_button("Trademark Line Items File", onit_trade_tasks_data, "custom_trademark_tasks.csv", "text/csv")
 
+    onit_mna_tasks_data = read_file_for_download("assets/custom_mergers_acquisitions_tasks.csv")
+    if onit_mna_tasks_data:
+        st.download_button("M&A Line Items File", onit_mna_tasks_data, "custom_m&a_tasks.csv", "text/csv")
+    
     onit_capmkt_tasks_data = read_file_for_download("assets/custom_capital_market_tasks_invoice_catalog_100_expenses.csv")
     if onit_capmkt_tasks_data:
         st.download_button("Capital Market Line Items File", onit_capmkt_tasks_data, "custom_capital_market_tasks.csv", "text/csv")
