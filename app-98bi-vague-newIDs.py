@@ -1275,7 +1275,8 @@ def _create_ledes_1998bi_content(rows: List[Dict],
                                  invoice_number: str, matter_number: str,
                                  matter_name: str, po_number: str,
                                  client_matter_id: str, invoice_currency: str,
-                                 tax_rate: float, is_first_invoice: bool = True) -> str:
+                                 tax_rate: float, is_first_invoice: bool = True,
+                                 include_tax_in_line_item_total: bool = False) -> str:
     header = "LEDES1998BI[]"
     fields = ("INVOICE_DATE|INVOICE_NUMBER|CLIENT_ID|LAW_FIRM_MATTER_ID|INVOICE_TOTAL|"
               "BILLING_START_DATE|BILLING_END_DATE|INVOICE_DESCRIPTION|LINE_ITEM_NUMBER|"
@@ -1327,14 +1328,13 @@ def _create_ledes_1998bi_content(rows: List[Dict],
         units = _f(row.get("HOURS", 0))
         unit_cost = _f(row.get("RATE", 0))
         adj_amount = _f(row.get("LINE_ITEM_ADJUSTMENT_AMOUNT", 0))
-        base_amount = _f(row.get("LINE_ITEM_TOTAL", units * unit_cost))
-        if base_amount == 0 and units * unit_cost != 0:
-            base_amount = units * unit_cost + adj_amount
+        base_amount = round(units * unit_cost, 2)
         line_tax_rate = float(tax_rate or 0)
         line_tax_total = round((units * unit_cost + adj_amount) * line_tax_rate, 2) if not is_expense else 0.0
         net_total += base_amount
         tax_total += line_tax_total
-        prepped.append((is_expense, units, unit_cost, adj_amount, base_amount, line_tax_rate, line_tax_total))
+        line_total = round(base_amount + (line_tax_total if include_tax_in_line_item_total else 0.0), 2)
+        prepped.append((is_expense, units, unit_cost, adj_amount, line_total, line_tax_rate, line_tax_total))
 
     invoice_total = round(net_total + tax_total, 2)
 
@@ -1343,7 +1343,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
 
     # Second pass: write lines
     for i, row in enumerate(rows, start=1):
-        is_expense, units, unit_cost, adj_amount, base_amount, line_tax_rate, line_tax_total = prepped[i-1]
+        is_expense, units, unit_cost, adj_amount, line_total, line_tax_rate, line_tax_total = prepped[i-1]
         try:
             date_obj = datetime.datetime.strptime(str(row.get("LINE_ITEM_DATE","")), "%Y-%m-%d").date()
         except Exception:
@@ -1387,7 +1387,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
             adj_type,
             f"{units:.1f}" if adj_type == "F" else f"{int(units)}",
             f"{adj_amount:.2f}",
-            f"{base_amount:.2f}",
+            f"{line_total:.2f}",
             date_obj.strftime("%Y%m%d"),
             task_code,
             expense_code,
@@ -4566,7 +4566,7 @@ else:
 
 # Validation Logic
 
-# --- Tax Fields Tab (only if 1998BIv2 selected) ---
+# --- Tax Fields Tab (1998BI and 1998BIv2) ---
 if "Tax Fields" in tabs:
     tax_tab_index = tabs.index("Tax Fields")
     with tab_objects[tax_tab_index]:
@@ -4583,6 +4583,13 @@ if "Tax Fields" in tabs:
         st.selectbox("Invoice Currency *", ["USD", "AUD", "CAD", "GBP", "EUR"], index=["USD", "AUD", "CAD", "GBP", "EUR"].index(st.session_state.get("tax_invoice_currency", "USD")), key="tax_invoice_currency")
         st.number_input("Tax Rate *", min_value=0.0, max_value=1.0, step=0.01, value=st.session_state.get("tax_rate", 0.19), key="tax_rate")
         st.selectbox("Tax Type *", ["VAT","PST","QST","GST"], index=0, key="tax_type", help="Type of tax to apply to line items.")
+        if st.session_state.get("ledes_version") == "1998BI":
+            st.checkbox(
+                "Include line-item tax in LINE_ITEM_TOTAL",
+                value=False,
+                key="bi_include_tax_in_line_item_total",
+                help="When enabled, LINE_ITEM_TOTAL is units × unit cost + LINE_ITEM_TAX_TOTAL. Otherwise it is units × unit cost.",
+            )
 
         with st.expander("Law Firm Details"):
             st.text_input("Law Firm Address 1", key="pf_lf_address1", disabled=(_is_vat_profile(st.session_state.get("active_profile_id")) and not st.session_state.get("allow_override", False)))
@@ -4917,7 +4924,8 @@ if generate_button:
                         st.session_state.get('tax_client_matter_id',''),
                         st.session_state.get('tax_invoice_currency','USD'),
                         st.session_state.get('tax_rate', 0.19),
-                        is_first_invoice=not combine_ledes or is_first
+                        is_first_invoice=not combine_ledes or is_first,
+                        include_tax_in_line_item_total=st.session_state.get('bi_include_tax_in_line_item_total', False),
                     )
                 else:
                     ledes_content_part = _create_ledes_1998b_content(
@@ -5237,4 +5245,3 @@ if _admin_task_sum or _admin_task_expected:
                 "but no Invoice Line Item Catalog was loaded, the CSV did not include a PROHIBITED_ADMIN column, "
                 "no rows had PROHIBITED_ADMIN = Y, or no timekeeper data was available."
             )
-
