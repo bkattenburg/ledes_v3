@@ -1276,7 +1276,7 @@ def _create_ledes_1998bi_content(rows: List[Dict],
                                  matter_name: str, po_number: str,
                                  client_matter_id: str, invoice_currency: str,
                                  tax_rate: float, is_first_invoice: bool = True,
-                                 include_tax_in_line_item_total: bool = False) -> str:
+                                 include_tax_in_line_item_total: bool = True) -> str:
     header = "LEDES1998BI[]"
     fields = ("INVOICE_DATE|INVOICE_NUMBER|CLIENT_ID|LAW_FIRM_MATTER_ID|INVOICE_TOTAL|"
               "BILLING_START_DATE|BILLING_END_DATE|INVOICE_DESCRIPTION|LINE_ITEM_NUMBER|"
@@ -1330,7 +1330,8 @@ def _create_ledes_1998bi_content(rows: List[Dict],
         adj_amount = _f(row.get("LINE_ITEM_ADJUSTMENT_AMOUNT", 0))
         base_amount = round(units * unit_cost, 2)
         line_tax_rate = float(tax_rate or 0)
-        line_tax_total = round((units * unit_cost + adj_amount) * line_tax_rate, 2) if not is_expense else 0.0
+        # Apply the same tax calculation to fee and expense rows.
+        line_tax_total = round((units * unit_cost + adj_amount) * line_tax_rate, 2)
         net_total += base_amount
         tax_total += line_tax_total
         line_total = round(base_amount + (line_tax_total if include_tax_in_line_item_total else 0.0), 2)
@@ -4925,7 +4926,7 @@ if generate_button:
                         st.session_state.get('tax_invoice_currency','USD'),
                         st.session_state.get('tax_rate', 0.19),
                         is_first_invoice=not combine_ledes or is_first,
-                        include_tax_in_line_item_total=st.session_state.get('bi_include_tax_in_line_item_total', False),
+                        include_tax_in_line_item_total=st.session_state.get('bi_include_tax_in_line_item_total', True),
                     )
                 else:
                     ledes_content_part = _create_ledes_1998b_content(
