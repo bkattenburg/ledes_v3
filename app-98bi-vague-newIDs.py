@@ -4586,7 +4586,7 @@ if "Tax Fields" in tabs:
         if st.session_state.get("ledes_version") == "1998BI":
             st.checkbox(
                 "Include line-item tax in LINE_ITEM_TOTAL",
-                value=False,
+                value=True,
                 key="bi_include_tax_in_line_item_total",
                 help="When enabled, LINE_ITEM_TOTAL is units × unit cost + LINE_ITEM_TAX_TOTAL. Otherwise it is units × unit cost.",
             )
